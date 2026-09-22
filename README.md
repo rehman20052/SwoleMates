@@ -44,24 +44,25 @@ A lightweight nutrition summary can be added after the complete match-to-workout
 - [Team workflow](docs/TEAM_WORKFLOW.md)
 - [Recorded product decisions](docs/DECISIONS.md)
 
-## Team branches
+## Feature branches
 
-Each teammate has a local branch ready to use:
+Branches are organized by feature area so teammates can collaborate around the actual app features:
 
-- `member/abdur`
-- `member/gio`
-- `member/habib`
-- `member/noor`
-- `member/zub`
-- `member/yunus`
+- `feature/profile-preferences`
+- `feature/discovery-matching`
+- `feature/match-requests-chat`
+- `feature/workout-planning`
+- `feature/reliability-checkins`
+- `feature/progress-dashboard`
+- `feature/safety-privacy`
 
 Switch branches with:
 
 ```bash
-git switch member/abdur
+git switch feature/discovery-matching
 ```
 
-Replace `member/abdur` with your branch name.
+Replace `feature/discovery-matching` with the feature branch you are working on.
 
 ## Recommended implementation
 
