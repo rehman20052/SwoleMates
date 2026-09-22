@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1800" viewBox="0 0 2500 1800" role="img" aria-labelledby="title description">
+  <title id="title">SwoleMates system context diagram</title>
+  <desc id="description">A simple dark-grid Level-0 context diagram showing exactly 30 directional interactions between SwoleMates and external entities. Recipe functionality is excluded.</desc>
+
+  <defs>
+    <pattern id="smallGrid" width="25" height="25" patternUnits="userSpaceOnUse">
+      <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#1b1b1b" stroke-width="1"/>
+    </pattern>
+    <pattern id="largeGrid" width="125" height="125" patternUnits="userSpaceOnUse">
+      <rect width="125" height="125" fill="url(#smallGrid)"/>
+      <path d="M 125 0 L 0 0 0 125" fill="none" stroke="#252525" stroke-width="1.2"/>
+    </pattern>
+    <marker id="arrow" markerWidth="13" markerHeight="13" refX="10" refY="6.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 13 6.5 L 0 13 z" fill="#f2f2f2"/>
+    </marker>
+    <style>
+      .box { fill: #111; stroke: #f2f2f2; stroke-width: 2.4; }
+      .system { fill: #111; stroke: #f2f2f2; stroke-width: 2.4; }
+      .arrow { fill: none; stroke: #f2f2f2; stroke-width: 2.6; marker-end: url(#arrow); }
+      .entity-text { fill: #f2f2f2; font-family: Arial, Helvetica, sans-serif; font-size: 28px; font-weight: 400; text-anchor: middle; dominant-baseline: middle; }
+      .system-text { fill: #f2f2f2; font-family: Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 400; text-anchor: middle; dominant-baseline: middle; }
+      .label-mask { fill: #111; opacity: 0.96; }
+      .flow-text { fill: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 400; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="2500" height="1800" fill="#101010"/>
+  <rect width="2500" height="1800" fill="url(#largeGrid)" opacity="0.9"/>
+
+  <!-- External entities -->
+  <rect x="650" y="60" width="1200" height="220" class="box"/>
+  <text x="1250" y="170" class="entity-text">Average Gym Goers</text>
+
+  <rect x="60" y="650" width="240" height="450" class="box"/>
+  <text x="180" y="875" class="entity-text">Gyms</text>
+
+  <rect x="2160" y="650" width="300" height="450" class="box"/>
+  <text x="2310" y="858" class="entity-text">Trainers/</text>
+  <text x="2310" y="898" class="entity-text">Influencers</text>
+
+  <rect x="650" y="1500" width="460" height="220" class="box"/>
+  <text x="880" y="1610" class="entity-text">AI Chatbot Tool</text>
+
+  <rect x="1350" y="1500" width="460" height="220" class="box"/>
+  <text x="1580" y="1610" class="entity-text">Food Data API</text>
+
+  <!-- Central system -->
+  <rect x="650" y="650" width="1200" height="450" rx="35" ry="35" class="system"/>
+  <text x="1250" y="875" class="system-text">SwoleMates System</text>
+
+  <!-- Average Gym Goer flows: 13 interactions -->
+  <line data-flow="1" x1="700" y1="280" x2="700" y2="650" class="arrow"/>
+  <rect x="652" y="382" width="96" height="58" class="label-mask"/>
+  <text x="700" y="405" class="flow-text">
+    <tspan x="700">Create/update</tspan><tspan x="700" dy="24">profile</tspan>
+  </text>
+
+  <line data-flow="2" x1="795" y1="280" x2="795" y2="650" class="arrow"/>
+  <rect x="747" y="382" width="96" height="58" class="label-mask"/>
+  <text x="795" y="405" class="flow-text">
+    <tspan x="795">Partner</tspan><tspan x="795" dy="24">preferences</tspan>
+  </text>
+
+  <line data-flow="3" x1="890" y1="280" x2="890" y2="650" class="arrow"/>
+  <rect x="842" y="382" width="96" height="58" class="label-mask"/>
+  <text x="890" y="405" class="flow-text">
+    <tspan x="890">Search gym</tspan><tspan x="890" dy="24">partner</tspan>
+  </text>
+
+  <line data-flow="4" x1="985" y1="650" x2="985" y2="280" class="arrow"/>
+  <rect x="937" y="382" width="96" height="58" class="label-mask"/>
+  <text x="985" y="405" class="flow-text">
+    <tspan x="985">Partner</tspan><tspan x="985" dy="24">suggestions</tspan>
+  </text>
+
+  <line data-flow="5" x1="1080" y1="280" x2="1080" y2="650" class="arrow"/>
+  <rect x="1027" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1080" y="405" class="flow-text">
+    <tspan x="1080">Match request/</tspan><tspan x="1080" dy="24">decision</tspan>
+  </text>
+
+  <line data-flow="6" x1="1175" y1="650" x2="1175" y2="280" class="arrow"/>
+  <rect x="1127" y="382" width="96" height="58" class="label-mask"/>
+  <text x="1175" y="405" class="flow-text">
+    <tspan x="1175">Match</tspan><tspan x="1175" dy="24">status</tspan>
+  </text>
+
+  <line data-flow="7" x1="1270" y1="280" x2="1270" y2="650" class="arrow"/>
+  <rect x="1217" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1270" y="405" class="flow-text">
+    <tspan x="1270">Messages/</tspan><tspan x="1270" dy="24">workout plans</tspan>
+  </text>
+
+  <line data-flow="8" x1="1365" y1="650" x2="1365" y2="280" class="arrow"/>
+  <rect x="1312" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1365" y="405" class="flow-text">
+    <tspan x="1365">Messages/</tspan><tspan x="1365" dy="24">reminders</tspan>
+  </text>
+
+  <line data-flow="9" x1="1460" y1="280" x2="1460" y2="650" class="arrow"/>
+  <rect x="1403" y="382" width="114" height="58" class="label-mask"/>
+  <text x="1460" y="405" class="flow-text">
+    <tspan x="1460">Attendance/</tspan><tspan x="1460" dy="24">cancel/unmatch</tspan>
+  </text>
+
+  <line data-flow="10" x1="1555" y1="280" x2="1555" y2="650" class="arrow"/>
+  <rect x="1507" y="382" width="96" height="58" class="label-mask"/>
+  <text x="1555" y="405" class="flow-text">
+    <tspan x="1555">Workout/</tspan><tspan x="1555" dy="24">lift logs</tspan>
+  </text>
+
+  <line data-flow="11" x1="1650" y1="650" x2="1650" y2="280" class="arrow"/>
+  <rect x="1597" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1650" y="405" class="flow-text">
+    <tspan x="1650">Dashboard/</tspan><tspan x="1650" dy="24">streak/macros</tspan>
+  </text>
+
+  <line data-flow="12" x1="1745" y1="280" x2="1745" y2="650" class="arrow"/>
+  <rect x="1692" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1745" y="405" class="flow-text">
+    <tspan x="1745">Post progress</tspan><tspan x="1745" dy="24">photos/feed</tspan>
+  </text>
+
+  <line data-flow="13" x1="1840" y1="280" x2="1840" y2="650" class="arrow"/>
+  <rect x="1787" y="382" width="106" height="58" class="label-mask"/>
+  <text x="1840" y="405" class="flow-text">
+    <tspan x="1840">Enter nutrition</tspan><tspan x="1840" dy="24">journal</tspan>
+  </text>
+
+  <!-- Gym flows: 4 interactions -->
+  <line data-flow="14" x1="300" y1="725" x2="650" y2="725" class="arrow"/>
+  <text x="475" y="695" class="flow-text">
+    <tspan x="475">Post gym events</tspan>
+  </text>
+
+  <line data-flow="15" x1="300" y1="835" x2="650" y2="835" class="arrow"/>
+  <text x="475" y="805" class="flow-text">
+    <tspan x="475">Enter gym</tspan><tspan x="475" dy="24">profile info</tspan>
+  </text>
+
+  <line data-flow="16" x1="650" y1="945" x2="300" y2="945" class="arrow"/>
+  <text x="475" y="915" class="flow-text">
+    <tspan x="475">View event</tspan><tspan x="475" dy="24">attendance</tspan>
+  </text>
+
+  <line data-flow="17" x1="300" y1="1055" x2="650" y2="1055" class="arrow"/>
+  <text x="475" y="1025" class="flow-text">
+    <tspan x="475">Update class</tspan><tspan x="475" dy="24">schedules</tspan>
+  </text>
+
+  <!-- Trainer and influencer flows: 4 interactions -->
+  <line data-flow="18" x1="2160" y1="725" x2="1850" y2="725" class="arrow"/>
+  <text x="2005" y="685" class="flow-text">
+    <tspan x="2005">Enter trainer/</tspan><tspan x="2005" dy="24">influencer profile</tspan>
+  </text>
+
+  <line data-flow="19" x1="2160" y1="835" x2="1850" y2="835" class="arrow"/>
+  <text x="2005" y="795" class="flow-text">
+    <tspan x="2005">Post programs/</tspan><tspan x="2005" dy="24">splits/workouts</tspan>
+  </text>
+
+  <line data-flow="20" x1="1850" y1="945" x2="2160" y2="945" class="arrow"/>
+  <text x="2005" y="915" class="flow-text">
+    <tspan x="2005">View client</tspan><tspan x="2005" dy="24">requests</tspan>
+  </text>
+
+  <line data-flow="21" x1="2160" y1="1055" x2="1850" y2="1055" class="arrow"/>
+  <text x="2005" y="1015" class="flow-text">
+    <tspan x="2005">Accept/decline</tspan><tspan x="2005" dy="24">client requests</tspan>
+  </text>
+
+  <!-- AI chatbot flows: 5 interactions -->
+  <line data-flow="22" x1="700" y1="1100" x2="700" y2="1500" class="arrow"/>
+  <rect x="658" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="700" y="1260" class="flow-text">
+    <tspan x="700">User</tspan><tspan x="700" dy="24">question</tspan>
+  </text>
+
+  <line data-flow="23" x1="790" y1="1100" x2="790" y2="1500" class="arrow"/>
+  <rect x="748" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="790" y="1260" class="flow-text">
+    <tspan x="790">User</tspan><tspan x="790" dy="24">context</tspan>
+  </text>
+
+  <line data-flow="24" x1="880" y1="1100" x2="880" y2="1500" class="arrow"/>
+  <rect x="838" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="880" y="1260" class="flow-text">
+    <tspan x="880">Custom</tspan><tspan x="880" dy="24">plan req.</tspan>
+  </text>
+
+  <line data-flow="25" x1="970" y1="1500" x2="970" y2="1100" class="arrow"/>
+  <rect x="928" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="970" y="1260" class="flow-text">
+    <tspan x="970">Chatbot</tspan><tspan x="970" dy="24">answer</tspan>
+  </text>
+
+  <line data-flow="26" x1="1060" y1="1500" x2="1060" y2="1100" class="arrow"/>
+  <rect x="1018" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="1060" y="1260" class="flow-text">
+    <tspan x="1060">Suggested</tspan><tspan x="1060" dy="24">plan</tspan>
+  </text>
+
+  <!-- Food data API flows: 4 interactions -->
+  <line data-flow="27" x1="1420" y1="1100" x2="1420" y2="1500" class="arrow"/>
+  <rect x="1378" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="1420" y="1260" class="flow-text">
+    <tspan x="1420">Food</tspan><tspan x="1420" dy="24">search</tspan>
+  </text>
+
+  <line data-flow="28" x1="1525" y1="1100" x2="1525" y2="1500" class="arrow"/>
+  <rect x="1483" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="1525" y="1260" class="flow-text">
+    <tspan x="1525">Nutrient</tspan><tspan x="1525" dy="24">lookup</tspan>
+  </text>
+
+  <line data-flow="29" x1="1635" y1="1500" x2="1635" y2="1100" class="arrow"/>
+  <rect x="1593" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="1635" y="1260" class="flow-text">
+    <tspan x="1635">Food</tspan><tspan x="1635" dy="24">records</tspan>
+  </text>
+
+  <line data-flow="30" x1="1740" y1="1500" x2="1740" y2="1100" class="arrow"/>
+  <rect x="1698" y="1237" width="84" height="58" class="label-mask"/>
+  <text x="1740" y="1260" class="flow-text">
+    <tspan x="1740">Macro</tspan><tspan x="1740" dy="24">data</tspan>
+  </text>
+</svg>
