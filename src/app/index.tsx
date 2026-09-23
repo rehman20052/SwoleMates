@@ -9,36 +9,57 @@ import {
   Platform,
   SafeAreaView,
   ImageBackground,
-  ScrollView
+  ScrollView,
+  Modal,
+  FlatList
 } from 'react-native';
 
 export default function App() {
-  // Navigation Flow States: 'launch' | 'auth' | 'profile-setup' | 'main-app'
   const [currentScreen, setCurrentScreen] = useState('launch');
-  const [authMode, setAuthMode] = useState('signup'); // 'signup' | 'login'
-  const [activeTab, setActiveTab] = useState('Discover'); // 'Discover' | 'Matches' | 'Dashboard' | 'Plans' | 'Profile'
+  const [authMode, setAuthMode] = useState('signup');
+  const [activeTab, setActiveTab] = useState('Discover');
 
-  // Form Inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Profile Setup Form States
-  const [fullName, setFullName] = useState('Alex Rivera');
-  const [age, setAge] = useState('26');
-  const [primaryGym, setPrimaryGym] = useState("Gold's Gym Downtown");
-  const [experienceLevel, setExperienceLevel] = useState('Intermediate');
-  const [selectedGoals, setSelectedGoals] = useState(['Muscle Gain', 'Strength']);
-  const [bench, setBench] = useState('225 lbs');
-  const [squat, setSquat] = useState('315 lbs');
-  const [deadlift, setDeadlift] = useState('405 lbs');
+  const [profileData, setProfileData] = useState({
+    fullName: 'Alex Rivera',
+    age: '26',
+    primaryGym: "Gold's Gym Downtown",
+    experienceLevel: 'Intermediate',
+    selectedGoals: ['Muscle Gain', 'Strength'],
+    bench: '225 lbs',
+    squat: '315 lbs',
+    deadlift: '405 lbs'
+  });
+
+  // Vertical Modal Picker State
+  const [modalVisible, setModalVisible] = useState(false);
+  const [activePrField, setActivePrField] = useState(null); // 'bench' | 'squat' | 'deadlift'
 
   const toggleGoal = (goal) => {
-    if (selectedGoals.includes(goal)) {
-      setSelectedGoals(selectedGoals.filter(g => g !== goal));
+    const goals = profileData.selectedGoals;
+    if (goals.includes(goal)) {
+      setProfileData({ ...profileData, selectedGoals: goals.filter(g => g !== goal) });
     } else {
-      setSelectedGoals([...selectedGoals, goal]);
+      setProfileData({ ...profileData, selectedGoals: [...goals, goal] });
     }
+  };
+
+  // Generate vertical list options: N/A followed by 1 to 999 lbs
+  const prOptions = ['N/A', ...Array.from({ length: 999 }, (_, i) => `${i + 1} lbs`)];
+
+  const openPrModal = (field) => {
+    setActivePrField(field);
+    setModalVisible(true);
+  };
+
+  const selectPrValue = (val) => {
+    if (activePrField) {
+      setProfileData({ ...profileData, [activePrField]: val });
+    }
+    setModalVisible(false);
   };
 
   // ==========================================
@@ -61,7 +82,7 @@ export default function App() {
 
               <View style={styles.socialProofCard}>
                 <Text style={styles.avatarText}>👥🔥</Text>
-                <Text style={styles.socialProofText}>Join local lifters and match today!</Text>
+                <Text style={styles.socialProofText}>Join 12,000+ local lifters matches today</Text>
               </View>
 
               <TouchableOpacity
@@ -78,7 +99,7 @@ export default function App() {
   }
 
   // ==========================================
-  // 2. AUTH SCREEN (Sign Up / Log In)
+  // 2. AUTH SCREEN
   // ==========================================
   if (currentScreen === 'auth') {
     return (
@@ -159,7 +180,6 @@ export default function App() {
               </TouchableOpacity>
             )}
 
-            {/* Triggers Profile Setup on Auth Success */}
             <TouchableOpacity
               style={styles.limeButton}
               onPress={() => setCurrentScreen('profile-setup')}
@@ -183,110 +203,182 @@ export default function App() {
   }
 
   // ==========================================
-  // 3. PROFILE SETUP SCREEN (Step 1 of 2)
+  // 3. PROFILE SETUP SCREEN
   // ==========================================
   if (currentScreen === 'profile-setup') {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-
-          <View style={styles.setupHeader}>
-            <Text style={styles.setupTitle}>Set Up Profile</Text>
-            <Text style={styles.stepIndicator}>Step 1 of 2</Text>
-          </View>
-
-          {/* Avatar Picker Mock */}
-          <View style={styles.avatarSection}>
-            <View style={styles.avatarRing}>
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarEmoji}>💪</Text>
-              </View>
-              <View style={styles.cameraBadge}>
-                <Text style={styles.cameraBadgeText}>+</Text>
-              </View>
-            </View>
-            <Text style={styles.avatarSubtext}>Tap to change workout profile photo</Text>
-          </View>
-
-          {/* Form Card */}
-          <View style={styles.profileFormCard}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>FULL NAME</Text>
-              <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholderTextColor="#666" />
-            </View>
-
-            <View style={styles.rowInputs}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                <Text style={styles.inputLabel}>AGE</Text>
-                <TextInput style={styles.input} value={age} onChangeText={setAge} keyboardType="numeric" placeholderTextColor="#666" />
-              </View>
-              <View style={[styles.inputGroup, { flex: 2 }]}>
-                <Text style={styles.inputLabel}>PRIMARY GYM</Text>
-                <TextInput style={styles.input} value={primaryGym} onChangeText={setPrimaryGym} placeholderTextColor="#666" />
-              </View>
-            </View>
-
-            {/* Experience Level Selection */}
-            <Text style={styles.sectionSubHeader}>Experience Level</Text>
-            <View style={styles.chipsRow}>
-              {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map((level) => {
-                const isSelected = experienceLevel === level;
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    style={[styles.chip, isSelected && styles.activeChip]}
-                    onPress={() => setExperienceLevel(level)}
-                  >
-                    <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{level}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Fitness Goals Selection */}
-            <Text style={styles.sectionSubHeader}>Fitness Goals (Select Multi)</Text>
-            <View style={styles.chipsRow}>
-              {['Muscle Gain', 'Fat Loss', 'Strength', 'Endurance', 'General Fitness'].map((goal) => {
-                const isSelected = selectedGoals.includes(goal);
-                return (
-                  <TouchableOpacity
-                    key={goal}
-                    style={[styles.chip, isSelected && styles.activeChip]}
-                    onPress={() => toggleGoal(goal)}
-                  >
-                    <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{goal}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* PRs */}
-            <Text style={styles.sectionSubHeader}>Personal Records (1RM Maxes)</Text>
-            <View style={styles.prRow}>
-              <View style={styles.prBox}>
-                <Text style={styles.prLabel}>BENCH</Text>
-                <TextInput style={styles.prInput} value={bench} onChangeText={setBench} />
-              </View>
-              <View style={styles.prBox}>
-                <Text style={styles.prLabel}>SQUAT</Text>
-                <TextInput style={styles.prInput} value={squat} onChangeText={setSquat} />
-              </View>
-              <View style={styles.prBox}>
-                <Text style={styles.prLabel}>DEADLIFT</Text>
-                <TextInput style={styles.prInput} value={deadlift} onChangeText={setDeadlift} />
-              </View>
-            </View>
-          </View>
-
-          {/* Submit Profile & Enter Main App */}
-          <TouchableOpacity
-            style={[styles.limeButton, { marginVertical: 20 }]}
-            onPress={() => setCurrentScreen('main-app')}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.limeButtonText}>Save & Match</Text>
-          </TouchableOpacity>
 
-        </ScrollView>
+            <View style={styles.setupHeader}>
+              <Text style={styles.setupTitle}>Set Up Profile</Text>
+            </View>
+
+            <View style={styles.avatarSection}>
+              <View style={styles.avatarRing}>
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarEmoji}>💪</Text>
+                </View>
+                <View style={styles.cameraBadge}>
+                  <Text style={styles.cameraBadgeText}>+</Text>
+                </View>
+              </View>
+              <Text style={styles.avatarSubtext}>Tap to change workout profile photo</Text>
+            </View>
+
+            <View style={styles.profileFormCard}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>FULL NAME</Text>
+                <TextInput
+                  style={styles.input}
+                  value={profileData.fullName}
+                  onChangeText={(val) => setProfileData({ ...profileData, fullName: val })}
+                  placeholderTextColor="#666"
+                />
+              </View>
+
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                  <Text style={styles.inputLabel}>AGE</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={profileData.age}
+                    onChangeText={(val) => setProfileData({ ...profileData, age: val })}
+                    keyboardType="numeric"
+                    placeholderTextColor="#666"
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 2 }]}>
+                  <Text style={styles.inputLabel}>PRIMARY GYM</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={profileData.primaryGym}
+                    onChangeText={(val) => setProfileData({ ...profileData, primaryGym: val })}
+                    placeholderTextColor="#666"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.sectionSubHeader}>Experience Level</Text>
+              <View style={styles.chipsRow}>
+                {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map((level) => {
+                  const isSelected = profileData.experienceLevel === level;
+                  return (
+                    <TouchableOpacity
+                      key={level}
+                      style={[styles.chip, isSelected && styles.activeChip]}
+                      onPress={() => setProfileData({ ...profileData, experienceLevel: level })}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{level}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.sectionSubHeader}>Fitness Goals (Select Multi)</Text>
+              <View style={styles.chipsRow}>
+                {['Muscle Gain', 'Fat Loss', 'Strength', 'Endurance', 'General Fitness'].map((goal) => {
+                  const isSelected = profileData.selectedGoals.includes(goal);
+                  return (
+                    <TouchableOpacity
+                      key={goal}
+                      style={[styles.chip, isSelected && styles.activeChip]}
+                      onPress={() => toggleGoal(goal)}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{goal}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Personal Records Vertical Dropdown Triggers */}
+              <Text style={styles.sectionSubHeader}>Personal Records (1RM Maxes)</Text>
+
+              <View style={styles.prRowContainer}>
+                <View style={styles.prFieldWrapper}>
+                  <Text style={styles.inputLabel}>BENCH</Text>
+                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('bench')}>
+                    <Text style={styles.dropdownTriggerText}>{profileData.bench}</Text>
+                    <Text style={styles.dropdownArrow}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.prFieldWrapper}>
+                  <Text style={styles.inputLabel}>SQUAT</Text>
+                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('squat')}>
+                    <Text style={styles.dropdownTriggerText}>{profileData.squat}</Text>
+                    <Text style={styles.dropdownArrow}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.prFieldWrapper}>
+                  <Text style={styles.inputLabel}>DEADLIFT</Text>
+                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('deadlift')}>
+                    <Text style={styles.dropdownTriggerText}>{profileData.deadlift}</Text>
+                    <Text style={styles.dropdownArrow}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+            </View>
+
+            <TouchableOpacity
+              style={[styles.limeButton, { marginVertical: 20 }]}
+              onPress={() => setCurrentScreen('main-app')}
+            >
+              <Text style={styles.limeButtonText}>Save & Match</Text>
+            </TouchableOpacity>
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        {/* Vertical Dropdown Selection Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  Select {activePrField ? activePrField.toUpperCase() : 'Weight'} (lbs)
+                </Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={prOptions}
+                keyExtractor={(item) => item}
+                showsVerticalScrollIndicator={true}
+                renderItem={({ item }) => {
+                  const isSelected = profileData[activePrField] === item;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                      onPress={() => selectPrValue(item)}
+                    >
+                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     );
   }
@@ -313,7 +405,7 @@ export default function App() {
         return (
           <View style={styles.tabContentContainer}>
             <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>💬</Text>
+              <Text style={styles.emptyIcon}>🤝</Text>
             </View>
             <Text style={styles.emptyTitle}>Your Inbox is Empty</Text>
             <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Swipe right on prospective SwoleMates to start a conversation!</Text>
@@ -354,8 +446,9 @@ export default function App() {
             <View style={styles.emptyCircle}>
               <Text style={styles.emptyIcon}>👤</Text>
             </View>
-            <Text style={styles.emptyTitle}>{fullName}</Text>
-            <Text style={styles.emptyDesc}>{primaryGym} • Age {age} • {experienceLevel}</Text>
+            <Text style={styles.emptyTitle}>{profileData.fullName}</Text>
+            <Text style={styles.emptyDesc}>{profileData.primaryGym} • Age {profileData.age} • {profileData.experienceLevel}</Text>
+            <Text style={styles.savedPrsText}>Bench: {profileData.bench} | Squat: {profileData.squat} | Deadlift: {profileData.deadlift}</Text>
             <TouchableOpacity style={styles.limeButtonSmall} onPress={() => setCurrentScreen('profile-setup')}>
               <Text style={styles.limeButtonSmallText}>Edit Profile Info</Text>
             </TouchableOpacity>
@@ -369,14 +462,12 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mainAppContainer}>
-        {/* Dynamic Tab Body */}
         {renderMainTabContent()}
 
-        {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
           {[
             { name: 'Discover', icon: '✨' },
-            { name: 'Matches', icon: '❤️' },
+            { name: 'Matches', icon: '🤝' },
             { name: 'Dashboard', icon: '⚡' },
             { name: 'Plans', icon: '📅' },
             { name: 'Profile', icon: '👤' },
@@ -450,10 +541,9 @@ const styles = StyleSheet.create({
   termsHighlight: { color: '#FFFFFF', fontWeight: '600' },
   backLink: { alignItems: 'center', marginTop: 16 },
   backLinkText: { color: '#666666', fontSize: 13 },
-  scrollContainer: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
-  setupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  scrollContainer: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 },
+  setupHeader: { marginBottom: 20 },
   setupTitle: { fontSize: 26, fontWeight: '800', color: '#FFFFFF' },
-  stepIndicator: { color: '#CCFF00', fontSize: 14, fontWeight: '700' },
   avatarSection: { alignItems: 'center', marginBottom: 24 },
   avatarRing: {
     width: 90,
@@ -490,10 +580,30 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: '#1A1A1A', borderColor: '#CCFF00' },
   chipText: { color: '#777777', fontSize: 13, fontWeight: '600' },
   activeChipText: { color: '#CCFF00' },
-  prRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  prBox: { flex: 1, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#262626', borderRadius: 12, padding: 10 },
-  prLabel: { color: '#777777', fontSize: 10, fontWeight: '700', marginBottom: 4 },
-  prInput: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  prRowContainer: { flexDirection: 'row', gap: 8 },
+  prFieldWrapper: { flex: 1 },
+  dropdownTrigger: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#262626',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownTriggerText: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
+  dropdownArrow: { color: '#CCFF00', fontSize: 10 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#121212', borderRadius: 20, width: '100%', maxWidth: 340, height: '60%', padding: 20, borderWidth: 1, borderColor: '#222222' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#222222', paddingBottom: 10 },
+  modalTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  modalCloseText: { color: '#888888', fontSize: 18, fontWeight: 'bold' },
+  modalItem: { paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#1A1A1A', alignItems: 'center' },
+  modalItemSelected: { backgroundColor: '#1A1A1A', borderRadius: 8 },
+  modalItemText: { color: '#999999', fontSize: 15, fontWeight: '600' },
+  modalItemTextSelected: { color: '#CCFF00', fontWeight: 'bold' },
   mainAppContainer: { flex: 1, justifyContent: 'space-between' },
   tabContentContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   emptyCircle: {
@@ -510,6 +620,7 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 32 },
   emptyTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
   emptyDesc: { color: '#888888', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 24 },
+  savedPrsText: { color: '#CCFF00', fontSize: 13, fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   limeButtonSmall: { backgroundColor: '#CCFF00', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, alignItems: 'center' },
   limeButtonSmallText: { color: '#000000', fontSize: 14, fontWeight: '700' },
   bottomNav: {
