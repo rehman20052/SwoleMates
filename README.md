@@ -48,6 +48,7 @@ A lightweight nutrition summary can be added after the complete match-to-workout
 
 Branches are organized by feature area so teammates can collaborate around the actual app features:
 
+- `feature/user-accounts`
 - `feature/profile-preferences`
 - `feature/discovery-matching`
 - `feature/match-requests-chat`

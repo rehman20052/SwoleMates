@@ -8,6 +8,7 @@ Branches are organized by feature area instead of by teammate. Multiple members 
 
 | Branch | Feature area | Scope |
 |---|---|---|
+| `feature/user-accounts` | User accounts | Registration, sign in, password reset, and account deletion |
 | `feature/profile-preferences` | Profiles and preferences | Onboarding, public profile fields, photos, gym preference, availability, and dealbreakers |
 | `feature/discovery-matching` | Partner discovery | Match cards, filters, compatibility scoring, nearby partners, and "show outside range" behavior |
 | `feature/match-requests-chat` | Requests and messaging | Sending match requests, accept/decline states, private chat starter, and notifications |

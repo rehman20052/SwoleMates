@@ -1,194 +1,282 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
+import { ReactNode, useMemo, useRef } from "react";
+import { Animated, PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
-import { AppText, Card, Pill, PrimaryButton, Screen, SecondaryButton } from "@/components/ui";
-import { featureDirection, matchingFactors, partners, prototypeDirection } from "@/data/project";
+import { icons } from "@/assets";
+import { AppText, Brand, Icon, IconButton, Screen } from "@/components/ui";
+import { Partner, partners } from "@/data/partners";
+import { useNavigation } from "@/navigation";
+import { useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
-export function DiscoverScreen() {
-  const theme = useAppTheme();
-  const partner = partners[0];
+const SWIPE_THRESHOLD = 120;
+
+export function DiscoverScreen({ empty }: { empty: ReactNode }) {
+  const nav = useNavigation();
+  const { swiped, blocked, preferences, swipe } = useAppData();
+
+  const deck = useMemo(() => {
+    const maxDistance = preferences.distance * (preferences.expandScope ? 1.2 : 1);
+    return partners.filter(
+      (partner) => !swiped.includes(partner.id) && !blocked.includes(partner.id) && partner.distance <= maxDistance,
+    );
+  }, [swiped, blocked, preferences.distance, preferences.expandScope]);
+
+  const current = deck[0];
+
+  if (!current) {
+    return empty;
+  }
 
   return (
     <Screen>
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { padding: theme.spacing.lg }]}
-      >
-        <View style={styles.hero}>
-          <Pill tone="primary">MVP focus</Pill>
-          <AppText title>SwoleMates helps lifters find compatible gym partners.</AppText>
-          <AppText muted>{featureDirection.problem}</AppText>
+      <View style={styles.actionBar}>
+        <Brand size="sm" />
+        <View style={styles.actionIcons}>
+          <IconButton source={icons.sliders} label="Match settings" onPress={() => nav.setTab("Profile")} />
+          <IconButton source={icons.bell} label="Partner invites" onPress={() => nav.push({ name: "invites" })} />
         </View>
+      </View>
 
-        <Card style={{ gap: theme.spacing.md }}>
-          <View
-            style={[
-              styles.profileArt,
-              {
-                backgroundColor: theme.colors.surfaceMuted,
-                borderColor: theme.colors.border,
-              },
-            ]}
-          >
-            <View style={[styles.artCircle, { backgroundColor: theme.colors.primary }]} />
-            <View style={[styles.artPlate, { backgroundColor: theme.colors.teal }]} />
-            <View style={[styles.artBar, { backgroundColor: theme.colors.text }]} />
-          </View>
-
-          <View style={styles.rowBetween}>
-            <View>
-              <AppText title>
-                {partner.name}, {partner.age}
-              </AppText>
-              <AppText muted>
-                {partner.gym} · {partner.distance}
-              </AppText>
-            </View>
-            <View style={[styles.matchBadge, { backgroundColor: theme.colors.primary }]}>
-              <AppText style={{ color: theme.colors.primaryText, fontWeight: "800" }}>
-                {partner.match}%
-              </AppText>
-              <AppText small style={{ color: theme.colors.primaryText }}>
-                match
-              </AppText>
-            </View>
-          </View>
-
-          <View style={styles.pillWrap}>
-            <Pill>{partner.experience}</Pill>
-            <Pill tone="teal">{partner.split}</Pill>
-            <Pill tone="blue">{partner.availability}</Pill>
-          </View>
-
-          <View style={styles.metrics}>
-            <Metric label="Bench" value={partner.lifts.bench} />
-            <Metric label="Squat" value={partner.lifts.squat} />
-            <Metric label="Deadlift" value={partner.lifts.deadlift} />
-          </View>
-
-          <AppText>{partner.goal}</AppText>
-
-          <View style={styles.actions}>
-            <SecondaryButton>Skip</SecondaryButton>
-            <PrimaryButton>Send match request</PrimaryButton>
-          </View>
-        </Card>
-
-        <Card>
-          <AppText style={styles.sectionTitle}>Matching compares</AppText>
-          <View style={styles.pillWrap}>
-            {matchingFactors.map((factor) => (
-              <Pill key={factor}>{factor}</Pill>
-            ))}
-          </View>
-        </Card>
-
-        <Card>
-          <AppText style={styles.sectionTitle}>Prototype direction</AppText>
-          {prototypeDirection.map((item) => (
-            <AppText key={item} muted>
-              {item}
-            </AppText>
-          ))}
-        </Card>
-      </ScrollView>
+      <SwipeDeck key={current.id} partner={current} onSwipe={(liked) => swipe(current.id, liked)} />
     </Screen>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function SwipeDeck({ partner, onSwipe }: { partner: Partner; onSwipe: (liked: boolean) => void }) {
   const theme = useAppTheme();
+  const nav = useNavigation();
+  const { width } = useWindowDimensions();
+  const position = useRef(new Animated.ValueXY()).current;
+  const onSwipeRef = useRef(onSwipe);
+  onSwipeRef.current = onSwipe;
+
+  function flyOut(liked: boolean) {
+    Animated.timing(position, {
+      toValue: { x: (liked ? 1 : -1) * width * 1.5, y: 0 },
+      duration: 220,
+      useNativeDriver: false,
+    }).start(() => onSwipeRef.current(liked));
+  }
+
+  const responder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+      onPanResponderMove: Animated.event([null, { dx: position.x, dy: position.y }], { useNativeDriver: false }),
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dx > SWIPE_THRESHOLD) flyOut(true);
+        else if (gesture.dx < -SWIPE_THRESHOLD) flyOut(false);
+        else Animated.spring(position, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+      },
+    }),
+  ).current;
+
+  const rotate = position.x.interpolate({ inputRange: [-width, 0, width], outputRange: ["-12deg", "0deg", "12deg"] });
 
   return (
-    <View
-      style={[
-        styles.metric,
-        {
-          backgroundColor: theme.colors.surfaceMuted,
-          borderColor: theme.colors.border,
-        },
-      ]}
+    <>
+      <View style={styles.viewport}>
+        <Animated.View
+          {...responder.panHandlers}
+          style={[styles.cardWrap, { transform: [{ translateX: position.x }, { translateY: position.y }, { rotate }] }]}
+        >
+          <MatchCard partner={partner} />
+        </Animated.View>
+      </View>
+
+      <View style={styles.deckActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Pass on ${partner.name}`}
+          onPress={() => flyOut(false)}
+          style={[styles.roundButton, styles.large, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        >
+          <Icon source={icons.x} size={24} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Message ${partner.name}`}
+          onPress={() => nav.push({ name: "chat", id: partner.id })}
+          style={[styles.roundButton, styles.small, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        >
+          <Icon source={icons.messageSquare} size={20} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Send ${partner.name} a partner invite`}
+          onPress={() => flyOut(true)}
+          style={[styles.roundButton, styles.large, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+        >
+          <Icon source={icons.check} size={26} />
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+function MatchCard({ partner }: { partner: Partner }) {
+  const theme = useAppTheme();
+  const nav = useNavigation();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`View ${partner.name}'s profile`}
+      onPress={() => nav.push({ name: "partner", id: partner.id })}
+      style={styles.card}
     >
-      <AppText style={{ fontWeight: "800" }}>{value}</AppText>
-      <AppText small muted>
-        {label}
-      </AppText>
-    </View>
+      <Image source={partner.photos[0]} style={StyleSheet.absoluteFill} contentFit="cover" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0, 0, 0, 0.35)" }]} />
+
+      <View style={styles.badges}>
+        <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
+          <AppText size={13} weight="extrabold" color={theme.colors.primaryText}>
+            {partner.match}% Match
+          </AppText>
+        </View>
+        <View style={[styles.badge, styles.safetyBadge, { backgroundColor: theme.colors.scrim }]}>
+          <Icon source={icons.shield} size={14} />
+          <AppText size={12} weight="bold">
+            {partner.safety} Safety
+          </AppText>
+        </View>
+      </View>
+
+      <View style={styles.details}>
+        <View style={{ gap: 4 }}>
+          <AppText size={26} weight="black">
+            {partner.name}, {partner.age}
+          </AppText>
+          <AppText weight="semibold" primary>
+            {partner.style} • {partner.gym}
+          </AppText>
+        </View>
+        <View style={styles.metrics}>
+          <View style={[styles.metric, { backgroundColor: theme.colors.glass }]}>
+            <AppText size={12} weight="medium">
+              {partner.distance} miles away
+            </AppText>
+          </View>
+          <View style={[styles.metric, { backgroundColor: theme.colors.glass }]}>
+            <AppText size={12} weight="medium">
+              {partner.frequency} Availability
+            </AppText>
+          </View>
+        </View>
+        <View style={styles.prGrid}>
+          {(
+            [
+              ["Bench", partner.lifts.bench],
+              ["Squat", partner.lifts.squat],
+              ["Deadlift", partner.lifts.deadlift],
+            ] as const
+          ).map(([label, value]) => (
+            <View key={label} style={[styles.pr, { borderColor: theme.colors.border }]}>
+              <AppText size={9} weight="bold" muted upper>
+                {label}
+              </AppText>
+              <AppText size={13} weight="extrabold">
+                {value} lb
+              </AppText>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    gap: 16,
-    paddingBottom: 28,
-  },
-  hero: {
-    gap: 10,
-  },
-  profileArt: {
-    borderRadius: 16,
-    borderWidth: 1,
-    height: 210,
-    overflow: "hidden",
-  },
-  artCircle: {
-    borderRadius: 999,
-    height: 150,
-    position: "absolute",
-    right: -28,
-    top: -24,
-    width: 150,
-  },
-  artPlate: {
-    borderRadius: 999,
-    bottom: 34,
-    height: 86,
-    left: 34,
-    position: "absolute",
-    width: 86,
-  },
-  artBar: {
-    bottom: 75,
-    height: 12,
-    left: 44,
-    position: "absolute",
-    transform: [{ rotate: "-14deg" }],
-    width: 220,
-  },
-  rowBetween: {
+  actionBar: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
     justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingVertical: 8,
   },
-  matchBadge: {
-    alignItems: "center",
-    borderRadius: 14,
-    minWidth: 70,
+  actionIcons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  viewport: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  cardWrap: {
+    flex: 1,
+  },
+  card: {
+    borderRadius: 28,
+    flex: 1,
+    overflow: "hidden",
+  },
+  badges: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  badge: {
+    borderRadius: 100,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
-  pillWrap: {
+  safetyBadge: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+  },
+  details: {
+    bottom: 0,
+    gap: 12,
+    left: 0,
+    padding: 20,
+    position: "absolute",
+    right: 0,
+  },
+  metrics: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-  metrics: {
-    flexDirection: "row",
-    gap: 10,
-  },
   metric: {
-    borderRadius: 12,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  prGrid: {
+    flexDirection: "row",
+    gap: 8,
+    paddingTop: 8,
+  },
+  pr: {
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 10,
     borderWidth: 1,
     flex: 1,
-    padding: 12,
+    gap: 2,
+    padding: 8,
   },
-  actions: {
+  deckActions: {
+    alignItems: "center",
     flexDirection: "row",
-    gap: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 48,
+    paddingVertical: 12,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
+  roundButton: {
+    alignItems: "center",
+    borderWidth: 1,
+    justifyContent: "center",
+  },
+  large: {
+    borderRadius: 28,
+    height: 56,
+    width: 56,
+  },
+  small: {
+    borderRadius: 25,
+    height: 50,
+    width: 50,
   },
 });
