@@ -14,10 +14,27 @@ import {
   FlatList
 } from 'react-native';
 
+import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
+import { ChatScreen } from '@/screens/chat';
+import { DashboardScreen } from '@/screens/dashboard';
+import { DiscoverScreen } from '@/screens/discover';
+import { InboxScreen } from '@/screens/inbox';
+import { PartnerProfileScreen } from '@/screens/partner-profile';
+import { PlansScreen } from '@/screens/plans';
+import { ProfileScreen } from '@/screens/profile';
+import { RequestsScreen } from '@/screens/requests';
+import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
+import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
+import { useAppData } from '@/state/app-data';
+
+type PrField = 'bench' | 'squat' | 'deadlift';
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('launch');
   const [authMode, setAuthMode] = useState('signup');
-  const [activeTab, setActiveTab] = useState('Discover');
+  const [activeTab, setActiveTab] = useState<Tab>('Discover');
+  const [stack, setStack] = useState<Route[]>([]);
+  const { logWorkout } = useAppData();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,9 +53,9 @@ export default function App() {
 
   // Vertical Modal Picker State
   const [modalVisible, setModalVisible] = useState(false);
-  const [activePrField, setActivePrField] = useState(null); // 'bench' | 'squat' | 'deadlift'
+  const [activePrField, setActivePrField] = useState<PrField | null>(null);
 
-  const toggleGoal = (goal) => {
+  const toggleGoal = (goal: string) => {
     const goals = profileData.selectedGoals;
     if (goals.includes(goal)) {
       setProfileData({ ...profileData, selectedGoals: goals.filter(g => g !== goal) });
@@ -50,12 +67,12 @@ export default function App() {
   // Generate vertical list options: N/A followed by 1 to 999 lbs
   const prOptions = ['N/A', ...Array.from({ length: 999 }, (_, i) => `${i + 1} lbs`)];
 
-  const openPrModal = (field) => {
+  const openPrModal = (field: PrField) => {
     setActivePrField(field);
     setModalVisible(true);
   };
 
-  const selectPrValue = (val) => {
+  const selectPrValue = (val: string) => {
     if (activePrField) {
       setProfileData({ ...profileData, [activePrField]: val });
     }
@@ -362,7 +379,7 @@ export default function App() {
                 keyExtractor={(item) => item}
                 showsVerticalScrollIndicator={true}
                 renderItem={({ item }) => {
-                  const isSelected = profileData[activePrField] === item;
+                  const isSelected = activePrField !== null && profileData[activePrField] === item;
                   return (
                     <TouchableOpacity
                       style={[styles.modalItem, isSelected && styles.modalItemSelected]}
@@ -386,73 +403,120 @@ export default function App() {
   // ==========================================
   // 4. MAIN APP WITH BOTTOM NAVIGATION
   // ==========================================
+  const nav = {
+    push: (route: Route) => setStack((current) => [...current, route]),
+    // Replaces the top screen, or returns to that screen if it's already open underneath.
+    replace: (route: Route) =>
+      setStack((current) => {
+        const below = current.slice(0, -1);
+        const existing = below.findIndex((r) => JSON.stringify(r) === JSON.stringify(route));
+        return existing >= 0 ? below.slice(0, existing + 1) : [...below, route];
+      }),
+    back: () => setStack((current) => current.slice(0, -1)),
+    setTab: (tab: Tab) => {
+      setStack([]);
+      setActiveTab(tab);
+    },
+    signOut: () => {
+      setStack([]);
+      setActiveTab('Discover');
+      setCurrentScreen('launch');
+    },
+  };
+  const topRoute = stack[stack.length - 1];
+
+  const renderRoute = (route: Route) => {
+    switch (route.name) {
+      case 'partner':
+        return <PartnerProfileScreen id={route.id} />;
+      case 'invites':
+        return <RequestsScreen />;
+      case 'chat':
+        return <ChatScreen id={route.id} />;
+      case 'schedule':
+        return <ScheduleWorkoutScreen partnerId={route.partnerId} />;
+      case 'scheduled':
+        return <WorkoutScheduledScreen workoutId={route.workoutId} />;
+    }
+  };
+
   const renderMainTabContent = () => {
     switch (activeTab) {
       case 'Discover':
         return (
-          <View style={styles.tabContentContainer}>
-            <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>🔍</Text>
+          <DiscoverScreen empty={
+            <View style={styles.tabContentContainer}>
+              <View style={styles.emptyCircle}>
+                <Text style={styles.emptyIcon}>🔍</Text>
+              </View>
+              <Text style={styles.emptyTitle}>No Partners Nearby Yet</Text>
+              <Text style={styles.emptyDesc}>We couldn't find anyone matching your current filters within your search radius. Try expanding your search distance or style.</Text>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Profile')}>
+                <Text style={styles.limeButtonSmallText}>Expand Match Preferences</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>No Partners Nearby Yet</Text>
-            <Text style={styles.emptyDesc}>We couldn't find anyone matching your current filters within your search radius. Try expanding your search distance or style.</Text>
-            <TouchableOpacity style={styles.limeButtonSmall}>
-              <Text style={styles.limeButtonSmallText}>Expand Match Preferences</Text>
-            </TouchableOpacity>
-          </View>
+          } />
         );
       case 'Matches':
         return (
-          <View style={styles.tabContentContainer}>
-            <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>🤝</Text>
+          <InboxScreen empty={
+            <View style={styles.tabContentContainer}>
+              <View style={styles.emptyCircle}>
+                <Text style={styles.emptyIcon}>🤝</Text>
+              </View>
+              <Text style={styles.emptyTitle}>Your Inbox is Empty</Text>
+              <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Swipe right on prospective SwoleMates to start a conversation!</Text>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Discover')}>
+                <Text style={styles.limeButtonSmallText}>Start Swiping Now</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>Your Inbox is Empty</Text>
-            <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Swipe right on prospective SwoleMates to start a conversation!</Text>
-            <TouchableOpacity style={styles.limeButtonSmall}>
-              <Text style={styles.limeButtonSmallText}>Start Swiping Now</Text>
-            </TouchableOpacity>
-          </View>
+          } />
         );
       case 'Dashboard':
         return (
-          <View style={styles.tabContentContainer}>
-            <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>⚡</Text>
+          <DashboardScreen lifts={profileData} empty={
+            <View style={styles.tabContentContainer}>
+              <View style={styles.emptyCircle}>
+                <Text style={styles.emptyIcon}>⚡</Text>
+              </View>
+              <Text style={styles.emptyTitle}>No Active Streaks</Text>
+              <Text style={styles.emptyDesc}>Keep track of your consistency and PR progression alongside your partner. Complete your first logged session to start!</Text>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={logWorkout}>
+                <Text style={styles.limeButtonSmallText}>Log Today's Workout</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>No Active Streaks</Text>
-            <Text style={styles.emptyDesc}>Keep track of your consistency and PR progression alongside your partner. Complete your first logged session to start!</Text>
-            <TouchableOpacity style={styles.limeButtonSmall}>
-              <Text style={styles.limeButtonSmallText}>Log Today's Workout</Text>
-            </TouchableOpacity>
-          </View>
+          } />
         );
       case 'Plans':
         return (
-          <View style={styles.tabContentContainer}>
-            <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>📅</Text>
+          <PlansScreen empty={
+            <View style={styles.tabContentContainer}>
+              <View style={styles.emptyCircle}>
+                <Text style={styles.emptyIcon}>📅</Text>
+              </View>
+              <Text style={styles.emptyTitle}>No Scheduled Workouts</Text>
+              <Text style={styles.emptyDesc}>You don't have any sessions locked in. Set up a workout plan with one of your matches to stay reliable.</Text>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.push({ name: 'schedule' })}>
+                <Text style={styles.limeButtonSmallText}>Propose a New Session</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>No Scheduled Workouts</Text>
-            <Text style={styles.emptyDesc}>You don't have any sessions locked in. Set up a workout plan with one of your matches to stay reliable.</Text>
-            <TouchableOpacity style={styles.limeButtonSmall}>
-              <Text style={styles.limeButtonSmallText}>Propose a New Session</Text>
-            </TouchableOpacity>
-          </View>
+          } />
         );
       case 'Profile':
         return (
-          <View style={styles.tabContentContainer}>
-            <View style={styles.emptyCircle}>
-              <Text style={styles.emptyIcon}>👤</Text>
+          <ProfileScreen>
+            <View style={styles.tabContentContainer}>
+              <View style={styles.emptyCircle}>
+                <Text style={styles.emptyIcon}>👤</Text>
+              </View>
+              <Text style={styles.emptyTitle}>{profileData.fullName}</Text>
+              <Text style={styles.emptyDesc}>{profileData.primaryGym} • Age {profileData.age} • {profileData.experienceLevel}</Text>
+              <Text style={styles.savedPrsText}>Bench: {profileData.bench} | Squat: {profileData.squat} | Deadlift: {profileData.deadlift}</Text>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => setCurrentScreen('profile-setup')}>
+                <Text style={styles.limeButtonSmallText}>Edit Profile Info</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>{profileData.fullName}</Text>
-            <Text style={styles.emptyDesc}>{profileData.primaryGym} • Age {profileData.age} • {profileData.experienceLevel}</Text>
-            <Text style={styles.savedPrsText}>Bench: {profileData.bench} | Squat: {profileData.squat} | Deadlift: {profileData.deadlift}</Text>
-            <TouchableOpacity style={styles.limeButtonSmall} onPress={() => setCurrentScreen('profile-setup')}>
-              <Text style={styles.limeButtonSmallText}>Edit Profile Info</Text>
-            </TouchableOpacity>
-          </View>
+          </ProfileScreen>
         );
       default:
         return null;
@@ -460,24 +524,26 @@ export default function App() {
   };
 
   return (
+    <NavigationContext.Provider value={nav}>
     <SafeAreaView style={styles.container}>
       <View style={styles.mainAppContainer}>
-        {renderMainTabContent()}
+        {topRoute ? renderRoute(topRoute) : renderMainTabContent()}
 
+        {!(topRoute && fullScreenRoutes.includes(topRoute.name)) && (
         <View style={styles.bottomNav}>
-          {[
+          {([
             { name: 'Discover', icon: '✨' },
             { name: 'Matches', icon: '🤝' },
             { name: 'Dashboard', icon: '⚡' },
             { name: 'Plans', icon: '📅' },
             { name: 'Profile', icon: '👤' },
-          ].map((tab) => {
+          ] as const).map((tab) => {
             const isActive = activeTab === tab.name;
             return (
               <TouchableOpacity
                 key={tab.name}
                 style={styles.navItem}
-                onPress={() => setActiveTab(tab.name)}
+                onPress={() => nav.setTab(tab.name)}
               >
                 <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
                 <Text style={[styles.navLabel, isActive && styles.activeNavLabel]}>{tab.name}</Text>
@@ -485,8 +551,10 @@ export default function App() {
             );
           })}
         </View>
+        )}
       </View>
     </SafeAreaView>
+    </NavigationContext.Provider>
   );
 }
 
