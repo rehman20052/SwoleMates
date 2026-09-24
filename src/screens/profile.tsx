@@ -30,11 +30,12 @@ type ProfileScreenProps = {
   profile: UserProfile;
   saving: boolean;
   error: string | null;
+  title?: string;
   onChange: (profile: UserProfile) => void;
   onSave: () => void;
 };
 
-export function ProfileScreen({ profile, saving, error, onChange, onSave }: ProfileScreenProps) {
+export function ProfileScreen({ profile, saving, error, title = "Edit Profile", onChange, onSave }: ProfileScreenProps) {
   const theme = useAppTheme();
   const nav = useNavigation();
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -64,7 +65,7 @@ export function ProfileScreen({ profile, saving, error, onChange, onSave }: Prof
     <Screen>
       <ScrollBody>
         <AppText size={20} weight="extrabold">
-          Edit Profile
+          {title}
         </AppText>
 
         <Card>
@@ -78,12 +79,8 @@ export function ProfileScreen({ profile, saving, error, onChange, onSave }: Prof
               const isNextEmpty = !photo && index === profile.photos.length;
               const locked = !photo && index > profile.photos.length;
               return (
-                <Pressable
+                <View
                   key={index}
-                  accessibilityRole="button"
-                  accessibilityLabel={photo ? `Replace photo ${index + 1}` : index === 0 ? "Add profile photo" : `Add photo ${index + 1}`}
-                  disabled={locked || saving}
-                  onPress={() => addPhoto(index)}
                   style={[
                     styles.photoSlot,
                     {
@@ -93,18 +90,26 @@ export function ProfileScreen({ profile, saving, error, onChange, onSave }: Prof
                     },
                   ]}
                 >
-                  {photo ? (
-                    <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                  ) : (
-                    <View style={styles.photoEmpty}>
-                      <AppText size={22} weight="bold" primary>
-                        +
-                      </AppText>
-                      <AppText size={10} weight="bold" muted style={styles.photoLabel}>
-                        {index === 0 ? "Profile photo" : isNextEmpty ? "Add" : ""}
-                      </AppText>
-                    </View>
-                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={photo ? `Replace photo ${index + 1}` : index === 0 ? "Add profile photo" : `Add photo ${index + 1}`}
+                    disabled={locked || saving}
+                    onPress={() => addPhoto(index)}
+                    style={styles.photoPress}
+                  >
+                    {photo ? (
+                      <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    ) : (
+                      <View style={styles.photoEmpty}>
+                        <AppText size={22} weight="bold" primary>
+                          +
+                        </AppText>
+                        <AppText size={10} weight="bold" muted style={styles.photoLabel}>
+                          {index === 0 ? "Profile photo" : isNextEmpty ? "Add" : ""}
+                        </AppText>
+                      </View>
+                    )}
+                  </Pressable>
                   {photo ? (
                     <Pressable
                       accessibilityRole="button"
@@ -118,7 +123,7 @@ export function ProfileScreen({ profile, saving, error, onChange, onSave }: Prof
                       </AppText>
                     </Pressable>
                   ) : null}
-                </Pressable>
+                </View>
               );
             })}
           </View>
@@ -335,6 +340,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
     width: "31%",
+  },
+  photoPress: {
+    flex: 1,
   },
   photoEmpty: {
     alignItems: "center",

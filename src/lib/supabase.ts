@@ -5,29 +5,26 @@ const supabaseClientKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-function createSupabaseClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseClientKey) {
-    throw new Error(
-      "Missing EXPO_PUBLIC_SUPABASE_URL and either EXPO_PUBLIC_SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
-    );
-  }
+if (!supabaseUrl || !supabaseClientKey) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_SUPABASE_URL and either EXPO_PUBLIC_SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+  );
+}
 
-  return createClient(supabaseUrl, supabaseClientKey, {
+const globalClient = globalThis as typeof globalThis & {
+  __swolematesSupabase?: SupabaseClient;
+};
+
+// Reuse one client across refreshes. A second client on the same browser
+// session makes sign-in fail or hang.
+export const supabase =
+  globalClient.__swolematesSupabase ??
+  createClient(supabaseUrl, supabaseClientKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
     },
   });
-}
 
-let client: SupabaseClient | undefined;
-
-// Created on first use so a missing .env does not crash the rest of the app.
-export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
-  get(_target, property) {
-    client ??= createSupabaseClient();
-    const value = Reflect.get(client, property, client) as unknown;
-    return typeof value === "function" ? value.bind(client) : value;
-  },
-});
+globalClient.__swolematesSupabase = supabase;
