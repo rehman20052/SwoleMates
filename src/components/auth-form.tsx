@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { AppText, Field, Input, PrimaryButton, Segmented } from "@/components/ui";
-import { loadProfile, type UserProfile } from "@/lib/profile";
+import { profileFromUser, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/theme";
 
@@ -52,43 +52,35 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
 
     setSubmitting(true);
     try {
-      if (mode === "signup") {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: trimmedEmail,
-          password,
-        });
+      const result =
+        mode === "signup"
+          ? await supabase.auth.signUp({ email: trimmedEmail, password })
+          : await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
 
-        if (signUpError) {
-          setError(signUpError.message);
-          return;
-        }
-
-        if (data.user && data.user.identities?.length === 0) {
-          setError("An account with this email already exists. Try logging in.");
-          return;
-        }
-
-        if (!data.session) {
-          setNotice("Check your email to confirm your account, then log in.");
-          setMode("login");
-          return;
-        }
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password,
-        });
-
-        if (signInError) {
-          setError(signInError.message);
-          return;
-        }
+      if (result.error) {
+        setError(result.error.message);
+        return;
       }
 
-      const profile = await loadProfile();
-      onSuccess?.(profile);
+      if (mode === "signup" && result.data.user && result.data.user.identities?.length === 0) {
+        setError("An account with this email already exists. Try logging in.");
+        return;
+      }
+
+      if (!result.data.session) {
+        setNotice("Check your email to confirm your account, then log in.");
+        setMode("login");
+        return;
+      }
+
+      onSuccess?.(profileFromUser(result.data.user));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      const message = err instanceof Error ? err.message : "Something went wrong. Try again.";
+      setError(
+        message === "Failed to fetch"
+          ? "Could not reach Supabase. Check your connection or antivirus, then try again."
+          : message,
+      );
     } finally {
       setSubmitting(false);
     }

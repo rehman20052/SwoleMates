@@ -2,16 +2,12 @@ import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   ImageBackground,
-  ScrollView,
-  Modal,
-  FlatList
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
@@ -30,7 +26,23 @@ import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
 
-type PrField = 'bench' | 'squat' | 'deadlift';
+const emptyProfile = (): UserProfile => ({
+  fullName: '',
+  age: '',
+  gender: '',
+  primaryGym: '',
+  hometown: '',
+  zipCode: '',
+  about: '',
+  experienceLevel: 'Intermediate',
+  selectedGoals: [],
+  bench: 'N/A',
+  squat: 'N/A',
+  deadlift: 'N/A',
+  customLiftName: '',
+  customLift: 'N/A',
+  photos: [],
+});
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('launch');
@@ -38,46 +50,12 @@ export default function App() {
   const [stack, setStack] = useState<Route[]>([]);
   const { logWorkout } = useAppData();
 
-  const [profileData, setProfileData] = useState<UserProfile>({
-    fullName: 'Alex Rivera',
-    age: '26',
-    gender: '',
-    primaryGym: "Gold's Gym Downtown",
-    hometown: '',
-    zipCode: '',
-    about: '',
-    experienceLevel: 'Intermediate',
-    selectedGoals: ['Muscle Gain', 'Strength'],
-    bench: '225 lbs',
-    squat: '315 lbs',
-    deadlift: '405 lbs',
-    customLiftName: '',
-    customLift: 'N/A',
-    photos: [],
-  });
+  const [profileData, setProfileData] = useState<UserProfile>(emptyProfile);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  const freshProfile = (): UserProfile => ({
-    fullName: 'Alex Rivera',
-    age: '26',
-    gender: '',
-    primaryGym: "Gold's Gym Downtown",
-    hometown: '',
-    zipCode: '',
-    about: '',
-    experienceLevel: 'Intermediate',
-    selectedGoals: ['Muscle Gain', 'Strength'],
-    bench: '225 lbs',
-    squat: '315 lbs',
-    deadlift: '405 lbs',
-    customLiftName: '',
-    customLift: 'N/A',
-    photos: [],
-  });
-
   const continueAfterAuth = (profile: UserProfile | null) => {
-    setProfileData(profile ?? freshProfile());
+    setProfileData(profile ?? emptyProfile());
     setCurrentScreen(profile ? 'main-app' : 'profile-setup');
   };
 
@@ -100,41 +78,43 @@ export default function App() {
     setSavingProfile(true);
     setProfileError(null);
     try {
-      await saveProfile(profileData);
+      const saved = await saveProfile(profileData);
+      setProfileData(saved);
       setCurrentScreen('main-app');
     } catch (err) {
-      setProfileError(err instanceof Error ? err.message : 'Could not save your profile.');
+      const message = err instanceof Error ? err.message : 'Could not save your profile.';
+      setProfileError(
+        message === 'Failed to fetch'
+          ? 'Could not reach Supabase to save your profile. Check your connection and try again.'
+          : message === 'OVERSIZED_SESSION'
+            ? 'Sign out and sign in again, then save. This login is still carrying an old photo.'
+            : message,
+      );
     } finally {
       setSavingProfile(false);
     }
   };
 
-  // Vertical Modal Picker State
-  const [modalVisible, setModalVisible] = useState(false);
-  const [activePrField, setActivePrField] = useState<PrField | null>(null);
-
-  const toggleGoal = (goal: string) => {
-    const goals = profileData.selectedGoals;
-    if (goals.includes(goal)) {
-      setProfileData({ ...profileData, selectedGoals: goals.filter(g => g !== goal) });
-    } else {
-      setProfileData({ ...profileData, selectedGoals: [...goals, goal] });
-    }
-  };
-
-  // Generate vertical list options: N/A followed by 1 to 999 lbs
-  const prOptions = ['N/A', ...Array.from({ length: 999 }, (_, i) => `${i + 1} lbs`)];
-
-  const openPrModal = (field: PrField) => {
-    setActivePrField(field);
-    setModalVisible(true);
-  };
-
-  const selectPrValue = (val: string) => {
-    if (activePrField) {
-      setProfileData({ ...profileData, [activePrField]: val });
-    }
-    setModalVisible(false);
+  const nav = {
+    push: (route: Route) => setStack((current) => [...current, route]),
+    replace: (route: Route) =>
+      setStack((current) => {
+        const below = current.slice(0, -1);
+        const existing = below.findIndex((r) => JSON.stringify(r) === JSON.stringify(route));
+        return existing >= 0 ? below.slice(0, existing + 1) : [...below, route];
+      }),
+    back: () => setStack((current) => current.slice(0, -1)),
+    setTab: (tab: Tab) => {
+      setStack([]);
+      setActiveTab(tab);
+    },
+    signOut: () => {
+      void supabase.auth.signOut();
+      setProfileData(emptyProfile());
+      setStack([]);
+      setActiveTab('Discover');
+      setCurrentScreen('launch');
+    },
   };
 
   // ==========================================
@@ -212,212 +192,23 @@ export default function App() {
   // ==========================================
   if (currentScreen === 'profile-setup') {
     return (
-      <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ flex: 1 }}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContainer}
-            showsVerticalScrollIndicator={false}
-          >
-
-            <View style={styles.setupHeader}>
-              <Text style={styles.setupTitle}>Set Up Profile</Text>
-            </View>
-
-            <View style={styles.avatarSection}>
-              <View style={styles.avatarRing}>
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarEmoji}>💪</Text>
-                </View>
-                <View style={styles.cameraBadge}>
-                  <Text style={styles.cameraBadgeText}>+</Text>
-                </View>
-              </View>
-              <Text style={styles.avatarSubtext}>Tap to change workout profile photo</Text>
-            </View>
-
-            <View style={styles.profileFormCard}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>FULL NAME</Text>
-                <TextInput
-                  style={styles.input}
-                  value={profileData.fullName}
-                  onChangeText={(val) => setProfileData({ ...profileData, fullName: val })}
-                  placeholderTextColor="#666"
-                />
-              </View>
-
-              <View style={styles.rowInputs}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                  <Text style={styles.inputLabel}>AGE</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={profileData.age}
-                    onChangeText={(val) => setProfileData({ ...profileData, age: val })}
-                    keyboardType="numeric"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 2 }]}>
-                  <Text style={styles.inputLabel}>PRIMARY GYM</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={profileData.primaryGym}
-                    onChangeText={(val) => setProfileData({ ...profileData, primaryGym: val })}
-                    placeholderTextColor="#666"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.sectionSubHeader}>Experience Level</Text>
-              <View style={styles.chipsRow}>
-                {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map((level) => {
-                  const isSelected = profileData.experienceLevel === level;
-                  return (
-                    <TouchableOpacity
-                      key={level}
-                      style={[styles.chip, isSelected && styles.activeChip]}
-                      onPress={() => setProfileData({ ...profileData, experienceLevel: level })}
-                    >
-                      <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{level}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.sectionSubHeader}>Fitness Goals (Select Multi)</Text>
-              <View style={styles.chipsRow}>
-                {['Muscle Gain', 'Fat Loss', 'Strength', 'Endurance', 'General Fitness'].map((goal) => {
-                  const isSelected = profileData.selectedGoals.includes(goal);
-                  return (
-                    <TouchableOpacity
-                      key={goal}
-                      style={[styles.chip, isSelected && styles.activeChip]}
-                      onPress={() => toggleGoal(goal)}
-                    >
-                      <Text style={[styles.chipText, isSelected && styles.activeChipText]}>{goal}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Personal Records Vertical Dropdown Triggers */}
-              <Text style={styles.sectionSubHeader}>Personal Records (1RM Maxes)</Text>
-
-              <View style={styles.prRowContainer}>
-                <View style={styles.prFieldWrapper}>
-                  <Text style={styles.inputLabel}>BENCH</Text>
-                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('bench')}>
-                    <Text style={styles.dropdownTriggerText}>{profileData.bench}</Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.prFieldWrapper}>
-                  <Text style={styles.inputLabel}>SQUAT</Text>
-                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('squat')}>
-                    <Text style={styles.dropdownTriggerText}>{profileData.squat}</Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.prFieldWrapper}>
-                  <Text style={styles.inputLabel}>DEADLIFT</Text>
-                  <TouchableOpacity style={styles.dropdownTrigger} onPress={() => openPrModal('deadlift')}>
-                    <Text style={styles.dropdownTriggerText}>{profileData.deadlift}</Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-            </View>
-
-            {profileError ? (
-              <Text style={styles.profileError}>{profileError}</Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.limeButton, { marginVertical: 20, opacity: savingProfile ? 0.7 : 1 }]}
-              disabled={savingProfile}
-              onPress={() => saveAndMatch()}
-            >
-              <Text style={styles.limeButtonText}>{savingProfile ? 'Saving...' : 'Save & Match'}</Text>
-            </TouchableOpacity>
-
-          </ScrollView>
-        </KeyboardAvoidingView>
-
-        {/* Vertical Dropdown Selection Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={modalVisible}
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Select {activePrField ? activePrField.toUpperCase() : 'Weight'} (lbs)
-                </Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Text style={styles.modalCloseText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <FlatList
-                data={prOptions}
-                keyExtractor={(item) => item}
-                showsVerticalScrollIndicator={true}
-                renderItem={({ item }) => {
-                  const isSelected = activePrField !== null && profileData[activePrField] === item;
-                  return (
-                    <TouchableOpacity
-                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
-                      onPress={() => selectPrValue(item)}
-                    >
-                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            </View>
-          </View>
-        </Modal>
-
-      </SafeAreaView>
+      <NavigationContext.Provider value={nav}>
+        <ProfileScreen
+          profile={profileData}
+          saving={savingProfile}
+          error={profileError}
+          title="Create your profile"
+          onChange={setProfileData}
+          onSave={() => saveAndMatch(true)}
+        />
+      </NavigationContext.Provider>
     );
   }
 
   // ==========================================
   // 4. MAIN APP WITH BOTTOM NAVIGATION
   // ==========================================
-  const nav = {
-    push: (route: Route) => setStack((current) => [...current, route]),
-    // Replaces the top screen, or returns to that screen if it's already open underneath.
-    replace: (route: Route) =>
-      setStack((current) => {
-        const below = current.slice(0, -1);
-        const existing = below.findIndex((r) => JSON.stringify(r) === JSON.stringify(route));
-        return existing >= 0 ? below.slice(0, existing + 1) : [...below, route];
-      }),
-    back: () => setStack((current) => current.slice(0, -1)),
-    setTab: (tab: Tab) => {
-      setStack([]);
-      setActiveTab(tab);
-    },
-    signOut: () => {
-      void supabase.auth.signOut();
-      setProfileData(freshProfile());
-      setStack([]);
-      setActiveTab('Discover');
-      setCurrentScreen('launch');
-    },
-  };
+
   const topRoute = stack[stack.length - 1];
 
   const renderRoute = (route: Route) => {
