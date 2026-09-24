@@ -14,6 +14,7 @@ import {
   FlatList
 } from 'react-native';
 
+import { AuthForm } from '@/components/auth-form';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { ChatScreen } from '@/screens/chat';
 import { DashboardScreen } from '@/screens/dashboard';
@@ -31,14 +32,9 @@ type PrField = 'bench' | 'squat' | 'deadlift';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('launch');
-  const [authMode, setAuthMode] = useState('signup');
   const [activeTab, setActiveTab] = useState<Tab>('Discover');
   const [stack, setStack] = useState<Route[]>([]);
   const { logWorkout } = useAppData();
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [profileData, setProfileData] = useState({
     fullName: 'Alex Rivera',
@@ -134,77 +130,7 @@ export default function App() {
           </View>
 
           <View style={styles.authCard}>
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tab, authMode === 'signup' && styles.activeTab]}
-                onPress={() => setAuthMode('signup')}
-              >
-                <Text style={[styles.tabText, authMode === 'signup' && styles.activeTabText]}>Sign Up</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tab, authMode === 'login' && styles.activeTab]}
-                onPress={() => setAuthMode('login')}
-              >
-                <Text style={[styles.tabText, authMode === 'login' && styles.activeTabText]}>Log In</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. gym@swolemates.com"
-                placeholderTextColor="#666"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>PASSWORD</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            {authMode === 'signup' && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>CONFIRM PASSWORD</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor="#666"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-            )}
-
-            {authMode === 'login' && (
-              <TouchableOpacity style={styles.forgotPasswordContainer}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={styles.limeButton}
-              onPress={() => setCurrentScreen('profile-setup')}
-            >
-              <Text style={styles.limeButtonText}>
-                {authMode === 'signup' ? 'Create Account' : 'Log In'}
-              </Text>
-            </TouchableOpacity>
+            <AuthForm onSuccess={() => setCurrentScreen('profile-setup')} />
           </View>
 
           <Text style={styles.termsText}>
@@ -586,11 +512,6 @@ const styles = StyleSheet.create({
   authInnerContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   authHeader: { marginBottom: 24, paddingHorizontal: 4 },
   authCard: { backgroundColor: '#121212', borderWidth: 1, borderColor: '#222222', borderRadius: 24, padding: 20 },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#1A1A1A', borderRadius: 12, padding: 4, marginBottom: 20 },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 10 },
-  activeTab: { backgroundColor: '#262626' },
-  tabText: { color: '#777777', fontSize: 14, fontWeight: '600' },
-  activeTabText: { color: '#CCFF00' },
   inputGroup: { marginBottom: 14 },
   inputLabel: { color: '#888888', fontSize: 11, fontWeight: '700', marginBottom: 6, letterSpacing: 0.5 },
   input: {
@@ -603,8 +524,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262626',
   },
-  forgotPasswordContainer: { alignItems: 'flex-end', marginBottom: 14 },
-  forgotPasswordText: { color: '#CCFF00', fontSize: 13, fontWeight: '600' },
   termsText: { color: '#777777', fontSize: 12, textAlign: 'center', marginTop: 20 },
   termsHighlight: { color: '#FFFFFF', fontWeight: '600' },
   backLink: { alignItems: 'center', marginTop: 16 },
