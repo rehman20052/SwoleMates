@@ -15,7 +15,9 @@ import {
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
+import { saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
+import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
 import { DashboardScreen } from '@/screens/dashboard';
 import { DiscoverScreen } from '@/screens/discover';
@@ -36,7 +38,7 @@ export default function App() {
   const [stack, setStack] = useState<Route[]>([]);
   const { logWorkout } = useAppData();
 
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<UserProfile>({
     fullName: 'Alex Rivera',
     age: '26',
     primaryGym: "Gold's Gym Downtown",
@@ -46,6 +48,42 @@ export default function App() {
     squat: '315 lbs',
     deadlift: '405 lbs'
   });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const freshProfile = (): UserProfile => ({
+    fullName: 'Alex Rivera',
+    age: '26',
+    primaryGym: "Gold's Gym Downtown",
+    experienceLevel: 'Intermediate',
+    selectedGoals: ['Muscle Gain', 'Strength'],
+    bench: '225 lbs',
+    squat: '315 lbs',
+    deadlift: '405 lbs',
+  });
+
+  const continueAfterAuth = (profile: UserProfile | null) => {
+    setProfileData(profile ?? freshProfile());
+    setCurrentScreen(profile ? 'main-app' : 'profile-setup');
+  };
+
+  const saveAndMatch = async () => {
+    if (!profileData.fullName.trim()) {
+      setProfileError('Enter your name before saving.');
+      return;
+    }
+
+    setSavingProfile(true);
+    setProfileError(null);
+    try {
+      await saveProfile(profileData);
+      setCurrentScreen('main-app');
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Could not save your profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   // Vertical Modal Picker State
   const [modalVisible, setModalVisible] = useState(false);
@@ -130,7 +168,7 @@ export default function App() {
           </View>
 
           <View style={styles.authCard}>
-            <AuthForm onSuccess={() => setCurrentScreen('profile-setup')} />
+            <AuthForm onSuccess={continueAfterAuth} />
           </View>
 
           <Text style={styles.termsText}>
@@ -272,11 +310,16 @@ export default function App() {
 
             </View>
 
+            {profileError ? (
+              <Text style={styles.profileError}>{profileError}</Text>
+            ) : null}
+
             <TouchableOpacity
-              style={[styles.limeButton, { marginVertical: 20 }]}
-              onPress={() => setCurrentScreen('main-app')}
+              style={[styles.limeButton, { marginVertical: 20, opacity: savingProfile ? 0.7 : 1 }]}
+              disabled={savingProfile}
+              onPress={saveAndMatch}
             >
-              <Text style={styles.limeButtonText}>Save & Match</Text>
+              <Text style={styles.limeButtonText}>{savingProfile ? 'Saving...' : 'Save & Match'}</Text>
             </TouchableOpacity>
 
           </ScrollView>
@@ -344,6 +387,8 @@ export default function App() {
       setActiveTab(tab);
     },
     signOut: () => {
+      void supabase.auth.signOut();
+      setProfileData(freshProfile());
       setStack([]);
       setActiveTab('Discover');
       setCurrentScreen('launch');
@@ -524,6 +569,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262626',
   },
+  profileError: { color: '#FF3B30', fontSize: 13, textAlign: 'center', marginTop: 16 },
   termsText: { color: '#777777', fontSize: 12, textAlign: 'center', marginTop: 20 },
   termsHighlight: { color: '#FFFFFF', fontWeight: '600' },
   backLink: { alignItems: 'center', marginTop: 16 },
