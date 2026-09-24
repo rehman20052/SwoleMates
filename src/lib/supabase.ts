@@ -1,14 +1,18 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseClientKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 function createSupabaseClient(): SupabaseClient {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY.");
+  if (!supabaseUrl || !supabaseClientKey) {
+    throw new Error(
+      "Missing EXPO_PUBLIC_SUPABASE_URL and either EXPO_PUBLIC_SUPABASE_ANON_KEY or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+    );
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(supabaseUrl, supabaseClientKey, {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
