@@ -2,13 +2,14 @@ import { useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { AppText, Field, Input, PrimaryButton, Segmented } from "@/components/ui";
+import { loadProfile, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/theme";
 
 type AuthMode = "signup" | "login";
 
 type AuthFormProps = {
-  onSuccess?: () => void;
+  onSuccess?: (profile: UserProfile | null) => void;
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -84,7 +85,8 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
         }
       }
 
-      onSuccess?.();
+      const profile = await loadProfile();
+      onSuccess?.(profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
     } finally {
