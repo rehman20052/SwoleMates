@@ -21,7 +21,6 @@ import { InboxScreen } from '@/screens/inbox';
 import { PartnerProfileScreen } from '@/screens/partner-profile';
 import { PlansScreen } from '@/screens/plans';
 import { ProfileScreen } from '@/screens/profile';
-import { RequestsScreen } from '@/screens/requests';
 import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
@@ -215,8 +214,6 @@ export default function App() {
     switch (route.name) {
       case 'partner':
         return <PartnerProfileScreen id={route.id} />;
-      case 'invites':
-        return <RequestsScreen />;
       case 'chat':
         return <ChatScreen id={route.id} />;
       case 'schedule':
@@ -243,7 +240,7 @@ export default function App() {
             </View>
           } />
         );
-      case 'Matches':
+      case 'Chat':
         return (
           <InboxScreen empty={
             <View style={styles.tabContentContainer}>
@@ -251,9 +248,9 @@ export default function App() {
                 <Text style={styles.emptyIcon}>🤝</Text>
               </View>
               <Text style={styles.emptyTitle}>Your Inbox is Empty</Text>
-              <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Swipe right on prospective SwoleMates to start a conversation!</Text>
+              <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Invite prospective SwoleMates from Discover to start a conversation!</Text>
               <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Discover')}>
-                <Text style={styles.limeButtonSmallText}>Start Swiping Now</Text>
+                <Text style={styles.limeButtonSmallText}>Browse Profiles</Text>
               </TouchableOpacity>
             </View>
           } />
@@ -313,7 +310,7 @@ export default function App() {
         <View style={styles.bottomNav}>
           {([
             { name: 'Discover', icon: '✨' },
-            { name: 'Matches', icon: '🤝' },
+            { name: 'Chat', icon: '💬' },
             { name: 'Dashboard', icon: '⚡' },
             { name: 'Plans', icon: '📅' },
             { name: 'Profile', icon: '👤' },

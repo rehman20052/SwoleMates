@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
@@ -40,33 +40,25 @@ export function confirmSafetyAction(
 }
 
 function PartnerProfile({ partner }: { partner: Partner }) {
-  const theme = useAppTheme();
   const nav = useNavigation();
-  const { block, swipe } = useAppData();
-
-  function handleBlock() {
-    confirmSafetyAction(partner, "block", () => {
-      block(partner.id);
-      nav.back();
-    });
-  }
-
-  function handleReport() {
-    confirmSafetyAction(partner, "report", () =>
-      Alert.alert("Report submitted", "Thanks for helping keep SwoleMates safe."),
-    );
-  }
-
-  function handleHide() {
-    swipe(partner.id, false);
-    nav.back();
-  }
+  const { block } = useAppData();
 
   function openMore() {
     Alert.alert(partner.name, undefined, [
       { text: `Message ${firstName(partner)}`, onPress: () => nav.push({ name: "chat", id: partner.id }) },
-      { text: "Report", onPress: handleReport },
-      { text: "Block", style: "destructive", onPress: handleBlock },
+      {
+        text: "Report",
+        onPress: () => confirmSafetyAction(partner, "report", () => Alert.alert("Report submitted", "Thanks for helping keep SwoleMates safe.")),
+      },
+      {
+        text: "Block",
+        style: "destructive",
+        onPress: () =>
+          confirmSafetyAction(partner, "block", () => {
+            block(partner.id);
+            nav.back();
+          }),
+      },
       { text: "Cancel", style: "cancel" },
     ]);
   }
@@ -80,10 +72,48 @@ function PartnerProfile({ partner }: { partner: Partner }) {
         </AppText>
         <IconButton source={icons.moreHorizontal} label="More options" onPress={openMore} />
       </View>
+      <PartnerDetails partner={partner} onRemoved={nav.back} />
+    </Screen>
+  );
+}
 
+// The full, scrollable profile. Discover shows it with a decision footer so people
+// read the whole profile before choosing, instead of swiping on a photo.
+export function PartnerDetails({
+  partner,
+  footer,
+  onRemoved,
+}: {
+  partner: Partner;
+  footer?: ReactNode;
+  onRemoved?: () => void;
+}) {
+  const theme = useAppTheme();
+  const { block, review } = useAppData();
+
+  function handleBlock() {
+    confirmSafetyAction(partner, "block", () => {
+      block(partner.id);
+      onRemoved?.();
+    });
+  }
+
+  function handleReport() {
+    confirmSafetyAction(partner, "report", () =>
+      Alert.alert("Report submitted", "Thanks for helping keep SwoleMates safe."),
+    );
+  }
+
+  function handleHide() {
+    review(partner.id, false);
+    onRemoved?.();
+  }
+
+  return (
       <ScrollBody contentContainerStyle={{ paddingHorizontal: 20 }}>
         <View style={styles.hero}>
           <Image source={partner.photos[0]} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0, 0, 0, 0.3)" }]} />
           <View style={styles.heroBadges}>
             <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
               <AppText size={13} weight="extrabold" color={theme.colors.primaryText}>
@@ -95,6 +125,23 @@ function PartnerProfile({ partner }: { partner: Partner }) {
               <AppText size={12} weight="bold">
                 {partner.safety} Safety Rating
               </AppText>
+            </View>
+          </View>
+          <View style={styles.heroDetails}>
+            <AppText size={26} weight="black">
+              {partner.name}, {partner.age}
+            </AppText>
+            <AppText weight="semibold" primary>
+              {partner.style} • {partner.gym}
+            </AppText>
+            <View style={[styles.row, { flexWrap: "wrap", gap: 8, marginTop: 8 }]}>
+              {[`${partner.distance} miles away`, `${partner.frequency} Availability`].map((fact) => (
+                <View key={fact} style={[styles.fact, { backgroundColor: theme.colors.glass }]}>
+                  <AppText size={12} weight="medium">
+                    {fact}
+                  </AppText>
+                </View>
+              ))}
             </View>
           </View>
         </View>
@@ -166,8 +213,8 @@ function PartnerProfile({ partner }: { partner: Partner }) {
             <ActionButton label="Hide Profile" onPress={handleHide} />
           </View>
         </Card>
+        {footer}
       </ScrollBody>
-    </Screen>
   );
 }
 
@@ -224,8 +271,21 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: 24,
-    height: 280,
+    height: 420,
     overflow: "hidden",
+  },
+  heroDetails: {
+    bottom: 0,
+    gap: 4,
+    left: 0,
+    padding: 20,
+    position: "absolute",
+    right: 0,
+  },
+  fact: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   heroBadges: {
     flexDirection: "row",
