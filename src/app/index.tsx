@@ -41,12 +41,19 @@ export default function App() {
   const [profileData, setProfileData] = useState<UserProfile>({
     fullName: 'Alex Rivera',
     age: '26',
+    gender: '',
     primaryGym: "Gold's Gym Downtown",
+    hometown: '',
+    zipCode: '',
+    about: '',
     experienceLevel: 'Intermediate',
     selectedGoals: ['Muscle Gain', 'Strength'],
     bench: '225 lbs',
     squat: '315 lbs',
-    deadlift: '405 lbs'
+    deadlift: '405 lbs',
+    customLiftName: '',
+    customLift: 'N/A',
+    photos: [],
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -54,12 +61,19 @@ export default function App() {
   const freshProfile = (): UserProfile => ({
     fullName: 'Alex Rivera',
     age: '26',
+    gender: '',
     primaryGym: "Gold's Gym Downtown",
+    hometown: '',
+    zipCode: '',
+    about: '',
     experienceLevel: 'Intermediate',
     selectedGoals: ['Muscle Gain', 'Strength'],
     bench: '225 lbs',
     squat: '315 lbs',
     deadlift: '405 lbs',
+    customLiftName: '',
+    customLift: 'N/A',
+    photos: [],
   });
 
   const continueAfterAuth = (profile: UserProfile | null) => {
@@ -67,9 +81,19 @@ export default function App() {
     setCurrentScreen(profile ? 'main-app' : 'profile-setup');
   };
 
-  const saveAndMatch = async () => {
+  const saveAndMatch = async (requirePhoto = false) => {
     if (!profileData.fullName.trim()) {
       setProfileError('Enter your name before saving.');
+      return;
+    }
+
+    if (profileData.zipCode.trim() && !/^\d{5}(-\d{4})?$/.test(profileData.zipCode.trim())) {
+      setProfileError('Enter a 5-digit zip code.');
+      return;
+    }
+
+    if (requirePhoto && profileData.photos.length < 1) {
+      setProfileError('Add at least one profile photo.');
       return;
     }
 
@@ -133,7 +157,7 @@ export default function App() {
 
               <View style={styles.socialProofCard}>
                 <Text style={styles.avatarText}>👥🔥</Text>
-                <Text style={styles.socialProofText}>Join 12,000+ local lifters matches today</Text>
+                <Text style={styles.socialProofText}>Join local lifters and match today!</Text>
               </View>
 
               <TouchableOpacity
@@ -317,7 +341,7 @@ export default function App() {
             <TouchableOpacity
               style={[styles.limeButton, { marginVertical: 20, opacity: savingProfile ? 0.7 : 1 }]}
               disabled={savingProfile}
-              onPress={saveAndMatch}
+              onPress={() => saveAndMatch()}
             >
               <Text style={styles.limeButtonText}>{savingProfile ? 'Saving...' : 'Save & Match'}</Text>
             </TouchableOpacity>
@@ -423,7 +447,7 @@ export default function App() {
               <Text style={styles.emptyTitle}>No Partners Nearby Yet</Text>
               <Text style={styles.emptyDesc}>We couldn't find anyone matching your current filters within your search radius. Try expanding your search distance or style.</Text>
               <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Profile')}>
-                <Text style={styles.limeButtonSmallText}>Expand Match Preferences</Text>
+                <Text style={styles.limeButtonSmallText}>Edit your profile</Text>
               </TouchableOpacity>
             </View>
           } />
@@ -475,19 +499,13 @@ export default function App() {
         );
       case 'Profile':
         return (
-          <ProfileScreen>
-            <View style={styles.tabContentContainer}>
-              <View style={styles.emptyCircle}>
-                <Text style={styles.emptyIcon}>👤</Text>
-              </View>
-              <Text style={styles.emptyTitle}>{profileData.fullName}</Text>
-              <Text style={styles.emptyDesc}>{profileData.primaryGym} • Age {profileData.age} • {profileData.experienceLevel}</Text>
-              <Text style={styles.savedPrsText}>Bench: {profileData.bench} | Squat: {profileData.squat} | Deadlift: {profileData.deadlift}</Text>
-              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => setCurrentScreen('profile-setup')}>
-                <Text style={styles.limeButtonSmallText}>Edit Profile Info</Text>
-              </TouchableOpacity>
-            </View>
-          </ProfileScreen>
+          <ProfileScreen
+            profile={profileData}
+            saving={savingProfile}
+            error={profileError}
+            onChange={setProfileData}
+            onSave={() => saveAndMatch(true)}
+          />
         );
       default:
         return null;

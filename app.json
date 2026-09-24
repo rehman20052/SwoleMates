@@ -25,7 +25,13 @@
     "plugins": [
       "expo-router",
       "expo-image",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SwoleMates uses your photos for your profile."
+        }
+      ]
     ]
   }
 }
