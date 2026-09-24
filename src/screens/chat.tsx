@@ -18,7 +18,7 @@ export function ChatScreen({ id }: { id: string }) {
 function Conversation({ partner }: { partner: Partner }) {
   const theme = useAppTheme();
   const nav = useNavigation();
-  const { conversations, workouts, sendMessage, markRead, block, swipe } = useAppData();
+  const { conversations, workouts, sendMessage, markRead, block, review } = useAppData();
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<ScrollView>(null);
   const messages = conversations.find((c) => c.partnerId === partner.id)?.messages ?? [];
@@ -53,7 +53,7 @@ function Conversation({ partner }: { partner: Partner }) {
   }
 
   function handleHide() {
-    swipe(partner.id, false);
+    review(partner.id, false);
     Alert.alert("Profile hidden", `${name} won't appear in your Discover deck anymore.`);
   }
 

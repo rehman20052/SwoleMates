@@ -1,12 +1,11 @@
 import { createContext, useContext } from "react";
 
-export type Tab = "Discover" | "Matches" | "Dashboard" | "Plans" | "Profile";
+export type Tab = "Discover" | "Chat" | "Dashboard" | "Plans" | "Profile";
 
 // Screens opened on top of the current tab. Chat and the scheduled
 // confirmation hide the bottom nav; the rest keep it visible.
 export type Route =
   | { name: "partner"; id: string }
-  | { name: "invites" }
   | { name: "chat"; id: string }
   | { name: "schedule"; partnerId?: string }
   | { name: "scheduled"; workoutId: string };

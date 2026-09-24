@@ -204,7 +204,93 @@ export const partners: Partner[] = [
       summary: "Late evenings, six days a week.",
     },
   },
+  // Placeholder portraits until real profile photos come from the backend.
+  mockPartner({
+    id: "priya",
+    name: "Priya Nair",
+    age: 25,
+    gym: "Equinox West",
+    style: "CrossFit",
+    tags: "CrossFit • Conditioning",
+    distance: 2.8,
+    frequency: "5x / Week",
+    match: 88,
+    photo: "https://randomuser.me/api/portraits/women/44.jpg",
+    lifts: { bench: 115, squat: 205, deadlift: 255 },
+    goal: "Wants a partner for early WODs and Olympic lift practice.",
+  }),
+  mockPartner({
+    id: "tyler",
+    name: "Tyler Brooks",
+    age: 28,
+    gym: "Gold's Gym Downtown",
+    style: "Powerlifting",
+    tags: "Powerlifting • Strength",
+    distance: 1.6,
+    frequency: "4x / Week",
+    match: 86,
+    photo: "https://randomuser.me/api/portraits/men/32.jpg",
+    lifts: { bench: 265, squat: 405, deadlift: 485 },
+    goal: "Peaking for a local meet and needs a reliable spotter.",
+  }),
+  mockPartner({
+    id: "kenji",
+    name: "Kenji Sato",
+    age: 30,
+    gym: "Crunch Midtown",
+    style: "Calisthenics",
+    tags: "Calisthenics • Mobility",
+    distance: 3.4,
+    frequency: "3x / Week",
+    match: 84,
+    photo: "https://randomuser.me/api/portraits/men/75.jpg",
+    lifts: { bench: 185, squat: 225, deadlift: 315 },
+    goal: "Working toward a muscle-up and front lever.",
+  }),
+  mockPartner({
+    id: "aaliyah",
+    name: "Aaliyah Grant",
+    age: 27,
+    gym: "LA Fitness Central",
+    style: "Bodybuilding",
+    tags: "Bodybuilding • Glute Focus",
+    distance: 2.1,
+    frequency: "5x / Week",
+    match: 90,
+    photo: "https://randomuser.me/api/portraits/women/68.jpg",
+    lifts: { bench: 125, squat: 245, deadlift: 275 },
+    goal: "Prepping for a first bikini show next spring.",
+  }),
 ];
+
+// Builds a full profile from a few fields, for mock partners without hand-written details.
+function mockPartner(input: {
+  id: string;
+  name: string;
+  age: number;
+  gym: string;
+  style: string;
+  tags: string;
+  distance: number;
+  frequency: string;
+  match: number;
+  photo: string;
+  lifts: Lifts;
+  goal: string;
+}): Partner {
+  const { photo, goal, ...rest } = input;
+  return {
+    ...rest,
+    safety: 4.8,
+    reliability: 92,
+    avatar: { uri: photo },
+    photos: [{ uri: photo }],
+    goals: { primary: input.style, focus: "Consistency", summary: goal },
+    experience: { years: "4 Years", style: input.style, summary: `Trains ${input.frequency.toLowerCase()} at ${input.gym}.` },
+    gymNote: "Usually trains here after work.",
+    availability: { days: input.frequency, bestTime: "6:00 PM", summary: "Evenings on weekdays, flexible on weekends." },
+  };
+}
 
 export function getPartner(id: string) {
   return partners.find((partner) => partner.id === id);

@@ -131,24 +131,6 @@ export function IconButton({
   );
 }
 
-export function Brand({ size = "lg" }: { size?: "sm" | "md" | "lg" }) {
-  const theme = useAppTheme();
-  const config = {
-    sm: { bar: { width: 8, height: 20, borderRadius: 2 }, font: 18 },
-    md: { bar: { width: 12, height: 28, borderRadius: 4 }, font: 32 },
-    lg: { bar: { width: 12, height: 28, borderRadius: 4 }, font: 38 },
-  }[size];
-
-  return (
-    <View style={styles.brand}>
-      <View style={[config.bar, { backgroundColor: theme.colors.primary }]} />
-      <AppText size={config.font} weight="black">
-        SwoleMates
-      </AppText>
-    </View>
-  );
-}
-
 export function Card({
   children,
   style,
@@ -757,11 +739,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 12,
-  },
-  brand: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8,
   },
   field: {
     gap: 6,

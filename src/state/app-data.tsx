@@ -51,7 +51,8 @@ type SessionLog = {
 
 type AppData = {
   preferences: Preferences;
-  swiped: string[];
+  // Partners already shown in Discover (skipped or invited).
+  reviewed: string[];
   blocked: string[];
   invites: Invite[];
   conversations: Conversation[];
@@ -62,7 +63,7 @@ type AppData = {
 };
 
 type AppDataContextValue = AppData & {
-  swipe: (partnerId: string, liked: boolean) => void;
+  review: (partnerId: string, interested: boolean) => void;
   respondToInvite: (partnerId: string, accept: boolean) => void;
   cancelInvite: (partnerId: string) => void;
   sendMessage: (partnerId: string, text: string) => void;
@@ -123,11 +124,15 @@ const defaultPreferences: Preferences = {
 function seedData(): AppData {
   return {
     preferences: defaultPreferences,
-    swiped: [],
+    reviewed: [],
     blocked: [],
     invites: [
       { partnerId: "serena", direction: "incoming" },
       { partnerId: "devon", direction: "incoming" },
+      { partnerId: "aaliyah", direction: "incoming" },
+      { partnerId: "tyler", direction: "incoming" },
+      { partnerId: "priya", direction: "incoming" },
+      { partnerId: "kenji", direction: "incoming" },
     ],
     conversations: [
       {
@@ -157,32 +162,6 @@ function seedData(): AppData {
           },
         ],
       },
-      {
-        partnerId: "jessica",
-        unread: false,
-        messages: [
-          {
-            id: "j1",
-            from: "them",
-            day: "Yesterday",
-            time: "6:02 PM",
-            text: "Let's plan for that HIIT session on Friday morning.",
-          },
-        ],
-      },
-      {
-        partnerId: "brandon",
-        unread: false,
-        messages: [
-          {
-            id: "b1",
-            from: "them",
-            day: "2 days ago",
-            time: "7:40 PM",
-            text: "Hey man, do you use lifting straps for deadlifts?",
-          },
-        ],
-      },
     ],
     workouts: [
       {
@@ -199,7 +178,7 @@ function seedData(): AppData {
     logs: [
       { id: "l1", date: daysFromToday(-1), title: "Chest & Triceps with Marcus", verified: true },
       { id: "l2", date: daysFromToday(-4), title: "Active Recovery Yoga with Serena", verified: true },
-      { id: "l3", date: daysFromToday(-6), title: "Back & Biceps with Brandon", verified: true },
+      { id: "l3", date: daysFromToday(-6), title: "Back & Biceps with Marcus", verified: true },
     ],
     streak: 14,
     nutrition: { calories: "2,450", protein: "185g", carbs: "220g", fats: "65g" },
@@ -223,16 +202,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
 
     return {
       ...data,
-      swipe(partnerId, liked) {
+      review(partnerId, interested) {
         update((current) => {
           const connected =
             current.conversations.some((c) => c.partnerId === partnerId) ||
             current.invites.some((i) => i.partnerId === partnerId);
           return {
             ...current,
-            swiped: [...current.swiped, partnerId],
+            reviewed: [...current.reviewed, partnerId],
             invites:
-              liked && !connected
+              interested && !connected
                 ? [...current.invites, { partnerId, direction: "outgoing" }]
                 : current.invites,
           };
@@ -330,7 +309,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         }));
       },
       resetDeck() {
-        update((current) => ({ ...current, swiped: [] }));
+        update((current) => ({ ...current, reviewed: [] }));
       },
     };
   }, [data]);
