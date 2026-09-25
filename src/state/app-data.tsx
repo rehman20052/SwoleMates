@@ -79,6 +79,7 @@ type AppData = {
 
 type AppDataContextValue = AppData & {
   review: (partnerId: string, interested: boolean) => void;
+  clearReview: (partnerId: string) => void;
   respondToInvite: (partnerId: string, accept: boolean) => void;
   cancelInvite: (partnerId: string) => void;
   sendMessage: (partnerId: string, text: string) => void;
@@ -249,6 +250,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
                 : current.invites,
           };
         });
+      },
+      clearReview(partnerId) {
+        update((current) => ({
+          ...current,
+          reviewed: current.reviewed.filter((id) => id !== partnerId),
+        }));
       },
       respondToInvite(partnerId, accept) {
         update((current) => {
