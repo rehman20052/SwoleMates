@@ -8,10 +8,11 @@ import {
   Platform,
   SafeAreaView,
   ImageBackground,
+  Modal,
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
-import { saveProfile, type UserProfile } from '@/lib/profile';
+import { MIN_PROFILE_PROMPTS, answeredPrompts, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
@@ -35,12 +36,16 @@ const emptyProfile = (): UserProfile => ({
   about: '',
   experienceLevel: 'Intermediate',
   selectedGoals: [],
+  availabilityDays: [],
+  availabilityTimes: [],
   bench: 'N/A',
   squat: 'N/A',
   deadlift: 'N/A',
   customLiftName: '',
   customLift: 'N/A',
   photos: [],
+  photoCaptions: [],
+  prompts: [],
 });
 
 export default function App() {
@@ -52,6 +57,7 @@ export default function App() {
   const [profileData, setProfileData] = useState<UserProfile>(emptyProfile);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   const continueAfterAuth = (profile: UserProfile | null) => {
     setProfileData(profile ?? emptyProfile());
@@ -61,17 +67,22 @@ export default function App() {
   const saveAndMatch = async (requirePhoto = false) => {
     if (!profileData.fullName.trim()) {
       setProfileError('Enter your name before saving.');
-      return;
+      return false;
     }
 
     if (profileData.zipCode.trim() && !/^\d{5}(-\d{4})?$/.test(profileData.zipCode.trim())) {
       setProfileError('Enter a 5-digit zip code.');
-      return;
+      return false;
     }
 
     if (requirePhoto && profileData.photos.length < 1) {
       setProfileError('Add at least one profile photo.');
-      return;
+      return false;
+    }
+
+    if (answeredPrompts(profileData.prompts).length < MIN_PROFILE_PROMPTS) {
+      setProfileError(`Pick and answer at least ${MIN_PROFILE_PROMPTS} prompts.`);
+      return false;
     }
 
     setSavingProfile(true);
@@ -79,7 +90,11 @@ export default function App() {
     try {
       const saved = await saveProfile(profileData);
       setProfileData(saved);
+      setProfileSaved(true);
+      setStack([]);
+      setActiveTab('Profile');
       setCurrentScreen('main-app');
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not save your profile.';
       setProfileError(
@@ -89,6 +104,7 @@ export default function App() {
             ? 'Sign out and sign in again, then save. This login is still carrying an old photo.'
             : message,
       );
+      return false;
     } finally {
       setSavingProfile(false);
     }
@@ -197,6 +213,7 @@ export default function App() {
           saving={savingProfile}
           error={profileError}
           title="Create your profile"
+          initialMode="edit"
           onChange={setProfileData}
           onSave={() => saveAndMatch(true)}
         />
@@ -330,6 +347,17 @@ export default function App() {
         </View>
         )}
       </View>
+      <Modal animationType="fade" transparent visible={profileSaved} onRequestClose={() => setProfileSaved(false)}>
+        <View style={styles.savedOverlay}>
+          <View style={styles.savedCard}>
+            <Text style={styles.savedTitle}>Profile saved</Text>
+            <Text style={styles.savedBody}>Your profile was saved successfully.</Text>
+            <TouchableOpacity style={styles.limeButton} onPress={() => setProfileSaved(false)}>
+              <Text style={styles.limeButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
     </NavigationContext.Provider>
   );
@@ -359,6 +387,10 @@ const styles = StyleSheet.create({
   socialProofText: { color: '#DDDDDD', fontSize: 13, fontWeight: '500' },
   limeButton: { backgroundColor: '#CCFF00', paddingVertical: 18, borderRadius: 16, alignItems: 'center', width: '100%' },
   limeButtonText: { color: '#000000', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  savedOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.72)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  savedCard: { width: '100%', maxWidth: 320, backgroundColor: '#151518', borderRadius: 20, borderWidth: 1, borderColor: '#28282D', padding: 22, gap: 12 },
+  savedTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  savedBody: { color: '#8E8E93', fontSize: 15, lineHeight: 22 },
   container: { flex: 1, backgroundColor: '#0A0A0A' },
   authInnerContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   authHeader: { marginBottom: 24, paddingHorizontal: 4 },
