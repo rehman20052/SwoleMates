@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useContext, useMemo, useState } from "react";
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
+import { defaultDiscoverFilters, type DiscoverFilters } from "@/lib/discover";
 
 export type Gender = "Male" | "Female" | "Any";
 
@@ -63,6 +64,7 @@ export type NutritionTotals = {
 
 type AppData = {
   preferences: Preferences;
+  discoverFilters: DiscoverFilters;
   // Partners already shown in Discover (skipped or invited).
   reviewed: string[];
   blocked: string[];
@@ -84,6 +86,7 @@ type AppDataContextValue = AppData & {
   scheduleWorkout: (workout: Omit<Workout, "id" | "title">) => Workout;
   block: (partnerId: string) => void;
   updatePreferences: (preferences: Partial<Preferences>) => void;
+  updateDiscoverFilters: (filters: DiscoverFilters) => void;
   completeWorkout: (workoutId: string) => void;
   updateNutrition: (nutrition: Partial<NutritionTotals>) => void;
   logWorkout: (title?: string, notes?: string) => void;
@@ -152,6 +155,7 @@ const defaultNutrition: NutritionTotals = {
 function seedData(): AppData {
   return {
     preferences: defaultPreferences,
+    discoverFilters: defaultDiscoverFilters,
     reviewed: [],
     blocked: [],
     invites: [
@@ -240,7 +244,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             ...current,
             reviewed: [...current.reviewed, partnerId],
             invites:
-              interested && !connected
+              interested && !connected && getPartner(partnerId)
                 ? [...current.invites, { partnerId, direction: "outgoing" }]
                 : current.invites,
           };
@@ -329,6 +333,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       },
       updatePreferences(preferences) {
         update((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));
+      },
+      updateDiscoverFilters(filters) {
+        update((current) => ({ ...current, discoverFilters: filters }));
       },
       completeWorkout(workoutId) {
         update((current) => {
