@@ -616,6 +616,7 @@ function ProfilePreview({
   onChangeMode: (mode: "edit" | "view") => void;
 }) {
   const theme = useAppTheme();
+  const nav = useNavigation();
   const [hero, ...morePhotos] = profile.photos;
   const headline = [profile.fullName.trim() || "Your name", profile.age.trim()].filter(Boolean).join(", ");
   const subtitle = [profile.experienceLevel, profile.gender].filter(Boolean).join(" • ");
@@ -736,6 +737,10 @@ function ProfilePreview({
       </View>
 
       {previewBlocks}
+
+      <SecondaryButton height={44} fontSize={13} onPress={nav.signOut}>
+        Sign Out
+      </SecondaryButton>
     </ScrollBody>
   );
 }
