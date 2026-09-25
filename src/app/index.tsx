@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
+import { publishDiscoverProfile } from '@/lib/discover';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
@@ -147,6 +148,11 @@ export default function App() {
     setProfileError(null);
     try {
       const saved = await saveProfile(profileData);
+      try {
+        await publishDiscoverProfile(saved);
+      } catch {
+        // Discover shows its own message if the listing table is not ready.
+      }
       setProfileData(saved);
       setProfileSaved(true);
       setStack([]);
@@ -312,20 +318,7 @@ export default function App() {
   const renderMainTabContent = () => {
     switch (activeTab) {
       case 'Discover':
-        return (
-          <DiscoverScreen empty={
-            <View style={styles.tabContentContainer}>
-              <View style={styles.emptyCircle}>
-                <Text style={styles.emptyIcon}>🔍</Text>
-              </View>
-              <Text style={styles.emptyTitle}>No Partners Nearby Yet</Text>
-              <Text style={styles.emptyDesc}>We couldn't find anyone matching your current filters within your search radius. Try expanding your search distance or style.</Text>
-              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Profile')}>
-                <Text style={styles.limeButtonSmallText}>Edit your profile</Text>
-              </TouchableOpacity>
-            </View>
-          } />
-        );
+        return <DiscoverScreen profile={profileData} />;
       case 'Chat':
         return (
           <InboxScreen empty={

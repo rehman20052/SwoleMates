@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
@@ -851,21 +851,27 @@ function ModeTabs({
   );
 }
 
-function ProfilePreview({
+export function ProfilePreview({
   profile,
-  mode,
+  mode = "view",
   onChangeMode,
+  chrome = true,
+  distanceLabel,
+  footer,
 }: {
   profile: UserProfile;
-  mode: "edit" | "view";
-  onChangeMode: (mode: "edit" | "view") => void;
+  mode?: "edit" | "view";
+  onChangeMode?: (mode: "edit" | "view") => void;
+  chrome?: boolean;
+  distanceLabel?: string;
+  footer?: ReactNode;
 }) {
   const theme = useAppTheme();
   const nav = useNavigation();
   const [hero, ...morePhotos] = profile.photos;
   const headline = [profile.fullName.trim() || "Your name", profile.age.trim()].filter(Boolean).join(", ");
   const subtitle = [profile.experienceLevel, profile.gender].filter(Boolean).join(" • ");
-  const facts = [profile.hometown.trim(), profile.primaryGym.trim()].filter(Boolean);
+  const facts = [distanceLabel, profile.hometown.trim(), profile.primaryGym.trim()].filter(Boolean);
   const days = profile.availabilityDays.join(", ");
   const times = profile.availabilityTimes.join(", ");
   const answered = (profile.prompts ?? []).filter((row) => row.prompt.trim() && row.answer.trim());
@@ -944,8 +950,8 @@ function ProfilePreview({
   }
 
   return (
-    <ScrollBody contentContainerStyle={styles.previewScroll}>
-      <ModeTabs mode={mode} onChange={onChangeMode} inset={false} />
+    <ScrollBody style={{ flex: 1 }} contentContainerStyle={styles.previewScroll}>
+      {chrome && onChangeMode ? <ModeTabs mode={mode} onChange={onChangeMode} inset={false} /> : null}
       <View style={styles.hero}>
         {hero ? (
           <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" />
@@ -983,9 +989,13 @@ function ProfilePreview({
 
       {previewBlocks}
 
-      <SecondaryButton height={44} fontSize={13} onPress={nav.signOut}>
-        Sign Out
-      </SecondaryButton>
+      {footer}
+
+      {chrome ? (
+        <SecondaryButton height={44} fontSize={13} onPress={nav.signOut}>
+          Sign Out
+        </SecondaryButton>
+      ) : null}
     </ScrollBody>
   );
 }
