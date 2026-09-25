@@ -42,11 +42,23 @@ export type Workout = {
   notes: string;
 };
 
-type SessionLog = {
+export type SessionLog = {
   id: string;
   date: string;
   title: string;
+  notes?: string;
   verified: boolean;
+};
+
+export type NutritionTotals = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  calorieGoal: number;
+  proteinGoal: number;
+  carbGoal: number;
+  fatGoal: number;
 };
 
 type AppData = {
@@ -57,9 +69,10 @@ type AppData = {
   invites: Invite[];
   conversations: Conversation[];
   workouts: Workout[];
+  completedWorkoutIds: string[];
   logs: SessionLog[];
   streak: number;
-  nutrition: { calories: string; protein: string; carbs: string; fats: string } | null;
+  nutrition: NutritionTotals | null;
 };
 
 type AppDataContextValue = AppData & {
@@ -71,7 +84,11 @@ type AppDataContextValue = AppData & {
   scheduleWorkout: (workout: Omit<Workout, "id" | "title">) => Workout;
   block: (partnerId: string) => void;
   updatePreferences: (preferences: Partial<Preferences>) => void;
-  logWorkout: () => void;
+  completeWorkout: (workoutId: string) => void;
+  updateNutrition: (nutrition: Partial<NutritionTotals>) => void;
+  logWorkout: (title?: string, notes?: string) => void;
+  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => void;
+  deleteWorkoutLog: (logId: string) => void;
   resetDeck: () => void;
 };
 
@@ -118,6 +135,17 @@ const defaultPreferences: Preferences = {
   experienceRange: [1, 2],
   strengthRange: 20,
   expandScope: true,
+};
+
+const defaultNutrition: NutritionTotals = {
+  calories: 2450,
+  protein: 185,
+  carbs: 220,
+  fats: 65,
+  calorieGoal: 2500,
+  proteinGoal: 190,
+  carbGoal: 260,
+  fatGoal: 75,
 };
 
 // Mock data until the Supabase backend is ready.
@@ -175,13 +203,14 @@ function seedData(): AppData {
         notes: "Let's try to hit a new squat 1RM together! Bring your knee sleeves.",
       },
     ],
+    completedWorkoutIds: [],
     logs: [
       { id: "l1", date: daysFromToday(-1), title: "Chest & Triceps with Marcus", verified: true },
       { id: "l2", date: daysFromToday(-4), title: "Active Recovery Yoga with Serena", verified: true },
       { id: "l3", date: daysFromToday(-6), title: "Back & Biceps with Marcus", verified: true },
     ],
     streak: 14,
-    nutrition: { calories: "2,450", protein: "185g", carbs: "220g", fats: "65g" },
+    nutrition: defaultNutrition,
   };
 }
 
@@ -293,19 +322,76 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           invites: current.invites.filter((invite) => invite.partnerId !== partnerId),
           conversations: current.conversations.filter((c) => c.partnerId !== partnerId),
           workouts: current.workouts.filter((w) => w.partnerId !== partnerId),
+          completedWorkoutIds: current.completedWorkoutIds.filter(
+            (id) => current.workouts.find((workout) => workout.id === id)?.partnerId !== partnerId,
+          ),
         }));
       },
       updatePreferences(preferences) {
         update((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));
       },
-      logWorkout() {
+      completeWorkout(workoutId) {
+        update((current) => {
+          if (current.completedWorkoutIds.includes(workoutId)) {
+            return current;
+          }
+
+          const workout = current.workouts.find((item) => item.id === workoutId);
+          if (!workout) {
+            return current;
+          }
+
+          const alreadyLogged = current.logs.some((log) => log.title === workout.title && log.date === workout.date);
+
+          return {
+            ...current,
+            completedWorkoutIds: [...current.completedWorkoutIds, workoutId],
+            logs: alreadyLogged
+              ? current.logs
+              : [
+                  {
+                    id: `log-${workoutId}-${Date.now()}`,
+                    date: workout.date,
+                    title: workout.title,
+                    notes: workout.notes,
+                    verified: true,
+                  },
+                  ...current.logs,
+                ],
+            streak: workout.date === daysFromToday(0) ? current.streak + 1 : current.streak,
+          };
+        });
+      },
+      updateNutrition(nutrition) {
+        update((current) => ({
+          ...current,
+          nutrition: {
+            ...defaultNutrition,
+            ...(current.nutrition ?? {}),
+            ...nutrition,
+          },
+        }));
+      },
+      logWorkout(title = "Solo workout", notes) {
         update((current) => ({
           ...current,
           logs: [
-            { id: `log-${Date.now()}`, date: daysFromToday(0), title: "Solo session", verified: false },
+            { id: `log-${Date.now()}`, date: daysFromToday(0), title, notes, verified: false },
             ...current.logs,
           ],
           streak: current.streak + 1,
+        }));
+      },
+      updateWorkoutLog(logId, updates) {
+        update((current) => ({
+          ...current,
+          logs: current.logs.map((log) => (log.id === logId ? { ...log, ...updates } : log)),
+        }));
+      },
+      deleteWorkoutLog(logId) {
+        update((current) => ({
+          ...current,
+          logs: current.logs.filter((log) => log.id !== logId),
         }));
       },
       resetDeck() {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
-import { MIN_PROFILE_PROMPTS, answeredPrompts, saveProfile, type UserProfile } from '@/lib/profile';
+import { MIN_PROFILE_PROMPTS, answeredPrompts, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
@@ -50,6 +50,7 @@ const emptyProfile = (): UserProfile => ({
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('launch');
+  const [checkingSession, setCheckingSession] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('Discover');
   const [stack, setStack] = useState<Route[]>([]);
   const { logWorkout } = useAppData();
@@ -63,6 +64,53 @@ export default function App() {
     setProfileData(profile ?? emptyProfile());
     setCurrentScreen(profile ? 'main-app' : 'profile-setup');
   };
+
+  useEffect(() => {
+    let active = true;
+
+    const resetToLaunch = () => {
+      setProfileData(emptyProfile());
+      setStack([]);
+      setActiveTab('Discover');
+      setCurrentScreen('launch');
+    };
+
+    const restoreSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (!active) return;
+
+      if (error || !data.session) {
+        resetToLaunch();
+        setCheckingSession(false);
+        return;
+      }
+
+      continueAfterAuth(profileFromUser(data.session.user));
+      setCheckingSession(false);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active || checkingSession) return;
+
+      if (event === 'SIGNED_OUT' || !session) {
+        resetToLaunch();
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        continueAfterAuth(profileFromUser(session.user));
+      }
+    });
+
+    void restoreSession();
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [checkingSession]);
 
   const saveAndMatch = async (requirePhoto = false) => {
     if (!profileData.fullName.trim()) {
@@ -131,6 +179,17 @@ export default function App() {
       setCurrentScreen('launch');
     },
   };
+
+  if (checkingSession) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingTitle}>SwoleMates</Text>
+          <Text style={styles.loadingText}>Checking your login…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ==========================================
   // 1. LAUNCH SCREEN
@@ -281,7 +340,7 @@ export default function App() {
               </View>
               <Text style={styles.emptyTitle}>No Active Streaks</Text>
               <Text style={styles.emptyDesc}>Keep track of your consistency and PR progression alongside your partner. Complete your first logged session to start!</Text>
-              <TouchableOpacity style={styles.limeButtonSmall} onPress={logWorkout}>
+              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => logWorkout()}>
                 <Text style={styles.limeButtonSmallText}>Log Today's Workout</Text>
               </TouchableOpacity>
             </View>
@@ -392,6 +451,9 @@ const styles = StyleSheet.create({
   savedTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   savedBody: { color: '#8E8E93', fontSize: 15, lineHeight: 22 },
   container: { flex: 1, backgroundColor: '#0A0A0A' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  loadingTitle: { color: '#FFFFFF', fontSize: 30, fontWeight: '900' },
+  loadingText: { color: '#999999', fontSize: 14, fontWeight: '600' },
   authInnerContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   authHeader: { marginBottom: 24, paddingHorizontal: 4 },
   authCard: { backgroundColor: '#121212', borderWidth: 1, borderColor: '#222222', borderRadius: 24, padding: 20 },
