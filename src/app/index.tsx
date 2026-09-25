@@ -31,8 +31,13 @@ const emptyProfile = (): UserProfile => ({
   age: '',
   gender: '',
   primaryGym: '',
+  gymAddress: '',
+  gymLatitude: null,
+  gymLongitude: null,
   hometown: '',
   zipCode: '',
+  latitude: null,
+  longitude: null,
   about: '',
   experienceLevel: 'Intermediate',
   selectedGoals: [],
@@ -120,6 +125,11 @@ export default function App() {
 
     if (profileData.zipCode.trim() && !/^\d{5}(-\d{4})?$/.test(profileData.zipCode.trim())) {
       setProfileError('Enter a 5-digit zip code.');
+      return false;
+    }
+
+    if (profileData.primaryGym.trim() && (profileData.gymLatitude == null || profileData.gymLongitude == null)) {
+      setProfileError('Pick the street address from the list so we know which gym building it is.');
       return false;
     }
 

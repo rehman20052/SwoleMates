@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { lookupUsZip } from "@/lib/zip-location";
 
 export type ProfileGender = "" | "Male" | "Female" | "Other";
 
@@ -87,8 +88,13 @@ export type UserProfile = {
   age: string;
   gender: ProfileGender;
   primaryGym: string;
+  gymAddress: string;
+  gymLatitude: number | null;
+  gymLongitude: number | null;
   hometown: string;
   zipCode: string;
+  latitude: number | null;
+  longitude: number | null;
   about: string;
   experienceLevel: string;
   selectedGoals: string[];
@@ -113,6 +119,12 @@ function isGender(value: unknown): value is ProfileGender {
 function chosen(value: unknown, allowed: readonly string[]) {
   if (!Array.isArray(value)) return [];
   return allowed.filter((item) => value.includes(item));
+}
+
+function coordinate(value: unknown, min: number, max: number) {
+  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(number) || number < min || number > max) return null;
+  return Math.round(number * 10000) / 10000;
 }
 
 function listed(value: unknown, allowed: readonly string[]): value is string {
@@ -165,8 +177,13 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     age: typeof profile.age === "string" ? profile.age : "",
     gender: isGender(profile.gender) ? profile.gender : "",
     primaryGym: typeof profile.primaryGym === "string" ? profile.primaryGym : "",
+    gymAddress: typeof profile.gymAddress === "string" ? profile.gymAddress : "",
+    gymLatitude: coordinate(profile.gymLatitude, -90, 90),
+    gymLongitude: coordinate(profile.gymLongitude, -180, 180),
     hometown: typeof profile.hometown === "string" ? profile.hometown : "",
     zipCode: typeof profile.zipCode === "string" ? profile.zipCode : "",
+    latitude: coordinate(profile.latitude, -90, 90),
+    longitude: coordinate(profile.longitude, -180, 180),
     about: typeof profile.about === "string" ? profile.about : "",
     experienceLevel: typeof profile.experienceLevel === "string" ? profile.experienceLevel : "Intermediate",
     selectedGoals: goals,
@@ -250,14 +267,19 @@ function clip(value: string, max: number) {
   return trimmed.slice(0, max);
 }
 
-function accountProfile(profile: UserProfile, photoPaths: string[]) {
+function accountProfile(profile: UserProfile, photoPaths: string[], location: { latitude: number | null; longitude: number | null }) {
   return {
     fullName: clip(profile.fullName, 80),
     age: clip(profile.age, 3),
     gender: profile.gender,
     primaryGym: clip(profile.primaryGym, 80),
+    gymAddress: profile.primaryGym.trim() ? clip(profile.gymAddress, 140) : "",
+    gymLatitude: profile.primaryGym.trim() ? coordinate(profile.gymLatitude, -90, 90) : null,
+    gymLongitude: profile.primaryGym.trim() ? coordinate(profile.gymLongitude, -180, 180) : null,
     hometown: clip(profile.hometown, 80),
     zipCode: clip(profile.zipCode, 10),
+    latitude: location.latitude,
+    longitude: location.longitude,
     about: clip(profile.about, 280),
     experienceLevel: clip(profile.experienceLevel, 20),
     selectedGoals: chosen(profile.selectedGoals, profileGoals),
@@ -357,10 +379,28 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
   const session = sessionData.session;
   if (!session) throw new Error("Sign in again before saving your profile.");
   if (session.access_token.length > 8000) throw new Error("OVERSIZED_SESSION");
+  if (profile.primaryGym.trim() && (profile.gymLatitude == null || profile.gymLongitude == null)) {
+    throw new Error("Pick the street address from the list so we know which gym building it is.");
+  }
 
   const userId = session.user.id;
   const previous = savedPhotoPaths(session.user);
   const uploaded: string[] = [];
+  const zip = profile.zipCode.trim();
+  let place = null;
+  if (zip) {
+    try {
+      place = await lookupUsZip(zip);
+    } catch (error) {
+      if (error instanceof Error && error.message !== "Failed to fetch") throw error;
+      throw new Error("Could not look up that zip code. Check your connection and try again.");
+    }
+    if (!place) throw new Error("That zip code was not found.");
+  }
+  const location = {
+    latitude: place?.latitude ?? null,
+    longitude: place?.longitude ?? null,
+  };
 
   try {
     for (const photo of profile.photos.slice(0, 6)) {
@@ -368,7 +408,7 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
     }
 
     const { error } = await supabase.auth.updateUser({
-      data: { profile: accountProfile(profile, uploaded) },
+      data: { profile: accountProfile(profile, uploaded, location) },
     });
     if (error) throw error;
   } catch (error) {
@@ -385,5 +425,5 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
   }
   clearStoredPhotos(userId);
 
-  return { ...profile, photos: uploaded.map(publicPhotoUrl) };
+  return { ...profile, ...location, photos: uploaded.map(publicPhotoUrl) };
 }
