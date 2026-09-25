@@ -11,6 +11,7 @@ import {
   publishDiscoverProfile,
   type DiscoverCandidate,
 } from "@/lib/discover";
+import { isDiscoverTester, listConnections, sendMatchRequest } from "@/lib/matches";
 import type { UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { DiscoverFiltersScreen } from "@/screens/discover-filters";
@@ -25,6 +26,8 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [handshake, setHandshake] = useState<{ id: string; name: string } | null>(null);
+  const [requestedIds, setRequestedIds] = useState<string[]>([]);
+  const [matchError, setMatchError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -39,9 +42,13 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
           // The list request below reports a missing table or a network problem.
         }
       }
-      const people = await fetchDiscoverProfiles();
+      const [people, connections] = await Promise.all([
+        fetchDiscoverProfiles(),
+        listConnections().catch(() => []),
+      ]);
       if (!active) return;
       setCandidates(people);
+      setRequestedIds(connections.map((person) => person.userId));
       setStatus("ready");
     };
 
@@ -63,8 +70,12 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   );
 
   const queue = useMemo(
-    () => candidates.filter((candidate) => !hidden.has(candidate.id) && matchesDiscoverFilters(candidate, discoverFilters, profile)),
-    [candidates, hidden, discoverFilters, profile],
+    () =>
+      candidates.filter(
+        (candidate) =>
+          !hidden.has(candidate.id) && !requestedIds.includes(candidate.id) && matchesDiscoverFilters(candidate, discoverFilters, profile),
+      ),
+    [candidates, hidden, requestedIds, discoverFilters, profile],
   );
 
   if (filtersOpen) {
@@ -121,9 +132,15 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
                   Train with {current.profile.fullName.trim().split(/\s+/)[0]}?
                 </AppText>
               </View>
+              {matchError ? (
+                <AppText size={13} color="#FF3B30">
+                  {matchError}
+                </AppText>
+              ) : null}
               <PrimaryButton
                 onPress={() => {
                   if (handshake) return;
+                  setMatchError(null);
                   setHandshake({
                     id: current.id,
                     name: current.profile.fullName.trim().split(/\s+/)[0] || "them",
@@ -149,8 +166,20 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
         <WorkoutHandshake
           name={handshake.name}
           onDone={() => {
-            review(handshake.id, true);
+            const person = handshake;
             setHandshake(null);
+            if (isDiscoverTester(person.id)) {
+              review(person.id, true);
+              return;
+            }
+            void sendMatchRequest(person.id)
+              .then(() => {
+                review(person.id, true);
+                setRequestedIds((currentIds) => [...currentIds, person.id]);
+              })
+              .catch((error: unknown) => {
+                setMatchError(error instanceof Error ? error.message : "Could not send that request.");
+              });
           }}
         />
       ) : null}
