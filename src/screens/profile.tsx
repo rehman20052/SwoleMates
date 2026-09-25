@@ -23,7 +23,7 @@ import { searchGymsByName, searchStreetAddresses, type GymPlace } from "@/lib/gy
 
 const MAX_PHOTOS = 6;
 const ABOUT_LIMIT = 280;
-const WEIGHTS = ["N/A", ...Array.from({ length: 999 }, (_, index) => `${index + 1} lbs`)];
+const WEIGHTS = ["N/A", ...Array.from({ length: 200 }, (_, index) => `${(index + 1) * 5} lbs`)];
 const GENDERS: readonly Exclude<ProfileGender, "">[] = ["Male", "Female", "Other"];
 
 type LiftField = "bench" | "squat" | "deadlift" | "customLift";

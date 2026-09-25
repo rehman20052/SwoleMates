@@ -5,6 +5,7 @@ import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
 import { firstName, getPartner, Partner } from "@/data/partners";
 import { useNavigation } from "@/navigation";
+import { MatchChat } from "@/screens/match-chat";
 import { confirmSafetyAction } from "@/screens/partner-profile";
 import { daysFromToday, Message, relativeDay, useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
@@ -12,7 +13,8 @@ import { useAppTheme } from "@/theme";
 export function ChatScreen({ id }: { id: string }) {
   const { blocked } = useAppData();
   const partner = getPartner(id);
-  return partner && !blocked.includes(partner.id) ? <Conversation partner={partner} /> : null;
+  if (partner) return blocked.includes(partner.id) ? null : <Conversation partner={partner} />;
+  return <MatchChat userId={id} />;
 }
 
 function Conversation({ partner }: { partner: Partner }) {

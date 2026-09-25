@@ -1,274 +1,268 @@
-import { Fragment, ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { icons } from "@/assets";
-import { AppText, Avatar, Divider, Icon, Screen, TitleBar } from "@/components/ui";
-import { getPartner } from "@/data/partners";
+import { AppText, Avatar, Screen, TitleBar } from "@/components/ui";
+import { cancelMatchRequest, listConnections, respondToMatch, type MatchConnection } from "@/lib/matches";
 import { useNavigation } from "@/navigation";
-import { Conversation, Invite, useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
-// Invite tiles are compact. The pane shows two and a half, so the cut-off tile
-// makes it obvious the list scrolls.
-const INVITE_TILE_HEIGHT = 64;
-const INVITE_GAP = 8;
-const INVITE_PANE_PADDING = 8;
-const INVITE_PANE_HEIGHT = INVITE_TILE_HEIGHT * 2.5 + INVITE_GAP * 2 + INVITE_PANE_PADDING;
-
-// The Chat tab: a short scrolling pane of partner invites, then conversations fill the rest.
 export function InboxScreen({ empty }: { empty: ReactNode }) {
-  const theme = useAppTheme();
-  const { conversations, invites } = useAppData();
-  const invitePane = useRef<ScrollView>(null);
-  const incoming = invites.filter((invite) => invite.direction === "incoming").length;
-  // Incoming invites first (they need a decision), then ones you sent.
-  const sortedInvites = [...invites].sort((a, b) => (a.direction === b.direction ? 0 : a.direction === "incoming" ? -1 : 1));
+  const nav = useNavigation();
+  const [connections, setConnections] = useState<MatchConnection[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [message, setMessage] = useState<string | null>(null);
 
-  // Briefly show the scroll bar so it's clear the invites pane scrolls.
-  useEffect(() => {
-    const timer = setTimeout(() => invitePane.current?.flashScrollIndicators(), 500);
-    return () => clearTimeout(timer);
+  const load = useCallback(() => {
+    let active = true;
+    setStatus("loading");
+    listConnections()
+      .then((people) => {
+        if (!active) return;
+        setConnections(people);
+        setStatus("ready");
+        setMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setStatus("error");
+        setMessage(error instanceof Error ? error.message : "Could not load chats.");
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  if (conversations.length === 0 && invites.length === 0) {
-    return (
-      <Screen>
-        <TitleBar title="Chat" />
-        {empty}
-      </Screen>
-    );
+  useEffect(() => load(), [load]);
+
+  const requests = connections.filter((person) => person.status === "pending");
+  const chats = connections.filter((person) => person.status === "accepted");
+  const incoming = requests.filter((person) => person.direction === "incoming").length;
+
+  async function change(action: () => Promise<void>) {
+    try {
+      await action();
+      load();
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Could not update that request.");
+    }
   }
 
   return (
     <Screen>
       <TitleBar title="Chat" />
-
-      {invites.length ? (
-        <View style={styles.invites}>
-          <View style={styles.sectionTitle}>
-            <AppText weight="extrabold" upper>
-              Partner Invites
-            </AppText>
-            {incoming ? (
-              <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
-                <AppText size={10} weight="extrabold" color={theme.colors.primaryText}>
-                  {incoming}
+      {status === "loading" ? (
+        <AppText muted style={styles.note}>
+          Loading chats...
+        </AppText>
+      ) : status === "error" ? (
+        <AppText muted style={styles.note}>
+          {message}
+        </AppText>
+      ) : requests.length === 0 && chats.length === 0 ? (
+        empty
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.list}>
+          {requests.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.sectionTitle}>
+                <AppText size={13} weight="bold" muted upper>
+                  Requests
                 </AppText>
+                {incoming > 0 ? <Count value={incoming} /> : null}
               </View>
-            ) : null}
-            {invites.length > 2 ? (
-              <AppText size={11} muted style={{ marginLeft: "auto" }}>
-                Scroll to see all {invites.length}
-              </AppText>
-            ) : null}
-          </View>
-          <ScrollView
-            ref={invitePane}
-            nestedScrollEnabled
-            persistentScrollbar
-            style={[styles.invitePane, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-            contentContainerStyle={{ gap: INVITE_GAP, padding: INVITE_PANE_PADDING }}
-          >
-            {sortedInvites.map((invite) => (
-              <InviteTile key={invite.partnerId} invite={invite} />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
+              {requests.map((person) => (
+                <RequestCard
+                  key={person.requestId}
+                  person={person}
+                  onAccept={() => void change(() => respondToMatch(person.requestId, true))}
+                  onDecline={() => void change(() => respondToMatch(person.requestId, false))}
+                  onCancel={() => void change(() => cancelMatchRequest(person.requestId))}
+                />
+              ))}
+            </View>
+          ) : null}
 
-      <AppText weight="extrabold" upper style={styles.chatsTitle}>
-        Chats
-      </AppText>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.chats}>
-        {conversations.length ? (
-          conversations.map((conversation, index) => (
-            <Fragment key={conversation.partnerId}>
-              {index > 0 ? <Divider /> : null}
-              <ChatRow conversation={conversation} />
-            </Fragment>
-          ))
-        ) : (
-          <AppText muted style={{ lineHeight: 20, paddingVertical: 16 }}>
-            No chats yet. Accept a partner invite to start a conversation.
-          </AppText>
-        )}
-      </ScrollView>
+          <View style={styles.section}>
+            <AppText size={13} weight="bold" muted upper>
+              Messages
+            </AppText>
+            {chats.length > 0 ? (
+              chats.map((person) => (
+                <Pressable
+                  key={person.requestId}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Chat with ${person.name}`}
+                  onPress={() => nav.push({ name: "chat", id: person.userId })}
+                  style={({ pressed }) => [styles.chat, { opacity: pressed ? 0.75 : 1 }]}
+                >
+                  <PersonFace person={person} size={52} />
+                  <View style={styles.chatText}>
+                    <AppText size={16} weight="extrabold" numberOfLines={1}>
+                      {person.name}
+                    </AppText>
+                    <AppText size={13} muted numberOfLines={1}>
+                      {person.lastMessage || "Say hello"}
+                    </AppText>
+                  </View>
+                </Pressable>
+              ))
+            ) : (
+              <AppText size={13} muted>
+                When a request is accepted, the chat shows up here.
+              </AppText>
+            )}
+          </View>
+        </ScrollView>
+      )}
     </Screen>
   );
 }
 
-function InviteTile({ invite }: { invite: Invite }) {
+function RequestCard({
+  person,
+  onAccept,
+  onDecline,
+  onCancel,
+}: {
+  person: MatchConnection;
+  onAccept: () => void;
+  onDecline: () => void;
+  onCancel: () => void;
+}) {
   const theme = useAppTheme();
-  const nav = useNavigation();
-  const { respondToInvite, cancelInvite } = useAppData();
-  const partner = getPartner(invite.partnerId);
-
-  if (!partner) return null;
-
-  const incoming = invite.direction === "incoming";
+  const incoming = person.direction === "incoming";
+  const detail = [person.age, person.gym].filter(Boolean).join(" · ");
 
   return (
-    <View style={[styles.tile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`View ${partner.name}'s profile`}
-        onPress={() => nav.push({ name: "partner", id: partner.id })}
-        style={styles.person}
-      >
-        <Avatar source={partner.avatar} size={36} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <AppText size={14} weight="extrabold" numberOfLines={1}>
-            {partner.name}, {partner.age}
+    <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <View style={styles.person}>
+        <PersonFace person={person} size={48} />
+        <View style={styles.chatText}>
+          <AppText size={16} weight="extrabold" numberOfLines={1}>
+            {person.name}
           </AppText>
-          <AppText size={11} muted numberOfLines={1}>
-            {incoming ? (
-              <AppText size={11} weight="bold" primary>
-                {partner.match}% Match
-              </AppText>
-            ) : (
-              "Invite sent"
-            )}
-            {` • ${partner.gym}`}
+          <AppText size={13} muted numberOfLines={1}>
+            {incoming ? "Wants to train with you" : "Waiting for them to accept"}
+            {detail ? ` · ${detail}` : ""}
           </AppText>
         </View>
-      </Pressable>
-
+      </View>
       {incoming ? (
         <View style={styles.actions}>
-          <SmallButton label="Decline" color={theme.colors.danger} onPress={() => respondToInvite(partner.id, false)} />
-          <SmallButton label="Accept" primary onPress={() => respondToInvite(partner.id, true)} />
+          <Action label="Decline" onPress={onDecline} />
+          <Action label="Accept" primary onPress={onAccept} />
         </View>
       ) : (
-        <SmallButton label="Cancel" onPress={() => cancelInvite(partner.id)} />
+        <Action label="Cancel" onPress={onCancel} />
       )}
     </View>
   );
 }
 
-function SmallButton({ label, onPress, primary, color }: { label: string; onPress: () => void; primary?: boolean; color?: string }) {
+function PersonFace({ person, size }: { person: MatchConnection; size: number }) {
   const theme = useAppTheme();
+  if (person.photo) return <Avatar source={{ uri: person.photo }} size={size} />;
+  return (
+    <View style={[styles.letter, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.primaryTint }]}>
+      <AppText size={size * 0.38} weight="black" primary>
+        {person.name.slice(0, 1).toUpperCase()}
+      </AppText>
+    </View>
+  );
+}
 
+function Count({ value }: { value: number }) {
+  const theme = useAppTheme();
+  return (
+    <View style={[styles.count, { backgroundColor: theme.colors.primary }]}>
+      <AppText size={11} weight="extrabold" color={theme.colors.primaryText}>
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+function Action({ label, onPress, primary }: { label: string; onPress: () => void; primary?: boolean }) {
+  const theme = useAppTheme();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.smallButton,
-        primary
-          ? { backgroundColor: theme.colors.primary }
-          : { borderColor: theme.colors.border, borderWidth: 1 },
-        { opacity: pressed ? 0.75 : 1 },
+        styles.action,
+        {
+          backgroundColor: primary ? theme.colors.primary : theme.colors.surfaceRaised,
+          borderColor: primary ? theme.colors.primary : theme.colors.border,
+          opacity: pressed ? 0.75 : 1,
+        },
       ]}
     >
-      <AppText size={12} weight="extrabold" color={primary ? theme.colors.primaryText : color ?? theme.colors.muted}>
+      <AppText size={13} weight="extrabold" color={primary ? theme.colors.primaryText : theme.colors.text}>
         {label}
       </AppText>
     </Pressable>
   );
 }
 
-function ChatRow({ conversation }: { conversation: Conversation }) {
-  const nav = useNavigation();
-  const partner = getPartner(conversation.partnerId);
-  const last = conversation.messages[conversation.messages.length - 1];
-
-  if (!partner || !last) return null;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Chat with ${partner.name}${conversation.unread ? ", unread" : ""}`}
-      onPress={() => nav.push({ name: "chat", id: partner.id })}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
-    >
-      <Avatar source={partner.avatar} size={48} />
-      <View style={styles.rowText}>
-        <View style={styles.rowTop}>
-          <AppText size={15} weight="extrabold" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {partner.name}
-          </AppText>
-          <AppText size={11} muted>
-            {last.day === "Today" ? last.time : last.day}
-          </AppText>
-        </View>
-        <AppText size={13} weight={conversation.unread ? "bold" : "regular"} muted={!conversation.unread} numberOfLines={1}>
-          {last.from === "me" ? `You: ${last.text}` : last.text}
-        </AppText>
-      </View>
-      {conversation.unread ? <Icon source={icons.unreadDot} size={8} /> : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  invites: {
-    gap: 10,
-    paddingBottom: 8,
-    paddingHorizontal: 24,
+  note: {
+    padding: 24,
   },
-  invitePane: {
-    borderRadius: 16,
-    borderWidth: 1,
-    maxHeight: INVITE_PANE_HEIGHT,
+  list: {
+    gap: 28,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  section: {
+    gap: 12,
   },
   sectionTitle: {
     alignItems: "center",
     flexDirection: "row",
     gap: 8,
   },
-  badge: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  tile: {
-    alignItems: "center",
-    borderRadius: 14,
+  card: {
+    borderRadius: 18,
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 10,
-    height: INVITE_TILE_HEIGHT,
-    paddingHorizontal: 10,
+    gap: 14,
+    padding: 14,
   },
   person: {
     alignItems: "center",
-    flex: 1,
     flexDirection: "row",
-    gap: 8,
+    gap: 12,
   },
-  actions: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  smallButton: {
-    alignItems: "center",
-    borderRadius: 8,
-    height: 32,
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  chatsTitle: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-  },
-  chats: {
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-  },
-  row: {
+  chat: {
     alignItems: "center",
     flexDirection: "row",
     gap: 12,
-    paddingVertical: 14,
+    paddingVertical: 6,
   },
-  rowText: {
+  chatText: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
-  rowTop: {
-    alignItems: "center",
+  actions: {
     flexDirection: "row",
     gap: 8,
-    justifyContent: "space-between",
+  },
+  action: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  count: {
+    borderRadius: 8,
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  letter: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

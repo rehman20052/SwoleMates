@@ -327,7 +327,7 @@ export default function App() {
                 <Text style={styles.emptyIcon}>🤝</Text>
               </View>
               <Text style={styles.emptyTitle}>Your Inbox is Empty</Text>
-              <Text style={styles.emptyDesc}>You haven't matched with any lifters yet. Invite prospective SwoleMates from Discover to start a conversation!</Text>
+              <Text style={styles.emptyDesc}>Send a request from Discover. When they accept, the chat shows up here.</Text>
               <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.setTab('Discover')}>
                 <Text style={styles.limeButtonSmallText}>Browse Profiles</Text>
               </TouchableOpacity>
