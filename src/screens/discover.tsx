@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { WorkoutHandshake } from "@/components/workout-handshake";
 import { AppText, Card, PrimaryButton, Screen, SecondaryButton } from "@/components/ui";
 import {
   discoverSetupMessage,
@@ -23,6 +24,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const [candidates, setCandidates] = useState<DiscoverCandidate[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [handshake, setHandshake] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +110,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
         </Card>
       ) : current ? (
         <ProfilePreview
+          key={current.id}
           profile={current.profile}
           chrome={false}
           distanceLabel={formatDistance(current.distanceMiles)}
@@ -118,7 +121,17 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
                   Train with {current.profile.fullName.trim().split(/\s+/)[0]}?
                 </AppText>
               </View>
-              <PrimaryButton onPress={() => review(current.id, true)}>Work Out Together</PrimaryButton>
+              <PrimaryButton
+                onPress={() => {
+                  if (handshake) return;
+                  setHandshake({
+                    id: current.id,
+                    name: current.profile.fullName.trim().split(/\s+/)[0] || "them",
+                  });
+                }}
+              >
+                Work Out Together
+              </PrimaryButton>
               <SecondaryButton onPress={() => review(current.id, false)}>Skip</SecondaryButton>
             </Card>
           }
@@ -132,6 +145,15 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
           <PrimaryButton onPress={() => setFiltersOpen(true)}>Open filters</PrimaryButton>
         </Card>
       )}
+      {handshake ? (
+        <WorkoutHandshake
+          name={handshake.name}
+          onDone={() => {
+            review(handshake.id, true);
+            setHandshake(null);
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
