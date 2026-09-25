@@ -2,6 +2,86 @@ import { supabase } from "@/lib/supabase";
 
 export type ProfileGender = "" | "Male" | "Female" | "Other";
 
+export const profileGoals = ["Fat loss", "Endurance", "Strength training", "Gain mass"] as const;
+export const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+export const dayTimes = ["Morning", "Afternoon", "Evening"] as const;
+export const MIN_PROFILE_PROMPTS = 3;
+export const PROMPT_ANSWER_LIMIT = 140;
+
+export const photoCaptionGroups = [
+  {
+    title: "Milestones",
+    options: [
+      "My proudest moment in the gym so far.",
+      "The day I finally hit that PR.",
+      "Before the pre-workout kicked in vs. after.",
+      "Proof that consistency actually works.",
+      "The face of someone who just completed leg day.",
+    ],
+  },
+  {
+    title: "Lifestyle & Vibe",
+    options: [
+      "My natural habitat.",
+      "Where I spend 90% of my free time.",
+      "Post-workout pump appreciation.",
+      "Fueling up for greatness.",
+      "Recovery mode: active laziness.",
+    ],
+  },
+  {
+    title: "Humorous & Lighthearted",
+    options: [
+      "Me pretending I'm not entirely out of breath.",
+      "My relationship status: dating my gym bag.",
+      "Trying to look cool while doing cardio (failing).",
+      "Please don't talk to me during my heavy sets.",
+      "My gym playlist is the only thing carrying me through this.",
+    ],
+  },
+] as const;
+
+export const profilePromptGroups = [
+  {
+    title: "Progress & Goals",
+    options: [
+      "My current obsession in the gym is...",
+      "The one lift I'm trying to master this month is...",
+      "My ultimate fitness goal for this year is...",
+      "The hardest lesson I've learned in the gym was...",
+      "My biggest gym milestone was when I finally...",
+    ],
+  },
+  {
+    title: "Preferences & Habits",
+    options: [
+      "My go-to pre-workout ritual involves...",
+      "You know I'm locked into a workout when...",
+      "My ideal gym partner is someone who...",
+      "My absolute favorite split to run is...",
+      "The exercise I secretly love to hate is...",
+    ],
+  },
+  {
+    title: "Fun & Conversational",
+    options: [
+      "We'll get along if you never...",
+      "My most controversial gym opinion is...",
+      "The song that adds 10 lbs to my max squat is...",
+      "I'll judge you silently if you...",
+      "My post-gym cheat meal of choice is...",
+    ],
+  },
+] as const;
+
+export const photoCaptionOptions = photoCaptionGroups.flatMap((group) => group.options);
+export const profilePromptOptions = profilePromptGroups.flatMap((group) => group.options);
+
+export type ProfilePromptAnswer = {
+  prompt: string;
+  answer: string;
+};
+
 export type UserProfile = {
   fullName: string;
   age: string;
@@ -12,12 +92,16 @@ export type UserProfile = {
   about: string;
   experienceLevel: string;
   selectedGoals: string[];
+  availabilityDays: string[];
+  availabilityTimes: string[];
   bench: string;
   squat: string;
   deadlift: string;
   customLiftName: string;
   customLift: string;
   photos: string[];
+  photoCaptions: string[];
+  prompts: ProfilePromptAnswer[];
 };
 
 const genders: readonly ProfileGender[] = ["Male", "Female", "Other"];
@@ -26,14 +110,52 @@ function isGender(value: unknown): value is ProfileGender {
   return typeof value === "string" && genders.includes(value as ProfileGender);
 }
 
+function chosen(value: unknown, allowed: readonly string[]) {
+  if (!Array.isArray(value)) return [];
+  return allowed.filter((item) => value.includes(item));
+}
+
+function listed(value: unknown, allowed: readonly string[]): value is string {
+  return typeof value === "string" && allowed.includes(value);
+}
+
+export function answeredPrompts(prompts: ProfilePromptAnswer[]) {
+  const seen = new Set<string>();
+  const answers: ProfilePromptAnswer[] = [];
+  for (const item of prompts) {
+    const prompt = item.prompt.trim();
+    const answer = item.answer.trim().slice(0, PROMPT_ANSWER_LIMIT);
+    if (!listed(prompt, profilePromptOptions) || !answer || seen.has(prompt)) continue;
+    seen.add(prompt);
+    answers.push({ prompt, answer });
+  }
+  return answers;
+}
+
+function normalizeCaptions(value: unknown, count: number) {
+  const raw = Array.isArray(value) ? value : [];
+  return Array.from({ length: count }, (_, index) => (listed(raw[index], photoCaptionOptions) ? (raw[index] as string) : ""));
+}
+
+function normalizePrompts(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return answeredPrompts(
+    value.map((item) => {
+      const prompt = item && typeof item === "object" ? (item as { prompt?: unknown; answer?: unknown }) : {};
+      return {
+        prompt: typeof prompt.prompt === "string" ? prompt.prompt : "",
+        answer: typeof prompt.answer === "string" ? prompt.answer : "",
+      };
+    }),
+  );
+}
+
 export function normalizeProfile(value: unknown): UserProfile | null {
   if (!value || typeof value !== "object") return null;
   const profile = value as Partial<UserProfile>;
   if (typeof profile.fullName !== "string" || !profile.fullName.trim()) return null;
 
-  const goals = Array.isArray(profile.selectedGoals)
-    ? profile.selectedGoals.filter((goal): goal is string => typeof goal === "string")
-    : [];
+  const goals = chosen(profile.selectedGoals, profileGoals);
   const photos = Array.isArray(profile.photos)
     ? profile.photos.filter((photo): photo is string => typeof photo === "string").slice(0, 6)
     : [];
@@ -48,12 +170,16 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     about: typeof profile.about === "string" ? profile.about : "",
     experienceLevel: typeof profile.experienceLevel === "string" ? profile.experienceLevel : "Intermediate",
     selectedGoals: goals,
+    availabilityDays: chosen(profile.availabilityDays, weekDays),
+    availabilityTimes: chosen(profile.availabilityTimes, dayTimes),
     bench: typeof profile.bench === "string" ? profile.bench : "N/A",
     squat: typeof profile.squat === "string" ? profile.squat : "N/A",
     deadlift: typeof profile.deadlift === "string" ? profile.deadlift : "N/A",
     customLiftName: typeof profile.customLiftName === "string" ? profile.customLiftName : "",
     customLift: typeof profile.customLift === "string" ? profile.customLift : "N/A",
     photos,
+    photoCaptions: normalizeCaptions(profile.photoCaptions, photos.length),
+    prompts: normalizePrompts(profile.prompts),
   };
 }
 
@@ -125,11 +251,6 @@ function clip(value: string, max: number) {
 }
 
 function accountProfile(profile: UserProfile, photoPaths: string[]) {
-  const goals = profile.selectedGoals
-    .map((goal) => clip(goal, 40))
-    .filter((goal) => goal.length > 0)
-    .slice(0, 8);
-
   return {
     fullName: clip(profile.fullName, 80),
     age: clip(profile.age, 3),
@@ -139,13 +260,17 @@ function accountProfile(profile: UserProfile, photoPaths: string[]) {
     zipCode: clip(profile.zipCode, 10),
     about: clip(profile.about, 280),
     experienceLevel: clip(profile.experienceLevel, 20),
-    selectedGoals: goals,
+    selectedGoals: chosen(profile.selectedGoals, profileGoals),
+    availabilityDays: chosen(profile.availabilityDays, weekDays),
+    availabilityTimes: chosen(profile.availabilityTimes, dayTimes),
     bench: clip(profile.bench, 12),
     squat: clip(profile.squat, 12),
     deadlift: clip(profile.deadlift, 12),
     customLiftName: clip(profile.customLiftName, 40),
     customLift: clip(profile.customLift, 12),
     photos: photoPaths,
+    photoCaptions: normalizeCaptions(profile.photoCaptions, photoPaths.length),
+    prompts: answeredPrompts(profile.prompts),
   };
 }
 
