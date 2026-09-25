@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 
@@ -18,6 +18,8 @@ import { pickProfilePhoto } from "@/lib/pick-photo";
 import { dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
+import { lookupUsZip } from "@/lib/zip-location";
+import { searchGymsByName, searchStreetAddresses, type GymPlace } from "@/lib/gym-location";
 
 const MAX_PHOTOS = 6;
 const ABOUT_LIMIT = 280;
@@ -64,6 +66,119 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   const [activeLift, setActiveLift] = useState<LiftField | null>(null);
   const [picker, setPicker] = useState<{ kind: "caption" | "prompt"; index: number } | null>(null);
   const [mode, setMode] = useState<"edit" | "view">(initialMode);
+  const [zipPlace, setZipPlace] = useState<string | null>(null);
+  const [zipStatus, setZipStatus] = useState<string | null>(null);
+  const [zipPoint, setZipPoint] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [streetQuery, setStreetQuery] = useState(profile.gymAddress);
+  const [gymTown, setGymTown] = useState("");
+  const [gymResults, setGymResults] = useState<GymPlace[]>([]);
+  const [addressResults, setAddressResults] = useState<GymPlace[]>([]);
+  const [gymStatus, setGymStatus] = useState<string | null>(null);
+  const [addressStatus, setAddressStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const zip = profile.zipCode.trim();
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+      setZipPlace(null);
+      setZipPoint(null);
+      setZipStatus(null);
+      return;
+    }
+
+    let active = true;
+    setZipStatus("Checking that zip code...");
+    lookupUsZip(zip)
+      .then((place) => {
+        if (!active) return;
+        if (!place) {
+          setZipPlace(null);
+          setZipPoint(null);
+          setZipStatus("That zip code was not found.");
+          return;
+        }
+        setZipPlace([place.placeName, place.state].filter(Boolean).join(", "));
+        setZipPoint({ latitude: place.latitude, longitude: place.longitude });
+        setZipStatus(null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setZipPlace(null);
+        setZipPoint(null);
+        setZipStatus("Could not look up that zip code.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile.zipCode]);
+
+  useEffect(() => {
+    const gymName = profile.primaryGym.trim();
+    const pinned = profile.gymLatitude != null && profile.gymLongitude != null;
+    if (pinned || streetQuery.trim() || gymName.length < 2) {
+      setGymResults([]);
+      setGymStatus(null);
+      return;
+    }
+    if (!zipPoint) {
+      setGymResults([]);
+      setGymStatus("Add your zip code first so we can look near you.");
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(() => {
+      setGymStatus("Searching gyms...");
+      searchGymsByName(gymName, zipPoint)
+        .then((gyms) => {
+          if (!active) return;
+          setGymResults(gyms);
+          setGymStatus(gyms.length > 0 ? null : "That gym is not listed yet. Enter the street address and town below.");
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setGymResults([]);
+          setGymStatus(error instanceof Error ? error.message : "Could not search gyms.");
+        });
+    }, 400);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [profile.primaryGym, profile.gymLatitude, profile.gymLongitude, streetQuery, zipPoint]);
+
+  useEffect(() => {
+    const street = streetQuery.trim();
+    const town = gymTown.trim();
+    const pinned = profile.gymLatitude != null && profile.gymLongitude != null;
+    if (pinned || street.length < 3 || town.length < 2) {
+      setAddressResults([]);
+      setAddressStatus(null);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(() => {
+      setAddressStatus("Searching addresses...");
+      searchStreetAddresses(street, town, zipPoint)
+        .then((places) => {
+          if (!active) return;
+          setAddressResults(places);
+          setAddressStatus(places.length > 0 ? null : `No matching address in ${town}.`);
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setAddressResults([]);
+          setAddressStatus(error instanceof Error ? error.message : "Could not search that address.");
+        });
+    }, 400);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [streetQuery, gymTown, profile.gymLatitude, profile.gymLongitude, zipPoint]);
 
   const update = (patch: Partial<UserProfile>) => onChange({ ...profile, ...patch });
 
@@ -323,9 +438,139 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
               maxLength={10}
               placeholder="12345"
             />
+            <AppText size={12} muted>
+              Used to match people near you. It is saved as a location and is not shown on your profile.
+            </AppText>
+            {zipPlace ? (
+              <AppText size={13} weight="semibold" primary>
+                {zipPlace}
+              </AppText>
+            ) : zipStatus ? (
+              <AppText size={13} weight="medium" color={zipStatus.startsWith("Checking") ? theme.colors.muted : theme.colors.danger}>
+                {zipStatus}
+              </AppText>
+            ) : null}
           </Field>
-          <Field label="Home gym">
-            <Input value={profile.primaryGym} onChangeText={(primaryGym) => update({ primaryGym })} placeholder="Gym name" />
+          <Field label="Gym name">
+            <Input
+              value={profile.primaryGym}
+              onChangeText={(primaryGym) => {
+                setStreetQuery("");
+                setGymTown("");
+                setAddressResults([]);
+                setAddressStatus(null);
+                update({ primaryGym, gymAddress: "", gymLatitude: null, gymLongitude: null });
+              }}
+              placeholder="Enter gym name"
+              autoCapitalize="words"
+            />
+            <AppText size={12} muted>
+              Select your gym from the results to save its location.
+            </AppText>
+            {gymResults.length > 0 ? (
+              <View style={styles.gymResults}>
+                {gymResults.map((gym) => (
+                  <Pressable
+                    key={gym.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${gym.name}, ${gym.address}`}
+                    onPress={() => {
+                      setStreetQuery(gym.address);
+                      update({
+                        primaryGym: profile.primaryGym.trim() || gym.name,
+                        gymAddress: gym.address,
+                        gymLatitude: gym.latitude,
+                        gymLongitude: gym.longitude,
+                      });
+                      setGymResults([]);
+                      setGymStatus(null);
+                      setAddressResults([]);
+                      setAddressStatus(null);
+                    }}
+                    style={[styles.gymResult, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}
+                  >
+                    <AppText size={14} weight="bold">
+                      {gym.name}
+                    </AppText>
+                    {gym.address ? (
+                      <AppText size={12} muted>
+                        {gym.address}
+                      </AppText>
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : gymStatus ? (
+              <AppText size={13} weight="medium" color={gymStatus.startsWith("Searching") || gymStatus.startsWith("That gym") || gymStatus.startsWith("Add your") ? theme.colors.muted : theme.colors.danger}>
+                {gymStatus}
+              </AppText>
+            ) : null}
+          </Field>
+          <Field label="Street address">
+            <Input
+              value={streetQuery}
+              onChangeText={(street) => {
+                setStreetQuery(street);
+                setGymResults([]);
+                setGymStatus(null);
+                update({ gymAddress: "", gymLatitude: null, gymLongitude: null });
+              }}
+              placeholder="Enter street address"
+              autoCapitalize="words"
+            />
+          </Field>
+          <Field label="Town">
+            <Input
+              value={gymTown}
+              onChangeText={(town) => {
+                setGymTown(town);
+                setGymResults([]);
+                setGymStatus(null);
+                update({ gymAddress: "", gymLatitude: null, gymLongitude: null });
+              }}
+              placeholder="Enter town"
+              autoCapitalize="words"
+            />
+            {profile.gymAddress.trim() && profile.gymLatitude != null ? (
+              <AppText size={13} weight="semibold" primary>
+                Saved location: {profile.gymAddress}
+              </AppText>
+            ) : (
+              <AppText size={12} muted>
+                If your gym is not listed, enter the street address and town, then select the location.
+              </AppText>
+            )}
+            {addressResults.length > 0 ? (
+              <View style={styles.gymResults}>
+                {addressResults.map((place) => (
+                  <Pressable
+                    key={place.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={place.address}
+                    onPress={() => {
+                      setStreetQuery(place.name);
+                      setGymTown(gymTown.trim());
+                      update({
+                        gymAddress: place.address,
+                        gymLatitude: place.latitude,
+                        gymLongitude: place.longitude,
+                      });
+                      setAddressResults([]);
+                      setAddressStatus(null);
+                    }}
+                    style={[styles.gymResult, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}
+                  >
+                    <AppText size={14} weight="bold">
+                      {place.address}
+                    </AppText>
+                  </Pressable>
+                ))}
+              </View>
+            ) : addressStatus ? (
+              <AppText size={13} weight="medium" color={addressStatus.startsWith("Searching") || addressStatus.startsWith("No matching") || addressStatus.startsWith("That town") ? theme.colors.muted : theme.colors.danger}>
+                {addressStatus}
+              </AppText>
+            ) : null}
           </Field>
         </Card>
 
@@ -681,7 +926,7 @@ function ProfilePreview({
         {profile.primaryGym.trim() || "Home gym not set"}
       </AppText>
       <AppText size={13} muted>
-        {profile.hometown.trim() || "Add a hometown so people nearby can find you."}
+        {profile.gymAddress.trim() || profile.hometown.trim() || "Add a hometown so people nearby can find you."}
       </AppText>
     </Card>,
   ];
@@ -1056,6 +1301,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  gymResults: {
+    gap: 8,
+  },
+  gymResult: {
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   addPrompt: {
     alignItems: "center",
