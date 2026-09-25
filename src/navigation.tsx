@@ -7,10 +7,11 @@ export type Tab = "Discover" | "Chat" | "Dashboard" | "Plans" | "Profile";
 export type Route =
   | { name: "partner"; id: string }
   | { name: "chat"; id: string }
+  | { name: "request-profile"; userId: string }
   | { name: "schedule"; partnerId?: string }
   | { name: "scheduled"; workoutId: string };
 
-export const fullScreenRoutes: Route["name"][] = ["chat", "scheduled"];
+export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "scheduled"];
 
 type Navigation = {
   push: (route: Route) => void;

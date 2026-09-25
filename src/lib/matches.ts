@@ -1,4 +1,4 @@
-import { normalizeProfile } from "@/lib/profile";
+import { normalizeProfile, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
 const PHOTO_BUCKET = "profile-photos";
@@ -18,6 +18,7 @@ export type MatchConnection = {
   gym: string;
   photo: string | null;
   lastMessage: string;
+  profile: UserProfile | null;
 };
 
 export type MatchMessage = {
@@ -50,6 +51,17 @@ function missingFunction(error: { message?: string } | null, name: string) {
   return message.includes(name) || message.includes("schema cache");
 }
 
+const matchProfiles = new Map<string, UserProfile>();
+const matchPeople = new Map<string, MatchConnection>();
+
+export function matchProfile(userId: string) {
+  return matchProfiles.get(userId) ?? null;
+}
+
+export function matchConnection(userId: string) {
+  return matchPeople.get(userId) ?? null;
+}
+
 function personFrom(row: {
   id?: string;
   other_user_id?: string;
@@ -57,12 +69,16 @@ function personFrom(row: {
   status?: string;
   profile?: unknown;
   last_message?: string | null;
+  created_at?: string;
 }): MatchConnection | null {
   if (!row.id || !row.other_user_id) return null;
   if (row.direction !== "incoming" && row.direction !== "outgoing") return null;
   if (row.status !== "pending" && row.status !== "accepted" && row.status !== "declined") return null;
-  const profile = normalizeProfile(row.profile);
-  return {
+  const normalized = normalizeProfile(row.profile);
+  const photos = normalized?.photos.map(photoUrl).filter(Boolean) ?? [];
+  const profile = normalized ? { ...normalized, photos } : null;
+  if (profile) matchProfiles.set(row.other_user_id, profile);
+  const person: MatchConnection = {
     requestId: row.id,
     userId: row.other_user_id,
     direction: row.direction,
@@ -70,9 +86,121 @@ function personFrom(row: {
     name: profile?.fullName?.trim() || "SwoleMate",
     age: profile?.age?.trim() || "",
     gym: profile?.primaryGym?.trim() || "",
-    photo: profile?.photos?.[0] ? photoUrl(profile.photos[0]) : null,
+    photo: photos[0] ?? null,
     lastMessage: row.last_message?.trim() || "",
+    profile,
   };
+  matchPeople.set(person.userId, person);
+  return person;
+}
+
+const memoryReads = new Map<string, Record<string, string>>();
+const alertListeners = new Set<() => void>();
+
+function readKey(userId: string) {
+  return `swolemates.chat-read.${userId}`;
+}
+
+function readMap(userId: string) {
+  try {
+    if (typeof localStorage === "undefined") return { ...(memoryReads.get(userId) ?? {}) };
+    const saved = JSON.parse(localStorage.getItem(readKey(userId)) ?? "{}") as unknown;
+    if (!saved || typeof saved !== "object") return {};
+    return saved as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function saveReadMap(userId: string, reads: Record<string, string>) {
+  try {
+    if (typeof localStorage === "undefined") memoryReads.set(userId, reads);
+    else localStorage.setItem(readKey(userId), JSON.stringify(reads));
+  } catch {
+    memoryReads.set(userId, reads);
+  }
+}
+
+export function subscribeChatAlerts(listener: () => void) {
+  alertListeners.add(listener);
+  return () => {
+    alertListeners.delete(listener);
+  };
+}
+
+export function notifyChatAlerts() {
+  alertListeners.forEach((listener) => listener());
+}
+
+async function signedInUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
+export async function chattedMatchIds(matchIds: string[]) {
+  const me = await signedInUserId();
+  const ids = [...new Set(matchIds)];
+  if (!me || ids.length === 0) return new Set<string>();
+  const { data, error } = await supabase.from("match_messages").select("match_id").in("match_id", ids).eq("sender_id", me);
+  if (error) return new Set<string>();
+  return new Set(((data ?? []) as { match_id?: string }[]).map((row) => row.match_id).filter((id): id is string => Boolean(id)));
+}
+
+export async function openedChatIds() {
+  const me = await signedInUserId();
+  if (!me) return new Set<string>();
+  return new Set(Object.keys(readMap(me)));
+}
+
+export async function markChatRead(requestId: string) {
+  const me = await signedInUserId();
+  if (!me) return;
+  const reads = readMap(me);
+  reads[requestId] = new Date().toISOString();
+  saveReadMap(me, reads);
+  notifyChatAlerts();
+}
+
+export async function chatAlertCount() {
+  const me = await signedInUserId();
+  if (!me) return 0;
+
+  let connections: MatchConnection[] = [];
+  try {
+    connections = await listConnections();
+  } catch {
+    return 0;
+  }
+
+  const reads = readMap(me);
+  const incoming = connections.filter((person) => person.status === "pending" && person.direction === "incoming").length;
+  const accepted = connections.filter((person) => person.status === "accepted");
+  const latest = new Map<string, { sender: string; at: string }>();
+  const chatted = new Set<string>();
+
+  if (accepted.length > 0) {
+    const { data } = await supabase
+      .from("match_messages")
+      .select("match_id, sender_id, created_at")
+      .in("match_id", accepted.map((person) => person.requestId))
+      .order("created_at", { ascending: false });
+    for (const row of (data ?? []) as { match_id?: string; sender_id?: string; created_at?: string }[]) {
+      if (!row.match_id || !row.sender_id || !row.created_at) continue;
+      if (row.sender_id === me) chatted.add(row.match_id);
+      if (!latest.has(row.match_id)) latest.set(row.match_id, { sender: row.sender_id, at: row.created_at });
+    }
+  }
+
+  const unreadChats = accepted.filter((person) => {
+    if (!chatted.has(person.requestId)) return !reads[person.requestId];
+    const readAt = reads[person.requestId];
+    if (!readAt) return true;
+    const last = latest.get(person.requestId);
+    if (!last || last.sender === me) return false;
+    return new Date(last.at).getTime() > new Date(readAt).getTime();
+  }).length;
+
+  return incoming + unreadChats;
 }
 
 export async function listConnections() {
@@ -82,8 +210,10 @@ export async function listConnections() {
   const { data, error } = await supabase.rpc("my_connections");
   if (error) throw setupError(error);
   return ((data ?? []) as Parameters<typeof personFrom>[0][])
-    .map(personFrom)
-    .filter((person): person is MatchConnection => person !== null && person.status !== "declined");
+    .map((row) => ({ person: personFrom(row), createdAt: row.created_at ?? "" }))
+    .filter((item): item is { person: MatchConnection; createdAt: string } => item.person !== null && item.person.status !== "declined")
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .map((item) => item.person);
 }
 
 async function currentUserId() {
@@ -98,7 +228,48 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
 
   const { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
+  if (error) {
+    if (!missingFunction(error, "send_match_request")) throw setupError(error);
+    await sendMatchRequestDirect(me, toUserId);
+  }
+  notifyChatAlerts();
+}
+
+async function sendMatchRequestDirect(me: string, toUserId: string) {
+  const { data, error } = await supabase
+    .from("match_requests")
+    .select("id, from_user_id, to_user_id, status")
+    .or(`and(from_user_id.eq.${me},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${me})`);
   if (error) throw setupError(error);
+
+  const rows = (data ?? []) as { id: string; from_user_id: string; to_user_id: string; status: string }[];
+  const reverse = rows.find((row) => row.from_user_id === toUserId && row.to_user_id === me);
+  const mine = rows.find((row) => row.from_user_id === me && row.to_user_id === toUserId);
+
+  if (reverse && reverse.status !== "accepted") {
+    const { error: acceptError } = await supabase.from("match_requests").update({ status: "accepted" }).eq("id", reverse.id);
+    if (acceptError) throw setupError(acceptError);
+  }
+  if (reverse && mine && mine.status !== "accepted") {
+    const { error: deleteError } = await supabase.from("match_requests").delete().eq("id", mine.id);
+    if (deleteError) throw setupError(deleteError);
+    return;
+  }
+  if (reverse) return;
+
+  if (mine) {
+    if (mine.status === "pending" || mine.status === "accepted") return;
+    const { error: reopenError } = await supabase.from("match_requests").update({ status: "pending" }).eq("id", mine.id);
+    if (reopenError) throw setupError(reopenError);
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("match_requests").insert({
+    from_user_id: me,
+    to_user_id: toUserId,
+    status: "pending",
+  });
+  if (insertError) throw setupError(insertError);
 }
 
 export async function respondToMatch(requestId: string, accept: boolean) {
@@ -107,15 +278,18 @@ export async function respondToMatch(requestId: string, accept: boolean) {
     .update({ status: accept ? "accepted" : "declined" })
     .eq("id", requestId);
   if (error) throw setupError(error);
-  if (!accept) return;
-
-  const collapsed = await supabase.rpc("collapse_mutual_requests");
-  if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
+  if (accept) {
+    await markChatRead(requestId);
+    const collapsed = await supabase.rpc("collapse_mutual_requests");
+    if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
+  }
+  notifyChatAlerts();
 }
 
 export async function cancelMatchRequest(requestId: string) {
   const { error } = await supabase.from("match_requests").delete().eq("id", requestId);
   if (error) throw setupError(error);
+  notifyChatAlerts();
 }
 
 export async function listMessages(matchId: string, me: string): Promise<MatchMessage[]> {
@@ -143,4 +317,5 @@ export async function sendMatchMessage(matchId: string, body: string) {
     body: text.slice(0, 1000),
   });
   if (error) throw setupError(error);
+  await markChatRead(matchId);
 }

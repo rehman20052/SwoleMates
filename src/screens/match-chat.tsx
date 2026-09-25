@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, Screen } from "@/components/ui";
-import { listConnections, listMessages, sendMatchMessage, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { listConnections, listMessages, markChatRead, sendMatchMessage, type MatchConnection, type MatchMessage } from "@/lib/matches";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -38,6 +38,11 @@ export function MatchChat({ userId }: { userId: string }) {
   }, [userId]);
 
   useEffect(() => {
+    if (!person) return;
+    void markChatRead(person.requestId);
+  }, [person]);
+
+  useEffect(() => {
     if (!person || !me) return;
     let active = true;
     listMessages(person.requestId, me)
@@ -69,19 +74,36 @@ export function MatchChat({ userId }: { userId: string }) {
 
   return (
     <Screen>
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
-        {person?.photo ? <Avatar source={{ uri: person.photo }} size={40} /> : null}
-        <View style={{ flex: 1, gap: 2 }}>
-          <AppText size={16} weight="extrabold" numberOfLines={1}>
-            {person?.name ?? "Chat"}
-          </AppText>
-          {person?.gym ? (
-            <AppText size={12} muted numberOfLines={1}>
-              {person.gym}
+      <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
+        <View style={styles.header}>
+          <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
+          {person?.photo ? <Avatar source={{ uri: person.photo }} size={40} /> : null}
+          <View style={styles.identity}>
+            <AppText size={16} weight="extrabold" numberOfLines={1}>
+              {person?.name ?? "Chat"}
             </AppText>
-          ) : null}
+            {person?.gym ? (
+              <AppText size={12} muted numberOfLines={1}>
+                {person.gym}
+              </AppText>
+            ) : null}
+          </View>
         </View>
+        {person ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View ${person.name}'s profile`}
+            onPress={() => nav.push({ name: "request-profile", userId: person.userId })}
+            style={[styles.profileLink, { backgroundColor: theme.colors.surfaceRaised }]}
+          >
+            <AppText size={13} weight="medium">
+              View profile
+            </AppText>
+            <AppText size={16} muted>
+              ›
+            </AppText>
+          </Pressable>
+        ) : null}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -154,14 +176,29 @@ function Bubble({ message }: { message: MatchMessage }) {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
+  headerBlock: {
     borderBottomWidth: 1,
-    flexDirection: "row",
-    gap: 10,
+    gap: 8,
     paddingBottom: 12,
     paddingHorizontal: 12,
     paddingTop: 8,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  identity: {
+    flex: 1,
+    gap: 2,
+  },
+  profileLink: {
+    alignItems: "center",
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   messages: {
     flexGrow: 1,

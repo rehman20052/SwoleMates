@@ -13,6 +13,7 @@ import {
 
 import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
+import { chatAlertCount, subscribeChatAlerts } from '@/lib/matches';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
@@ -23,6 +24,7 @@ import { InboxScreen } from '@/screens/inbox';
 import { PartnerProfileScreen } from '@/screens/partner-profile';
 import { PlansScreen } from '@/screens/plans';
 import { ProfileScreen } from '@/screens/profile';
+import { RequestProfileScreen } from '@/screens/request-profile';
 import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
@@ -65,6 +67,25 @@ export default function App() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [chatAlerts, setChatAlerts] = useState(0);
+
+  useEffect(() => {
+    if (currentScreen !== 'main-app') return;
+    let active = true;
+    const refresh = () => {
+      void chatAlertCount().then((count) => {
+        if (active) setChatAlerts(count);
+      });
+    };
+    refresh();
+    const unsubscribe = subscribeChatAlerts(refresh);
+    const timer = setInterval(refresh, 15000);
+    return () => {
+      active = false;
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [currentScreen, activeTab, stack.length]);
 
   const continueAfterAuth = (profile: UserProfile | null) => {
     setProfileData(profile ?? emptyProfile());
@@ -308,6 +329,8 @@ export default function App() {
         return <PartnerProfileScreen id={route.id} />;
       case 'chat':
         return <ChatScreen id={route.id} />;
+      case 'request-profile':
+        return <RequestProfileScreen userId={route.userId} />;
       case 'schedule':
         return <ScheduleWorkoutScreen partnerId={route.partnerId} />;
       case 'scheduled':
@@ -399,9 +422,17 @@ export default function App() {
               <TouchableOpacity
                 key={tab.name}
                 style={styles.navItem}
+                accessibilityLabel={tab.name === 'Chat' && chatAlerts > 0 ? `Chat, ${chatAlerts} new` : tab.name}
                 onPress={() => nav.setTab(tab.name)}
               >
-                <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
+                <View style={styles.navIconWrap}>
+                  <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
+                  {tab.name === 'Chat' && chatAlerts > 0 ? (
+                    <View style={styles.chatBadge}>
+                      <Text style={styles.chatBadgeText}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={[styles.navLabel, isActive && styles.activeNavLabel]}>{tab.name}</Text>
               </TouchableOpacity>
             );
@@ -569,6 +600,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
   },
   navItem: { alignItems: 'center', flex: 1 },
+  navIconWrap: { position: 'relative' },
+  chatBadge: {
+    position: 'absolute',
+    top: -7,
+    right: -12,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#CCFF00',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  chatBadgeText: { color: '#000000', fontSize: 10, fontWeight: '800' },
   navIcon: { fontSize: 18, marginBottom: 2, opacity: 0.4 },
   activeNavIcon: { opacity: 1 },
   navLabel: { fontSize: 10, color: '#666666', fontWeight: '600' },
