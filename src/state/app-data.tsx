@@ -77,6 +77,15 @@ export type SavedMeal = Omit<FoodLogEntry, "id" | "date"> & {
   id: string;
 };
 
+export type NutritionProfile = {
+  sex: "Male" | "Female";
+  age: number;
+  weightLb: number;
+  heightIn: number;
+  activityLevel: "1–2 workouts/week" | "3–4 workouts/week" | "5–6 workouts/week" | "Daily intense training";
+  goal: "Lose 0.5 lb/week" | "Lose 1 lb/week" | "Maintain weight" | "Gain 0.5 lb/week" | "Gain 1 lb/week";
+};
+
 type AppData = {
   preferences: Preferences;
   discoverFilters: DiscoverFilters;
@@ -92,6 +101,7 @@ type AppData = {
   nutrition: NutritionTotals | null;
   foodEntries: FoodLogEntry[];
   savedMeals: SavedMeal[];
+  nutritionProfile: NutritionProfile | null;
 };
 
 type AppDataContextValue = AppData & {
@@ -110,6 +120,7 @@ type AppDataContextValue = AppData & {
   addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">) => void;
   deleteFoodEntry: (entryId: string) => void;
   saveMeal: (meal: Omit<SavedMeal, "id">) => void;
+  updateNutritionProfile: (profile: NutritionProfile) => void;
   logWorkout: (title?: string, notes?: string) => void;
   updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => void;
   deleteWorkoutLog: (logId: string) => void;
@@ -251,6 +262,7 @@ function seedData(): AppData {
     nutrition: defaultNutrition,
     foodEntries: seedFoodEntries,
     savedMeals: seedSavedMeals,
+    nutritionProfile: null,
   };
 }
 
@@ -461,6 +473,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           ...current,
           savedMeals: [{ ...meal, id: `saved-${Date.now()}` }, ...current.savedMeals],
         }));
+      },
+      updateNutritionProfile(profile) {
+        update((current) => ({ ...current, nutritionProfile: profile }));
       },
       logWorkout(title = "Solo workout", notes) {
         update((current) => ({
