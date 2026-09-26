@@ -73,7 +73,7 @@ export function MatchChat({ userId }: { userId: string }) {
   }
 
   return (
-    <Screen>
+    <Screen style={styles.screen}>
       <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
         <View style={styles.header}>
           <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
@@ -115,9 +115,11 @@ export function MatchChat({ userId }: { userId: string }) {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
           {messages.length === 0 ? (
-            <AppText muted style={{ textAlign: "center" }}>
-              You're training partners. Say hello.
-            </AppText>
+            <View style={styles.empty}>
+              <AppText muted style={{ textAlign: "center", lineHeight: 20 }}>
+                You're training partners. Say hello.
+              </AppText>
+            </View>
           ) : (
             messages.map((message) => <Bubble key={message.id} message={message} />)
           )}
@@ -161,13 +163,14 @@ function Bubble({ message }: { message: MatchMessage }) {
       <View
         style={[
           styles.bubble,
+          message.mine ? styles.mine : styles.theirs,
           message.mine
             ? { backgroundColor: theme.colors.primaryDeep, borderColor: theme.colors.primary }
             : { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
         ]}
       >
-        <AppText style={{ lineHeight: 21 }}>{message.body}</AppText>
-        <AppText size={10} muted style={{ textAlign: "right" }}>
+        <AppText style={{ lineHeight: 20 }}>{message.body}</AppText>
+        <AppText size={11} muted>
           {time}
         </AppText>
       </View>
@@ -176,17 +179,20 @@ function Bubble({ message }: { message: MatchMessage }) {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    paddingTop: 8,
+  },
   headerBlock: {
     borderBottomWidth: 1,
-    gap: 8,
-    paddingBottom: 12,
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    gap: 12,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
   },
   identity: {
     flex: 1,
@@ -194,17 +200,23 @@ const styles = StyleSheet.create({
   },
   profileLink: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 14,
     flexDirection: "row",
     justifyContent: "space-between",
+    marginLeft: 32,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   messages: {
     flexGrow: 1,
-    gap: 10,
+    gap: 8,
     justifyContent: "flex-end",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  empty: {
+    paddingBottom: 12,
+    paddingHorizontal: 28,
   },
   bubbleRow: {
     flexDirection: "row",
@@ -212,17 +224,23 @@ const styles = StyleSheet.create({
   bubble: {
     borderRadius: 18,
     borderWidth: 1,
-    gap: 4,
+    gap: 6,
     maxWidth: "78%",
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  mine: {
+    borderBottomRightRadius: 6,
+  },
+  theirs: {
+    borderBottomLeftRadius: 6,
   },
   composer: {
     alignItems: "center",
     borderTopWidth: 1,
     flexDirection: "row",
     gap: 10,
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
     paddingTop: 12,
   },
