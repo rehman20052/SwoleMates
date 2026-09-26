@@ -46,11 +46,6 @@ function parseWeight(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function parseNumber(value: string) {
-  const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function firstName(name: string) {
   return name.trim().split(/\s+/)[0] || "Lifter";
 }
@@ -152,7 +147,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     logWorkout,
     logs,
     nutrition,
-    updateNutrition,
     updateWorkoutLog,
     workouts,
   } = useAppData();
@@ -509,21 +503,27 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         </Card>
 
         {nutrition ? (
-          <Card padding={16} radius={20} gap={12}>
-            <SectionLabel>Nutrition Snapshot</SectionLabel>
-            <View style={styles.macroGrid}>
-              {(["calories", "protein", "carbs", "fats"] as const).map((field) => (
-                <MacroInput
-                  key={field}
-                  label={field === "fats" ? "Fats" : field[0].toUpperCase() + field.slice(1)}
-                  suffix={field === "calories" ? "cal" : "g"}
-                  value={nutrition[field]}
-                  goal={nutrition[macroGoals[field]]}
-                  onChange={(value) => updateNutrition({ [field]: value })}
-                />
-              ))}
-            </View>
-          </Card>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open nutrition tracker" onPress={() => nav.push({ name: "nutrition" })}>
+            <Card padding={16} radius={20} gap={12}>
+              <View style={styles.sectionHeader}>
+                <SectionLabel>Nutrition</SectionLabel>
+                <AppText size={12} weight="bold" primary>Open tracker ›</AppText>
+              </View>
+              <View style={styles.nutritionHeadline}>
+                <AppText size={24} weight="black">{nutrition.calories.toLocaleString()}</AppText>
+                <AppText size={13} muted> / {nutrition.calorieGoal.toLocaleString()} calories</AppText>
+              </View>
+              <ProgressBar progress={Math.min(nutrition.calories / Math.max(nutrition.calorieGoal, 1), 1)} />
+              <View style={styles.macroGrid}>
+                {(["protein", "carbs", "fats"] as const).map((field) => (
+                  <View key={field} style={styles.macroItem}>
+                    <AppText size={11} weight="bold" muted upper>{field === "fats" ? "Fat" : field}</AppText>
+                    <AppText size={15} weight="extrabold">{nutrition[field]}g <AppText size={12} muted>/ {nutrition[macroGoals[field]]}g</AppText></AppText>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          </Pressable>
         ) : null}
       </ScrollBody>
 
@@ -693,39 +693,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   );
 }
 
-function MacroInput({
-  label,
-  suffix,
-  value,
-  goal,
-  onChange,
-}: {
-  label: string;
-  suffix: string;
-  value: number;
-  goal: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <View style={styles.macroItem}>
-      <AppText size={11} weight="bold" muted upper>
-        {label}
-      </AppText>
-      <Input
-        accessibilityLabel={`${label} consumed today`}
-        keyboardType="number-pad"
-        value={`${value}`}
-        onChangeText={(text) => onChange(parseNumber(text))}
-        style={styles.macroInput}
-      />
-      <AppText size={11} muted>
-        {value.toLocaleString()} / {goal.toLocaleString()}
-        {suffix === "g" ? "g" : " cal"}
-      </AppText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   body: {
     gap: 14,
@@ -811,19 +778,14 @@ const styles = StyleSheet.create({
   },
   macroGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 10,
   },
   macroItem: {
     gap: 6,
-    minWidth: "47%",
+    flex: 1,
   },
-  macroInput: {
-    fontSize: 17,
-    fontWeight: "800",
-    height: 38,
-    paddingHorizontal: 10,
-  },
+  nutritionHeadline: { alignItems: "baseline", flexDirection: "row", gap: 2 },
   modalOverlay: {
     alignItems: "center",
     flex: 1,

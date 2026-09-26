@@ -62,6 +62,21 @@ export type NutritionTotals = {
   fatGoal: number;
 };
 
+export type FoodLogEntry = {
+  id: string;
+  date: string;
+  meal: "Breakfast" | "Lunch" | "Dinner" | "Snack";
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+};
+
+export type SavedMeal = Omit<FoodLogEntry, "id" | "date"> & {
+  id: string;
+};
+
 type AppData = {
   preferences: Preferences;
   discoverFilters: DiscoverFilters;
@@ -75,6 +90,8 @@ type AppData = {
   logs: SessionLog[];
   streak: number;
   nutrition: NutritionTotals | null;
+  foodEntries: FoodLogEntry[];
+  savedMeals: SavedMeal[];
 };
 
 type AppDataContextValue = AppData & {
@@ -90,6 +107,9 @@ type AppDataContextValue = AppData & {
   updateDiscoverFilters: (filters: DiscoverFilters) => void;
   completeWorkout: (workoutId: string) => void;
   updateNutrition: (nutrition: Partial<NutritionTotals>) => void;
+  addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">) => void;
+  deleteFoodEntry: (entryId: string) => void;
+  saveMeal: (meal: Omit<SavedMeal, "id">) => void;
   logWorkout: (title?: string, notes?: string) => void;
   updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => void;
   deleteWorkoutLog: (logId: string) => void;
@@ -151,6 +171,19 @@ const defaultNutrition: NutritionTotals = {
   carbGoal: 260,
   fatGoal: 75,
 };
+
+const seedFoodEntries: FoodLogEntry[] = [
+  { id: "food-1", date: daysFromToday(0), meal: "Breakfast", name: "Egg white & turkey wrap", calories: 520, protein: 48, carbs: 43, fats: 16 },
+  { id: "food-2", date: daysFromToday(0), meal: "Lunch", name: "Chicken rice bowl", calories: 780, protein: 62, carbs: 82, fats: 21 },
+  { id: "food-3", date: daysFromToday(0), meal: "Snack", name: "Greek yogurt protein parfait", calories: 350, protein: 35, carbs: 39, fats: 8 },
+  { id: "food-4", date: daysFromToday(0), meal: "Dinner", name: "Salmon with sweet potato", calories: 800, protein: 40, carbs: 56, fats: 20 },
+];
+
+const seedSavedMeals: SavedMeal[] = [
+  { id: "saved-1", meal: "Breakfast", name: "Protein shake", calories: 210, protein: 32, carbs: 12, fats: 4 },
+  { id: "saved-2", meal: "Lunch", name: "Chicken burrito bowl", calories: 650, protein: 45, carbs: 75, fats: 18 },
+  { id: "saved-3", meal: "Dinner", name: "Turkey pasta", calories: 590, protein: 46, carbs: 62, fats: 16 },
+];
 
 // Mock data until the Supabase backend is ready.
 function seedData(): AppData {
@@ -216,6 +249,8 @@ function seedData(): AppData {
     ],
     streak: 14,
     nutrition: defaultNutrition,
+    foodEntries: seedFoodEntries,
+    savedMeals: seedSavedMeals,
   };
 }
 
@@ -384,6 +419,47 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             ...(current.nutrition ?? {}),
             ...nutrition,
           },
+        }));
+      },
+      addFoodEntry(entry) {
+        update((current) => {
+          const nextEntry: FoodLogEntry = { ...entry, id: `food-${Date.now()}`, date: daysFromToday(0) };
+          const nutrition = current.nutrition ?? defaultNutrition;
+          return {
+            ...current,
+            foodEntries: [nextEntry, ...current.foodEntries],
+            nutrition: {
+              ...nutrition,
+              calories: nutrition.calories + entry.calories,
+              protein: nutrition.protein + entry.protein,
+              carbs: nutrition.carbs + entry.carbs,
+              fats: nutrition.fats + entry.fats,
+            },
+          };
+        });
+      },
+      deleteFoodEntry(entryId) {
+        update((current) => {
+          const entry = current.foodEntries.find((item) => item.id === entryId);
+          if (!entry || entry.date !== daysFromToday(0)) return current;
+          const nutrition = current.nutrition ?? defaultNutrition;
+          return {
+            ...current,
+            foodEntries: current.foodEntries.filter((item) => item.id !== entryId),
+            nutrition: {
+              ...nutrition,
+              calories: Math.max(0, nutrition.calories - entry.calories),
+              protein: Math.max(0, nutrition.protein - entry.protein),
+              carbs: Math.max(0, nutrition.carbs - entry.carbs),
+              fats: Math.max(0, nutrition.fats - entry.fats),
+            },
+          };
+        });
+      },
+      saveMeal(meal) {
+        update((current) => ({
+          ...current,
+          savedMeals: [{ ...meal, id: `saved-${Date.now()}` }, ...current.savedMeals],
         }));
       },
       logWorkout(title = "Solo workout", notes) {
