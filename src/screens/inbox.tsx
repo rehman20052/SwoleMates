@@ -2,14 +2,13 @@ import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, Avatar, Screen, TitleBar } from "@/components/ui";
-import { chattedMatchIds, listConnections, openedChatIds, type MatchConnection } from "@/lib/matches";
+import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, type MatchConnection } from "@/lib/matches";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
 export function InboxScreen({ empty }: { empty: ReactNode }) {
   const nav = useNavigation();
   const [connections, setConnections] = useState<MatchConnection[]>([]);
-  const [chattedIds, setChattedIds] = useState<Set<string>>(new Set());
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -21,14 +20,18 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
     listConnections()
       .then(async (people) => {
         const acceptedIds = people.filter((person) => person.status === "accepted").map((person) => person.requestId);
-        const [chatted, opened] = await Promise.all([chattedMatchIds(acceptedIds), openedChatIds()]);
-        return { people, chatted, opened };
+        const [reads, latest] = await Promise.all([chatReadTimes(), latestMessageBodies(acceptedIds)]);
+        const withMessages = people.map((person) => {
+          const message = latest.get(person.requestId);
+          return message ? { ...person, lastMessage: message.body, lastMessageMine: message.mine, lastMessageAt: message.at } : person;
+        });
+        await clearUnopenedMatchReads(withMessages.filter((person) => person.status === "accepted" && !person.lastMessage).map((person) => person.requestId));
+        return { people: withMessages, reads: await chatReadTimes() };
       })
-      .then(({ people, chatted, opened }) => {
+      .then(({ people, reads }) => {
         if (!active) return;
         setConnections(people);
-        setChattedIds(chatted);
-        setOpenedIds(opened);
+        setOpenedIds(new Set(Object.keys(reads)));
         setStatus("ready");
         setMessage(null);
       })
@@ -57,9 +60,10 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   const sent = requests.filter((person) => person.direction === "outgoing");
   const shownRequests = requestTab === "received" ? received : sent;
   const chats = connections.filter((person) => person.status === "accepted");
+  const grouped = groupChats(chats);
 
   return (
-    <Screen>
+    <Screen style={styles.screen}>
       <TitleBar title="Chat" />
       {status === "loading" ? (
         <AppText muted style={styles.note}>
@@ -94,32 +98,12 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
             </View>
           ) : null}
 
-          <View style={styles.section}>
-            <AppText size={13} weight="bold" muted upper>
-              Messages
-            </AppText>
+          <View style={styles.groups}>
             {chats.length > 0 ? (
-              chats.map((person) => (
-                <Pressable
-                  key={person.requestId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Chat with ${person.name}`}
-                  onPress={() => nav.push({ name: "chat", id: person.userId })}
-                  style={({ pressed }) => [styles.chat, { opacity: pressed ? 0.75 : 1 }]}
-                >
-                  <PersonFace person={person} size={52} />
-                  <View style={styles.chatText}>
-                    <AppText size={16} weight="extrabold" numberOfLines={1}>
-                      {person.name}
-                    </AppText>
-                    <ChatPreview
-                      person={person}
-                      isNew={!chattedIds.has(person.requestId) && !openedIds.has(person.requestId)}
-                      startChat={!chattedIds.has(person.requestId) && openedIds.has(person.requestId)}
-                    />
-                  </View>
-                </Pressable>
-              ))
+              <>
+                <ChatGroup people={grouped.attention} openedIds={openedIds} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
+                <ChatGroup title="Waiting" people={grouped.waiting} openedIds={openedIds} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
+              </>
             ) : (
               <AppText size={13} muted>
                 When a request is accepted, the chat shows up here.
@@ -129,6 +113,64 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
         </ScrollView>
       )}
     </Screen>
+  );
+}
+
+function groupChats(chats: MatchConnection[]) {
+  const attention: MatchConnection[] = [];
+  const waiting: MatchConnection[] = [];
+  for (const person of chats) {
+    if (person.lastMessageMine) waiting.push(person);
+    else attention.push(person);
+  }
+  const byRecent = (left: MatchConnection, right: MatchConnection) => right.lastMessageAt.localeCompare(left.lastMessageAt);
+  return {
+    attention: [...attention].sort((left, right) => Number(Boolean(left.lastMessage)) - Number(Boolean(right.lastMessage)) || byRecent(left, right)),
+    waiting: [...waiting].sort(byRecent),
+  };
+}
+
+function ChatGroup({
+  title,
+  people,
+  openedIds,
+  onOpen,
+}: {
+  title?: string;
+  people: MatchConnection[];
+  openedIds: Set<string>;
+  onOpen: (person: MatchConnection) => void;
+}) {
+  if (people.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      {title ? (
+        <AppText size={12} weight="bold" muted upper style={styles.groupLabel}>
+          {title}
+        </AppText>
+      ) : null}
+      {people.map((person) => (
+        <Pressable
+          key={person.requestId}
+          accessibilityRole="button"
+          accessibilityLabel={`Chat with ${person.name}`}
+          onPress={() => onOpen(person)}
+          style={({ pressed }) => [styles.chat, { opacity: pressed ? 0.75 : 1 }]}
+        >
+          <PersonFace person={person} size={50} />
+          <View style={styles.chatText}>
+            <AppText size={16} weight="extrabold" numberOfLines={1}>
+              {person.name}
+            </AppText>
+            <ChatPreview
+              person={person}
+              isNew={!person.lastMessage && !openedIds.has(person.requestId)}
+              startChat={!person.lastMessage && openedIds.has(person.requestId)}
+            />
+          </View>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -207,8 +249,9 @@ function ChatPreview({ person, isNew, startChat }: { person: MatchConnection; is
     );
   }
   if (!isNew) {
+    const sent = !person.lastMessage || person.lastMessageMine;
     return (
-      <AppText size={13} muted numberOfLines={1}>
+      <AppText size={13} weight={sent ? "regular" : "medium"} muted={sent} numberOfLines={1}>
         {person.lastMessage || "Say hello"}
       </AppText>
     );
@@ -248,6 +291,9 @@ function Count({ value, inverted }: { value: number; inverted?: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    paddingTop: 8,
+  },
   note: {
     padding: 24,
   },
@@ -255,13 +301,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   list: {
-    gap: 28,
-    paddingBottom: 32,
+    gap: 32,
+    paddingBottom: 28,
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4,
+  },
+  groups: {
+    gap: 32,
   },
   section: {
-    gap: 12,
+    gap: 4,
   },
   requestTabs: {
     flexDirection: "row",
@@ -269,13 +318,13 @@ const styles = StyleSheet.create({
   },
   requestTab: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   requestBox: {
     borderRadius: 18,
@@ -283,24 +332,28 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   requestScroll: {
-    maxHeight: 196,
+    maxHeight: 220,
   },
   person: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   chat: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
-    paddingVertical: 6,
+    gap: 14,
+    paddingVertical: 12,
   },
   chatText: {
     flex: 1,
-    gap: 3,
+    gap: 4,
+  },
+  groupLabel: {
+    marginBottom: 6,
+    marginTop: 8,
   },
   newMatch: {
     alignItems: "center",

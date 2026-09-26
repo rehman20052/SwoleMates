@@ -18,6 +18,8 @@ export type MatchConnection = {
   gym: string;
   photo: string | null;
   lastMessage: string;
+  lastMessageMine: boolean;
+  lastMessageAt: string;
   profile: UserProfile | null;
 };
 
@@ -88,6 +90,8 @@ function personFrom(row: {
     gym: profile?.primaryGym?.trim() || "",
     photo: photos[0] ?? null,
     lastMessage: row.last_message?.trim() || "",
+    lastMessageMine: false,
+    lastMessageAt: "",
     profile,
   };
   matchPeople.set(person.userId, person);
@@ -146,6 +150,56 @@ export async function chattedMatchIds(matchIds: string[]) {
   return new Set(((data ?? []) as { match_id?: string }[]).map((row) => row.match_id).filter((id): id is string => Boolean(id)));
 }
 
+export async function latestMessageBodies(matchIds: string[]) {
+  const me = await signedInUserId();
+  const ids = [...new Set(matchIds)];
+  if (!me || ids.length === 0) return new Map<string, { body: string; mine: boolean; at: string }>();
+  const { data, error } = await supabase
+    .from("match_messages")
+    .select("match_id, sender_id, body, created_at")
+    .in("match_id", ids)
+    .order("created_at", { ascending: false });
+  if (error) return new Map<string, { body: string; mine: boolean; at: string }>();
+  const latest = new Map<string, { body: string; mine: boolean; at: string }>();
+  for (const row of (data ?? []) as { match_id?: string; sender_id?: string; body?: string; created_at?: string }[]) {
+    if (!row.match_id || latest.has(row.match_id)) continue;
+    const body = row.body?.trim();
+    if (body) latest.set(row.match_id, { body, mine: row.sender_id === me, at: row.created_at ?? "" });
+  }
+  return latest;
+}
+
+export async function clearUnopenedMatchReads(matchIds: string[]) {
+  const me = await signedInUserId();
+  if (!me || matchIds.length === 0) return;
+  const repairedKey = `swolemates.chat-read-repaired.${me}`;
+  try {
+    if (typeof localStorage !== "undefined" && localStorage.getItem(repairedKey)) return;
+  } catch {
+    return;
+  }
+  const reads = readMap(me);
+  let changed = false;
+  for (const id of matchIds) {
+    if (!reads[id]) continue;
+    delete reads[id];
+    changed = true;
+  }
+  if (changed) saveReadMap(me, reads);
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(repairedKey, "1");
+  } catch {
+    // The cleared reads are already stored for this session.
+  }
+  if (changed) notifyChatAlerts();
+}
+
+export async function chatReadTimes() {
+  const me = await signedInUserId();
+  if (!me) return {};
+  return readMap(me);
+}
+
 export async function openedChatIds() {
   const me = await signedInUserId();
   if (!me) return new Set<string>();
@@ -192,11 +246,12 @@ export async function chatAlertCount() {
   }
 
   const unreadChats = accepted.filter((person) => {
-    if (!chatted.has(person.requestId)) return !reads[person.requestId];
+    const last = latest.get(person.requestId);
+    if (!last) return true;
+    if (last.sender === me) return false;
+    if (!chatted.has(person.requestId)) return true;
     const readAt = reads[person.requestId];
     if (!readAt) return true;
-    const last = latest.get(person.requestId);
-    if (!last || last.sender === me) return false;
     return new Date(last.at).getTime() > new Date(readAt).getTime();
   }).length;
 
@@ -279,7 +334,6 @@ export async function respondToMatch(requestId: string, accept: boolean) {
     .eq("id", requestId);
   if (error) throw setupError(error);
   if (accept) {
-    await markChatRead(requestId);
     const collapsed = await supabase.rpc("collapse_mutual_requests");
     if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
   }
