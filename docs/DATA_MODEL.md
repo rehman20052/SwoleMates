@@ -23,7 +23,8 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 | `user_goal` | Profile | Fitness goals | Your own rows | Saved on profile save |
 | `discover_filter` | Discover | Discover filter settings | Your own row | Not yet |
 | `discover_skip` | Discover | Profiles you skipped | Your own rows | Not yet |
-| `block` | Discover, Chat | People you blocked | Your own rows | Not yet |
+| `block` | Discover, Chat | People you blocked | Your own rows | Yes |
+| `report` | Chat | Why you reported someone, plus an explanation | You can file and read your own reports | Yes |
 | `match_requests` | Discover, Chat | Requests and matches, including unmatches | The two people involved; rules for accept, decline, cancel and unmatch | Yes |
 | `match_messages` | Chat | Chat messages | The two people in an accepted match | Yes |
 | `chat_read` | Chat | When you last read each chat | Your own rows | Not yet (stored on the device) |
@@ -333,6 +334,7 @@ erDiagram
 - `user_account`: birthdate must be 18 or older (`user_account_age_18_plus`).
 - `gym`: `address` and `osm_id` are each unique.
 - `match_requests`: no request to yourself, one request per direction (`match_requests_pair_key`), status is one of pending, accepted, declined, unmatched.
+- `report`: you can't report yourself. `block` only records who was blocked, so the reason and explanation live on `report`.
 - `match_messages`: body is 1–1000 characters, and messages only work in accepted matches.
 - `planned_workout`: exactly one of `gym_id` or `location` is filled in (`planned_workout_place_check`).
 - `workout_logs`: one log per person per planned workout (`workout_logs_one_per_plan`).

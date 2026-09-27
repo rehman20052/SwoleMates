@@ -1,4 +1,5 @@
 import { normalizeProfile, type UserProfile } from "@/lib/profile";
+import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
 
 const PHOTO_BUCKET = "profile-photos";
@@ -234,8 +235,10 @@ export async function chatAlertCount() {
   }
 
   const reads = readMap(me);
-  const incoming = connections.filter((person) => person.status === "pending" && person.direction === "incoming").length;
-  const accepted = connections.filter((person) => person.status === "accepted");
+  const blocked = await blockedUserIds();
+  const visible = connections.filter((person) => !blocked.has(person.userId));
+  const incoming = visible.filter((person) => person.status === "pending" && person.direction === "incoming").length;
+  const accepted = visible.filter((person) => person.status === "accepted");
   const latest = new Map<string, { sender: string; at: string }>();
   const chatted = new Set<string>();
 
@@ -288,6 +291,7 @@ async function currentUserId() {
 export async function sendMatchRequest(toUserId: string) {
   const me = await currentUserId();
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
+  if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Dashboard settings before matching again.");
 
   const { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
   if (error) {
@@ -308,10 +312,18 @@ async function sendMatchRequestDirect(me: string, toUserId: string) {
   const reverse = rows.find((row) => row.from_user_id === toUserId && row.to_user_id === me);
   const mine = rows.find((row) => row.from_user_id === me && row.to_user_id === toUserId);
 
-  // Matching again after an unmatch needs the send_match_request function; without it,
-  // an unmatched request would be accepted here without the other person agreeing.
-  if (reverse?.status === "unmatched" || mine?.status === "unmatched") {
-    throw new Error("Matching again isn't set up on this Supabase project yet.");
+  // Keep the same row so the old chat returns once they accept. Their old request
+  // stays unmatched until the database function can turn it into a new outgoing request.
+  if (mine?.status === "unmatched") {
+    const { error: reopenError } = await supabase
+      .from("match_requests")
+      .update({ status: "pending", ended_at: null, ended_by: null })
+      .eq("id", mine.id);
+    if (reopenError) throw setupError(reopenError);
+    return;
+  }
+  if (reverse?.status === "unmatched") {
+    throw new Error("Run the latest match request script in Supabase, then try matching again.");
   }
 
   if (reverse && reverse.status !== "accepted") {

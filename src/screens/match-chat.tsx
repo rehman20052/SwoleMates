@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, Screen } from "@/components/ui";
-import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -35,8 +36,11 @@ export function MatchChat({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<MatchMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [confirmingUnmatch, setConfirmingUnmatch] = useState(false);
-  const [unmatching, setUnmatching] = useState(false);
+  const [safety, setSafety] = useState<null | "menu" | "unmatch" | "block" | "report" | "reported">(null);
+  const [safetyBusy, setSafetyBusy] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reasonsOpen, setReasonsOpen] = useState(false);
   const [held, setHeld] = useState<MatchMessage | null>(null);
   const [anchor, setAnchor] = useState<BubbleAnchor | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -209,16 +213,50 @@ export function MatchChat({ userId }: { userId: string }) {
     }
   }
 
+  function closeSafety() {
+    if (safetyBusy) return;
+    setSafety(null);
+    setReasonsOpen(false);
+  }
+
   async function confirmUnmatch() {
     if (!person) return;
-    setUnmatching(true);
+    setSafetyBusy(true);
     try {
       await unmatch(person.requestId);
       nav.back();
     } catch (err) {
-      setUnmatching(false);
-      setConfirmingUnmatch(false);
+      setSafetyBusy(false);
+      setSafety(null);
       setError(err instanceof Error ? err.message : "Could not unmatch. Try again.");
+    }
+  }
+
+  async function confirmBlock() {
+    if (!person) return;
+    setSafetyBusy(true);
+    try {
+      await blockPerson(person.userId);
+      notifyChatAlerts();
+      nav.back();
+    } catch (err) {
+      setSafetyBusy(false);
+      setSafety(null);
+      setError(err instanceof Error ? err.message : "Could not block that person.");
+    }
+  }
+
+  async function submitReport() {
+    if (!person || !reportReason) return;
+    setSafetyBusy(true);
+    try {
+      await reportPerson(person.userId, reportReason, reportDetails);
+      setSafetyBusy(false);
+      setReasonsOpen(false);
+      setSafety("reported");
+    } catch (err) {
+      setSafetyBusy(false);
+      setError(err instanceof Error ? err.message : "Could not send that report.");
     }
   }
 
@@ -261,6 +299,11 @@ export function MatchChat({ userId }: { userId: string }) {
               </AppText>
             ) : null}
           </View>
+          {person ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Chat options" onPress={() => setSafety("menu")} hitSlop={8}>
+              <Icon source={icons.moreHorizontal} size={22} tint={theme.colors.primary} />
+            </Pressable>
+          ) : null}
         </View>
         {person ? (
           <Pressable
@@ -276,50 +319,6 @@ export function MatchChat({ userId }: { userId: string }) {
               ›
             </AppText>
           </Pressable>
-        ) : null}
-        {person && !confirmingUnmatch ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Unmatch ${person.name}`}
-            onPress={() => setConfirmingUnmatch(true)}
-            style={styles.unmatchLink}
-          >
-            <AppText size={13} weight="medium" color={theme.colors.danger}>
-              Unmatch
-            </AppText>
-          </Pressable>
-        ) : null}
-        {person && confirmingUnmatch ? (
-          <View style={[styles.confirm, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
-            <AppText size={13} weight="bold">
-              Unmatch {person.name}?
-            </AppText>
-            <AppText size={12} muted>
-              Your chat is hidden for both of you. Either of you can send a new request later, and the chat comes back if it's accepted.
-            </AppText>
-            <View style={styles.confirmButtons}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setConfirmingUnmatch(false)}
-                disabled={unmatching}
-                style={[styles.confirmButton, { backgroundColor: theme.colors.surface }]}
-              >
-                <AppText size={13} weight="bold">
-                  Cancel
-                </AppText>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void confirmUnmatch()}
-                disabled={unmatching}
-                style={[styles.confirmButton, { backgroundColor: theme.colors.danger, opacity: unmatching ? 0.6 : 1 }]}
-              >
-                <AppText size={13} weight="bold" color="#FFFFFF">
-                  {unmatching ? "Unmatching…" : "Unmatch"}
-                </AppText>
-              </Pressable>
-            </View>
-          </View>
         ) : null}
       </View>
 
@@ -445,6 +444,113 @@ export function MatchChat({ userId }: { userId: string }) {
           </View>
         </View>
       ) : null}
+      {person && safety ? (
+        <Animated.View style={[styles.safetyLayer, safety === "menu" ? styles.menuLayer : { justifyContent: "flex-end", paddingBottom: keyboardLift }]}>
+          <Pressable accessibilityLabel="Close safety options" style={StyleSheet.absoluteFill} onPress={closeSafety} />
+          <View style={[styles.safetyCard, safety === "menu" && styles.menuCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            {safety === "menu" ? (
+              <>
+                <Pressable accessibilityRole="button" onPress={() => setSafety("unmatch")} style={styles.safetyAction}>
+                  <AppText size={15} weight="semibold">Unmatch</AppText>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setSafety("report")} style={[styles.safetyAction, styles.safetyDivider, { borderTopColor: theme.colors.border }]}>
+                  <AppText size={15} weight="semibold">Report</AppText>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setSafety("block")} style={[styles.safetyAction, styles.safetyDivider, { borderTopColor: theme.colors.border }]}>
+                  <AppText size={15} weight="semibold" color={theme.colors.danger}>Block</AppText>
+                </Pressable>
+              </>
+            ) : null}
+            {safety === "unmatch" ? (
+              <View style={styles.safetyCopy}>
+                <AppText size={16} weight="extrabold">Unmatch {person.name}?</AppText>
+                <AppText size={13} muted style={{ lineHeight: 18 }}>
+                  Your chat is hidden. They can still show up in Discover, and the chat comes back only if you match again.
+                </AppText>
+                <View style={styles.safetyButtons}>
+                  <Pressable accessibilityRole="button" onPress={closeSafety} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.surfaceRaised }]}>
+                    <AppText size={14} weight="semibold">Cancel</AppText>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => void confirmUnmatch()} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.danger, opacity: safetyBusy ? 0.6 : 1 }]}>
+                    <AppText size={14} weight="semibold" color="#FFFFFF">{safetyBusy ? "Unmatching…" : "Unmatch"}</AppText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+            {safety === "block" ? (
+              <View style={styles.safetyCopy}>
+                <AppText size={16} weight="extrabold">Block {person.name}?</AppText>
+                <AppText size={13} muted style={{ lineHeight: 18 }}>
+                  They disappear from Discover, chat, and matching. You can unblock them from the settings gear on Dashboard.
+                </AppText>
+                <View style={styles.safetyButtons}>
+                  <Pressable accessibilityRole="button" onPress={closeSafety} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.surfaceRaised }]}>
+                    <AppText size={14} weight="semibold">Cancel</AppText>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => void confirmBlock()} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.danger, opacity: safetyBusy ? 0.6 : 1 }]}>
+                    <AppText size={14} weight="semibold" color="#FFFFFF">{safetyBusy ? "Blocking…" : "Block"}</AppText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+            {safety === "report" ? (
+              <View style={styles.safetyCopy}>
+                <AppText size={16} weight="extrabold">Report {person.name}</AppText>
+                <AppText size={12} muted>They won't be told you reported them.</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel="Report reason" onPress={() => setReasonsOpen((open) => !open)} style={[styles.reasonPicker, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
+                  <AppText size={14} muted={!reportReason}>{reportReason || "Choose a reason"}</AppText>
+                  <AppText muted>▾</AppText>
+                </Pressable>
+                {reasonsOpen ? (
+                  <View style={[styles.reasonList, { borderColor: theme.colors.border }]}>
+                    {reportReasons.map((reason) => (
+                      <Pressable key={reason} accessibilityRole="button" onPress={() => { setReportReason(reason); setReasonsOpen(false); }} style={styles.reasonItem}>
+                        <AppText size={14} weight={reportReason === reason ? "bold" : "medium"} primary={reportReason === reason}>{reason}</AppText>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                <TextInput
+                  value={reportDetails}
+                  onChangeText={setReportDetails}
+                  placeholder="Explain what happened"
+                  placeholderTextColor={theme.colors.muted}
+                  multiline
+                  maxLength={500}
+                  style={[styles.reportInput, { backgroundColor: theme.colors.surfaceRaised, color: theme.colors.text, fontFamily: theme.fonts.regular }]}
+                />
+                <View style={styles.safetyButtons}>
+                  <Pressable accessibilityRole="button" onPress={closeSafety} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.surfaceRaised }]}>
+                    <AppText size={14} weight="semibold">Cancel</AppText>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => void submitReport()} disabled={safetyBusy || !reportReason} style={[styles.safetyButton, { backgroundColor: theme.colors.primary, opacity: safetyBusy || !reportReason ? 0.45 : 1 }]}>
+                    <AppText size={14} weight="semibold" color={theme.colors.primaryText}>{safetyBusy ? "Sending…" : "Submit"}</AppText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+            {safety === "reported" ? (
+              <View style={styles.safetyCopy}>
+                <View style={styles.reportedHeader}>
+                  <AppText size={16} weight="extrabold">Report sent</AppText>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={closeSafety}>
+                    <AppText size={18} weight="bold" muted>✕</AppText>
+                  </Pressable>
+                </View>
+                <AppText size={13} muted style={{ lineHeight: 18 }}>
+                  You can unmatch {person.name}, block them, or leave the chat as it is.
+                </AppText>
+                <Pressable accessibilityRole="button" onPress={() => setSafety("unmatch")} style={styles.safetyAction}>
+                  <AppText size={15} weight="semibold">Unmatch</AppText>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setSafety("block")} style={[styles.safetyAction, styles.safetyDivider, { borderTopColor: theme.colors.border }]}>
+                  <AppText size={15} weight="semibold" color={theme.colors.danger}>Block</AppText>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        </Animated.View>
+      ) : null}
       </View>
     </Screen>
   );
@@ -527,27 +633,84 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
-  unmatchLink: {
-    alignSelf: "flex-start",
-    marginLeft: 32,
-    paddingVertical: 2,
+  safetyLayer: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 30,
   },
-  confirm: {
+  menuLayer: {
+    alignItems: "flex-end",
+    paddingRight: 16,
+    paddingTop: 58,
+  },
+  menuCard: {
     borderRadius: 14,
-    borderWidth: 1,
-    gap: 8,
-    marginLeft: 32,
-    padding: 14,
+    marginBottom: 0,
+    marginHorizontal: 0,
+    width: 180,
   },
-  confirmButtons: {
+  safetyCard: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  safetyAction: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  safetyDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  safetyCopy: {
+    gap: 10,
+    padding: 16,
+  },
+  safetyButtons: {
     flexDirection: "row",
     gap: 8,
     justifyContent: "flex-end",
   },
-  confirmButton: {
-    borderRadius: 10,
+  safetyButton: {
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
+  },
+  reasonPicker: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  reasonList: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  reasonItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  reportInput: {
+    borderRadius: 12,
+    fontSize: 14,
+    minHeight: 80,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: "top",
+  },
+  reportedHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   thread: {
     flex: 1,

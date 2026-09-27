@@ -258,43 +258,72 @@ set search_path = public
 as $$
 declare
   me uuid := auth.uid();
+  target uuid := to_user_id;
+  reverse_id uuid;
   reverse_status text;
+  mine_id uuid;
+  mine_status text;
 begin
   if me is null then
     raise exception 'Sign in again before sending a request.';
   end if;
-  if me = to_user_id then
+  if me = target then
     raise exception 'You can''t send a request to yourself.';
   end if;
 
   perform pg_advisory_xact_lock(
-    hashtext(least(me::text, to_user_id::text) || ':' || greatest(me::text, to_user_id::text))
+    hashtext(least(me::text, target::text) || ':' || greatest(me::text, target::text))
   );
 
-  select status into reverse_status
+  select id, status into reverse_id, reverse_status
   from public.match_requests
-  where from_user_id = to_user_id and to_user_id = me
+  where from_user_id = target and match_requests.to_user_id = me
   for update;
+
+  select id, status into mine_id, mine_status
+  from public.match_requests
+  where from_user_id = me and match_requests.to_user_id = target
+  for update;
+
+  -- Unmatch hides the chat but keeps the row. A new request has to be accepted again.
+  if mine_status = 'unmatched' or reverse_status = 'unmatched' then
+    if mine_status = 'unmatched' then
+      update public.match_requests
+      set status = 'pending', created_at = now(), ended_at = null, ended_by = null
+      where id = mine_id;
+      return;
+    end if;
+
+    update public.match_requests
+    set from_user_id = me,
+        to_user_id = target,
+        status = 'pending',
+        created_at = now(),
+        ended_at = null,
+        ended_by = null
+    where id = reverse_id;
+    return;
+  end if;
 
   if reverse_status is not null then
     if reverse_status <> 'accepted' then
       update public.match_requests
       set status = 'accepted'
-      where from_user_id = to_user_id and to_user_id = me;
+      where from_user_id = target and match_requests.to_user_id = me;
     end if;
 
     delete from public.match_requests
     where from_user_id = me
-      and to_user_id = to_user_id
+      and match_requests.to_user_id = target
       and status <> 'accepted';
     return;
   end if;
 
   insert into public.match_requests (from_user_id, to_user_id, status)
-  values (me, to_user_id, 'pending')
+  values (me, target, 'pending')
   on conflict (from_user_id, to_user_id)
-  do update set status = 'pending', created_at = now()
-  where public.match_requests.status = 'declined';
+  do update set status = 'pending', created_at = now(), ended_at = null, ended_by = null
+  where public.match_requests.status in ('declined', 'unmatched');
 end;
 $$;
 
