@@ -526,10 +526,26 @@ export async function loadProfile(): Promise<UserProfile | null> {
   return profileFromUser(data.session?.user ?? null);
 }
 
+async function sessionForSave() {
+  const current = await supabase.auth.getSession();
+  if (!current.data.session) throw new Error("Sign in again before saving your profile.");
+
+  const authed = await supabase.auth.getUser();
+  if (!authed.error && authed.data.user) {
+    return (await supabase.auth.getSession()).data.session ?? current.data.session;
+  }
+
+  const refreshed = await supabase.auth.refreshSession();
+  if (refreshed.error || !refreshed.data.session) {
+    throw new Error("Sign in again before saving your profile.");
+  }
+  return refreshed.data.session;
+}
+
 export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const session = sessionData.session;
-  if (!session) throw new Error("Sign in again before saving your profile.");
+  const session = await sessionForSave();
+  const birthError = birthDateError(profile.birthDate);
+  if (birthError) throw new Error(birthError);
   if (session.access_token.length > 8000) throw new Error("OVERSIZED_SESSION");
   if (profile.primaryGym.trim() && (profile.gymLatitude == null || profile.gymLongitude == null)) {
     throw new Error("Pick the street address from the list so we know which gym building it is.");
@@ -564,7 +580,10 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
     const { error } = await supabase.auth.updateUser({
       data: { profile: account },
     });
-    if (error) throw error;
+    if (error) {
+      if (/auth session missing/i.test(error.message)) throw new Error("Sign in again before saving your profile.");
+      throw error;
+    }
   } catch (error) {
     const freshUploads = uploaded.filter((path) => !previous.includes(path));
     if (freshUploads.length > 0) {

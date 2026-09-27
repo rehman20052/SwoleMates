@@ -28,7 +28,14 @@ export type MatchMessage = {
   mine: boolean;
   body: string;
   createdAt: string;
+  editedAt: string | null;
 };
+
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+
+export function messageEditable(createdAt: string, now = Date.now()) {
+  return now - new Date(createdAt).getTime() < EDIT_WINDOW_MS;
+}
 
 export function isDiscoverTester(id: string) {
   return id.startsWith("00000000-0000-4000-a000-");
@@ -365,17 +372,29 @@ export async function cancelMatchRequest(requestId: string) {
 }
 
 export async function listMessages(matchId: string, me: string): Promise<MatchMessage[]> {
-  const { data, error } = await supabase
+  const listed = await supabase
     .from("match_messages")
-    .select("id, sender_id, body, created_at")
+    .select("id, sender_id, body, created_at, edited_at")
     .eq("match_id", matchId)
     .order("created_at", { ascending: true });
+  let data = listed.data as { id: string; sender_id: string; body: string; created_at: string; edited_at?: string | null }[] | null;
+  let error = listed.error;
+  if (error && (error.message.includes("edited_at") || error.message.includes("schema cache"))) {
+    const fallback = await supabase
+      .from("match_messages")
+      .select("id, sender_id, body, created_at")
+      .eq("match_id", matchId)
+      .order("created_at", { ascending: true });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw setupError(error);
-  return ((data ?? []) as { id: string; sender_id: string; body: string; created_at: string }[]).map((message) => ({
+  return (data ?? []).map((message) => ({
     id: message.id,
     mine: message.sender_id === me,
     body: message.body,
     createdAt: message.created_at,
+    editedAt: message.edited_at ?? null,
   }));
 }
 
@@ -390,4 +409,31 @@ export async function sendMatchMessage(matchId: string, body: string) {
   });
   if (error) throw setupError(error);
   await markChatRead(matchId);
+}
+
+export async function editMatchMessage(messageId: string, body: string) {
+  const text = body.trim();
+  if (!text) throw new Error("Message can't be empty.");
+  const { data, error } = await supabase
+    .from("match_messages")
+    .update({ body: text.slice(0, 1000) })
+    .eq("id", messageId)
+    .select("id");
+  if (error) throw messageActionError(error, "Could not edit that message.");
+  if (!data?.length) throw new Error("Run the message actions script in Supabase, then try again.");
+}
+
+export async function deleteMatchMessage(messageId: string) {
+  const { data, error } = await supabase.from("match_messages").delete().eq("id", messageId).select("id");
+  if (error) throw messageActionError(error, "Could not delete that message.");
+  if (!data?.length) throw new Error("Run the message actions script in Supabase, then try again.");
+}
+
+function messageActionError(error: { message?: string }, fallback: string) {
+  const message = error.message ?? "";
+  if (message.includes("5 minutes")) return new Error("You can only edit a message within 5 minutes of sending.");
+  if (message.includes("row-level security") || message.includes("schema cache") || message.includes("edited_at")) {
+    return new Error("Run the message actions script in Supabase, then try again.");
+  }
+  return new Error(message || fallback);
 }
