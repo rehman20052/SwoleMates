@@ -2,7 +2,8 @@ import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, Avatar, Screen, TitleBar } from "@/components/ui";
-import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, type MatchConnection } from "@/lib/matches";
+import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, subscribeChatAlerts, type MatchConnection } from "@/lib/matches";
+import { blockedUserIds } from "@/lib/safety";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -26,7 +27,8 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
           return message ? { ...person, lastMessage: message.body, lastMessageMine: message.mine, lastMessageAt: message.at } : person;
         });
         await clearUnopenedMatchReads(withMessages.filter((person) => person.status === "accepted" && !person.lastMessage).map((person) => person.requestId));
-        return { people: withMessages, reads: await chatReadTimes() };
+        const blocked = await blockedUserIds();
+        return { people: withMessages.filter((person) => !blocked.has(person.userId)), reads: await chatReadTimes() };
       })
       .then(({ people, reads }) => {
         if (!active) return;
@@ -46,6 +48,8 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => subscribeChatAlerts(() => load()), [load]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || document.getElementById("chat-scroll-style")) return;

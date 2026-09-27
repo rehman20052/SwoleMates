@@ -12,6 +12,7 @@ import {
   type DiscoverCandidate,
 } from "@/lib/discover";
 import { isDiscoverTester, listConnections, sendMatchRequest } from "@/lib/matches";
+import { blockedUserIds } from "@/lib/safety";
 import type { UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { DiscoverFiltersScreen } from "@/screens/discover-filters";
@@ -27,6 +28,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const [message, setMessage] = useState<string | null>(null);
   const [handshake, setHandshake] = useState<{ id: string; name: string } | null>(null);
   const [requestedIds, setRequestedIds] = useState<string[]>([]);
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
   const [matchError, setMatchError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,13 +44,15 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
           // The list request below reports a missing table or a network problem.
         }
       }
-      const [people, connections] = await Promise.all([
+      const [people, connections, blocked] = await Promise.all([
         fetchDiscoverProfiles(),
         listConnections().catch(() => []),
+        blockedUserIds(),
       ]);
       if (!active) return;
       setCandidates(people);
       setRequestedIds(connections.map((person) => person.userId));
+      setBlockedIds([...blocked]);
       setStatus("ready");
     };
 
@@ -65,8 +69,8 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   }, [profile]);
 
   const hidden = useMemo(
-    () => new Set([...reviewed, ...blocked, ...conversations.map((item) => item.partnerId), ...invites.map((item) => item.partnerId)]),
-    [reviewed, blocked, conversations, invites],
+    () => new Set([...reviewed, ...blocked, ...blockedIds, ...conversations.map((item) => item.partnerId), ...invites.map((item) => item.partnerId)]),
+    [reviewed, blocked, blockedIds, conversations, invites],
   );
 
   const queue = useMemo(

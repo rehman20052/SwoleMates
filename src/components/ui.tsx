@@ -63,8 +63,8 @@ export function AppText({
   );
 }
 
-export function Icon({ source, size, width, height }: { source: ImageSource; size?: number; width?: number; height?: number }) {
-  return <Image source={source} style={{ width: width ?? size, height: height ?? size }} contentFit="contain" />;
+export function Icon({ source, size, width, height, tint }: { source: ImageSource; size?: number; width?: number; height?: number; tint?: string }) {
+  return <Image source={source} tintColor={tint} style={{ width: width ?? size, height: height ?? size }} contentFit="contain" />;
 }
 
 export function Avatar({ source, size }: { source: ImageSource; size: number }) {

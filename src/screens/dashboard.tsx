@@ -16,6 +16,7 @@ import {
 import { getPartner } from "@/data/partners";
 import { type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
+import { SettingsScreen } from "@/screens/settings";
 import {
   daysFromToday,
   formatShortDate,
@@ -133,6 +134,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showLogForm, setShowLogForm] = useState(false);
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -243,9 +245,20 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     showNotice("Activity deleted. Weekly goal updated.");
   }
 
+  if (showSettings) return <SettingsScreen onClose={() => setShowSettings(false)} />;
+
   return (
     <Screen>
-      <TitleBar title="Home" />
+      <TitleBar
+        title="Home"
+        right={
+          <Pressable accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} onPress={() => setShowSettings(true)}>
+            <AppText size={22} primary>
+              ⚙
+            </AppText>
+          </Pressable>
+        }
+      />
 
       <ScrollBody contentContainerStyle={styles.body}>
         <View style={styles.hero}>
