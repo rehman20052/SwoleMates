@@ -15,7 +15,8 @@ create table if not exists public.match_messages (
   match_id uuid not null references public.match_requests (id) on delete cascade,
   sender_id uuid not null references auth.users (id) on delete cascade,
   body text not null check (char_length(btrim(body)) between 1 and 1000),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  edited_at timestamptz
 );
 
 alter table public.match_requests enable row level security;
@@ -89,6 +90,53 @@ with check (
       and (request.from_user_id = (select auth.uid()) or request.to_user_id = (select auth.uid()))
   )
 );
+
+alter table public.match_messages add column if not exists edited_at timestamptz;
+
+-- The sender can change only the text, and only during the first 5 minutes.
+create or replace function public.guard_match_message_edit()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.id is distinct from old.id
+    or new.match_id is distinct from old.match_id
+    or new.sender_id is distinct from old.sender_id
+    or new.created_at is distinct from old.created_at
+  then
+    raise exception 'Only the message text can be changed.';
+  end if;
+  if old.created_at < now() - interval '5 minutes' then
+    raise exception 'Messages can only be edited within 5 minutes of sending.';
+  end if;
+  new.edited_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_match_message_edit on public.match_messages;
+create trigger guard_match_message_edit
+before update on public.match_messages
+for each row
+execute function public.guard_match_message_edit();
+
+drop policy if exists "sender edits recent messages" on public.match_messages;
+drop policy if exists "sender deletes own messages" on public.match_messages;
+
+create policy "sender edits recent messages"
+on public.match_messages for update
+to authenticated
+using (
+  sender_id = (select auth.uid())
+  and created_at > now() - interval '5 minutes'
+)
+with check (sender_id = (select auth.uid()));
+
+create policy "sender deletes own messages"
+on public.match_messages for delete
+to authenticated
+using (sender_id = (select auth.uid()));
 
 create or replace function public.my_connections()
 returns table (

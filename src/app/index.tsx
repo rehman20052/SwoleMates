@@ -97,6 +97,7 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    let restored = false;
 
     const resetToLaunch = () => {
       setProfileData(emptyProfile());
@@ -111,12 +112,14 @@ export default function App() {
 
       if (error || !data.session) {
         resetToLaunch();
+        restored = true;
         setCheckingSession(false);
         return;
       }
 
       const profile = profileFromUser(data.session.user);
       continueAfterAuth(profile);
+      restored = true;
       setCheckingSession(false);
       // Refresh the public Discover card so the age shown to others stays current after birthdays.
       if (profile) publishDiscoverProfile(profile).catch(() => {});
@@ -125,14 +128,15 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!active || checkingSession) return;
+      if (!active || !restored) return;
+      if (event === 'INITIAL_SESSION') return;
 
-      if (event === 'SIGNED_OUT' || !session) {
+      if (event === 'SIGNED_OUT') {
         resetToLaunch();
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session) {
         continueAfterAuth(profileFromUser(session.user));
       }
     });
@@ -143,7 +147,7 @@ export default function App() {
       active = false;
       subscription.unsubscribe();
     };
-  }, [checkingSession]);
+  }, []);
 
   const saveAndMatch = async (requirePhoto = false) => {
     if (!profileData.fullName.trim()) {

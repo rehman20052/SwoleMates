@@ -1,0 +1,14 @@
+---
+description: Use Noor's existing Supabase tables. Do not create duplicate tables.
+alwaysApply: true
+---
+
+# Supabase tables
+
+Noor owns the database. `docs/DATA_MODEL.md` is the list of tables already in Supabase. If that file and Supabase disagree, check Supabase and update the file.
+
+Do not create a table, view, or copy of a table that is already in that document. Tables marked "Not yet" in the app still exist. Use them instead of inventing a parallel table. Examples: do not add another chat, read-receipt, nutrition, workout, profile, or match table beside `match_messages`, `chat_read`, `nutrition_goal`, `food_log_entry`, `saved_meal`, `workout_logs`, `user_account`, or `match_requests`.
+
+Create a table only when the feature needs data that no existing table can hold. Prefer a column or policy on an existing table. `supabase/message-actions.sql` is the pattern: edit and delete stay on `match_messages`.
+
+When a new table really is required, say why the current tables are not enough before writing `CREATE TABLE`.
