@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, Screen } from "@/components/ui";
-import { listConnections, listMessages, markChatRead, sendMatchMessage, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { listConnections, listMessages, markChatRead, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -17,6 +17,8 @@ export function MatchChat({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<MatchMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmingUnmatch, setConfirmingUnmatch] = useState(false);
+  const [unmatching, setUnmatching] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -72,6 +74,19 @@ export function MatchChat({ userId }: { userId: string }) {
     }
   }
 
+  async function confirmUnmatch() {
+    if (!person) return;
+    setUnmatching(true);
+    try {
+      await unmatch(person.requestId);
+      nav.back();
+    } catch (err) {
+      setUnmatching(false);
+      setConfirmingUnmatch(false);
+      setError(err instanceof Error ? err.message : "Could not unmatch. Try again.");
+    }
+  }
+
   return (
     <Screen style={styles.screen}>
       <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
@@ -103,6 +118,50 @@ export function MatchChat({ userId }: { userId: string }) {
               ›
             </AppText>
           </Pressable>
+        ) : null}
+        {person && !confirmingUnmatch ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Unmatch ${person.name}`}
+            onPress={() => setConfirmingUnmatch(true)}
+            style={styles.unmatchLink}
+          >
+            <AppText size={13} weight="medium" color={theme.colors.danger}>
+              Unmatch
+            </AppText>
+          </Pressable>
+        ) : null}
+        {person && confirmingUnmatch ? (
+          <View style={[styles.confirm, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
+            <AppText size={13} weight="bold">
+              Unmatch {person.name}?
+            </AppText>
+            <AppText size={12} muted>
+              Your chat is hidden for both of you. Either of you can send a new request later, and the chat comes back if it's accepted.
+            </AppText>
+            <View style={styles.confirmButtons}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setConfirmingUnmatch(false)}
+                disabled={unmatching}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.surface }]}
+              >
+                <AppText size={13} weight="bold">
+                  Cancel
+                </AppText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void confirmUnmatch()}
+                disabled={unmatching}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.danger, opacity: unmatching ? 0.6 : 1 }]}
+              >
+                <AppText size={13} weight="bold" color="#FFFFFF">
+                  {unmatching ? "Unmatching…" : "Unmatch"}
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
         ) : null}
       </View>
 
@@ -206,6 +265,28 @@ const styles = StyleSheet.create({
     marginLeft: 32,
     paddingHorizontal: 14,
     paddingVertical: 11,
+  },
+  unmatchLink: {
+    alignSelf: "flex-start",
+    marginLeft: 32,
+    paddingVertical: 2,
+  },
+  confirm: {
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
+    marginLeft: 32,
+    padding: 14,
+  },
+  confirmButtons: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  confirmButton: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   messages: {
     flexGrow: 1,
