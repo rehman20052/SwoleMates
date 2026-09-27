@@ -301,6 +301,12 @@ async function sendMatchRequestDirect(me: string, toUserId: string) {
   const reverse = rows.find((row) => row.from_user_id === toUserId && row.to_user_id === me);
   const mine = rows.find((row) => row.from_user_id === me && row.to_user_id === toUserId);
 
+  // Matching again after an unmatch needs the send_match_request function; without it,
+  // an unmatched request would be accepted here without the other person agreeing.
+  if (reverse?.status === "unmatched" || mine?.status === "unmatched") {
+    throw new Error("Matching again isn't set up on this Supabase project yet.");
+  }
+
   if (reverse && reverse.status !== "accepted") {
     const { error: acceptError } = await supabase.from("match_requests").update({ status: "accepted" }).eq("id", reverse.id);
     if (acceptError) throw setupError(acceptError);
@@ -337,6 +343,18 @@ export async function respondToMatch(requestId: string, accept: boolean) {
     const collapsed = await supabase.rpc("collapse_mutual_requests");
     if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
   }
+  notifyChatAlerts();
+}
+
+// Ends an accepted match. The chat is hidden from both people, and either one can send a new request later.
+export async function unmatch(requestId: string) {
+  const me = await currentUserId();
+  const { error } = await supabase
+    .from("match_requests")
+    .update({ status: "unmatched", ended_at: new Date().toISOString(), ended_by: me })
+    .eq("id", requestId)
+    .eq("status", "accepted");
+  if (error) throw setupError(error);
   notifyChatAlerts();
 }
 
