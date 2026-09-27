@@ -21,6 +21,7 @@ import { ChatScreen } from '@/screens/chat';
 import { DashboardScreen } from '@/screens/dashboard';
 import { DiscoverScreen } from '@/screens/discover';
 import { InboxScreen } from '@/screens/inbox';
+import { NutritionTrackerScreen } from '@/screens/nutrition-tracker';
 import { PartnerProfileScreen } from '@/screens/partner-profile';
 import { PlansScreen } from '@/screens/plans';
 import { ProfileScreen } from '@/screens/profile';
@@ -335,6 +336,8 @@ export default function App() {
         return <ScheduleWorkoutScreen partnerId={route.partnerId} />;
       case 'scheduled':
         return <WorkoutScheduledScreen workoutId={route.workoutId} />;
+      case 'nutrition':
+        return <NutritionTrackerScreen />;
     }
   };
 

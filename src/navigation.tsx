@@ -9,7 +9,8 @@ export type Route =
   | { name: "chat"; id: string }
   | { name: "request-profile"; userId: string }
   | { name: "schedule"; partnerId?: string }
-  | { name: "scheduled"; workoutId: string };
+  | { name: "scheduled"; workoutId: string }
+  | { name: "nutrition" };
 
 export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "scheduled"];
 
