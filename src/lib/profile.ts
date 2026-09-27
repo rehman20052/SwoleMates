@@ -85,12 +85,16 @@ export type ProfilePromptAnswer = {
 
 export type UserProfile = {
   fullName: string;
+  // YYYY-MM-DD. Age is calculated from it and kept for Discover and match cards.
+  birthDate: string;
   age: string;
   gender: ProfileGender;
   primaryGym: string;
   gymAddress: string;
   gymLatitude: number | null;
   gymLongitude: number | null;
+  // OpenStreetMap ID of the picked place, e.g. "node:123456". Used to find the same gym again.
+  gymPlaceId: string;
   hometown: string;
   zipCode: string;
   latitude: number | null;
@@ -125,6 +129,35 @@ function coordinate(value: unknown, min: number, max: number) {
   const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   if (!Number.isFinite(number) || number < min || number > max) return null;
   return Math.round(number * 10000) / 10000;
+}
+
+export const MIN_AGE = 18;
+const MAX_AGE = 100;
+
+function parseBirthDate(iso: string) {
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return { year, month, day };
+}
+
+export function ageFromBirthDate(iso: string, today = new Date()): number | null {
+  const born = parseBirthDate(iso);
+  if (!born) return null;
+  const hadBirthday =
+    today.getMonth() + 1 > born.month || (today.getMonth() + 1 === born.month && today.getDate() >= born.day);
+  return today.getFullYear() - born.year - (hadBirthday ? 0 : 1);
+}
+
+export function birthDateError(iso: string): string | null {
+  const age = ageFromBirthDate(iso);
+  if (age == null) return "Enter your birthdate as MM/DD/YYYY.";
+  if (age < 0) return "Your birthdate can't be in the future.";
+  if (age < MIN_AGE) return `You must be ${MIN_AGE} or older to use SwoleMates.`;
+  if (age > MAX_AGE) return "Check the year of your birthdate.";
+  return null;
 }
 
 function listed(value: unknown, allowed: readonly string[]): value is string {
@@ -172,14 +205,20 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     ? profile.photos.filter((photo): photo is string => typeof photo === "string").slice(0, 6)
     : [];
 
+  const birthDate = typeof profile.birthDate === "string" && parseBirthDate(profile.birthDate) ? profile.birthDate : "";
+  const age = ageFromBirthDate(birthDate);
+
   return {
     fullName: profile.fullName,
-    age: typeof profile.age === "string" ? profile.age : "",
+    birthDate,
+    // Older profiles and tester rows only have a typed age.
+    age: age != null ? String(age) : typeof profile.age === "string" ? profile.age : "",
     gender: isGender(profile.gender) ? profile.gender : "",
     primaryGym: typeof profile.primaryGym === "string" ? profile.primaryGym : "",
     gymAddress: typeof profile.gymAddress === "string" ? profile.gymAddress : "",
     gymLatitude: coordinate(profile.gymLatitude, -90, 90),
     gymLongitude: coordinate(profile.gymLongitude, -180, 180),
+    gymPlaceId: typeof profile.gymPlaceId === "string" ? profile.gymPlaceId : "",
     hometown: typeof profile.hometown === "string" ? profile.hometown : "",
     zipCode: typeof profile.zipCode === "string" ? profile.zipCode : "",
     latitude: coordinate(profile.latitude, -90, 90),
@@ -270,12 +309,14 @@ function clip(value: string, max: number) {
 function accountProfile(profile: UserProfile, photoPaths: string[], location: { latitude: number | null; longitude: number | null }) {
   return {
     fullName: clip(profile.fullName, 80),
-    age: clip(profile.age, 3),
+    birthDate: parseBirthDate(profile.birthDate) ? profile.birthDate : "",
+    age: String(ageFromBirthDate(profile.birthDate) ?? clip(profile.age, 3)),
     gender: profile.gender,
     primaryGym: clip(profile.primaryGym, 80),
     gymAddress: profile.primaryGym.trim() ? clip(profile.gymAddress, 140) : "",
     gymLatitude: profile.primaryGym.trim() ? coordinate(profile.gymLatitude, -90, 90) : null,
     gymLongitude: profile.primaryGym.trim() ? coordinate(profile.gymLongitude, -180, 180) : null,
+    gymPlaceId: profile.primaryGym.trim() ? clip(profile.gymPlaceId, 60) : "",
     hometown: clip(profile.hometown, 80),
     zipCode: clip(profile.zipCode, 10),
     latitude: location.latitude,
@@ -368,6 +409,117 @@ async function uploadPhoto(userId: string, photo: string): Promise<string> {
   throw error;
 }
 
+type AccountProfile = ReturnType<typeof accountProfile>;
+
+// "135 lbs" -> 135, "N/A" or "" -> null
+function pounds(value: string) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function saveGym(account: AccountProfile): Promise<string | null> {
+  if (!account.primaryGym) return null;
+
+  // Search results without an OpenStreetMap ID get a stand-in like "place:<address>", which isn't stable.
+  const osmId = account.gymPlaceId && !account.gymPlaceId.startsWith("place:") ? account.gymPlaceId : null;
+
+  if (osmId) {
+    const { data: byOsm, error } = await supabase.from("gym").select("id").eq("osm_id", osmId).limit(1);
+    if (error) throw error;
+    if (byOsm && byOsm.length > 0) return byOsm[0].id as string;
+  }
+
+  // Addresses are unique in the gym table, so a gym saved before osm_id existed is found here.
+  const { data: byAddress, error: addressError } = await supabase
+    .from("gym")
+    .select("id, osm_id")
+    .eq("address", account.gymAddress)
+    .limit(1);
+  if (addressError) throw addressError;
+  if (byAddress && byAddress.length > 0) {
+    const gym = byAddress[0] as { id: string; osm_id: string | null };
+    if (osmId && !gym.osm_id) {
+      // Fill in the missing ID. Skipped quietly if the gym table has no update policy.
+      await supabase.from("gym").update({ osm_id: osmId }).eq("id", gym.id);
+    }
+    return gym.id;
+  }
+
+  const id = photoFileId();
+  const { error } = await supabase.from("gym").insert({
+    id,
+    osm_id: osmId,
+    name: account.primaryGym,
+    address: account.gymAddress,
+    latitude: account.gymLatitude,
+    longitude: account.gymLongitude,
+  });
+  if (error) throw error;
+  return id;
+}
+
+async function replaceRows(table: string, userId: string, rows: Record<string, unknown>[]) {
+  const { error: deleteError } = await supabase.from(table).delete().eq("user_id", userId);
+  if (deleteError) throw deleteError;
+  if (rows.length === 0) return;
+  const { error } = await supabase.from(table).insert(rows);
+  if (error) throw error;
+}
+
+// Writes the profile to user_account and its child tables. The gym goes first
+// because user_account points to it, and the user row goes before the rows that point to it.
+async function saveProfileTables(userId: string, account: AccountProfile) {
+  const homeGymId = await saveGym(account);
+
+  const { error } = await supabase.from("user_account").upsert({
+    id: userId,
+    full_name: account.fullName,
+    birthdate: account.birthDate || null,
+    gender: account.gender || null,
+    hometown: account.hometown || null,
+    zip_code: account.zipCode || null,
+    latitude: account.latitude,
+    longitude: account.longitude,
+    about: account.about || null,
+    fitness_level: account.experienceLevel || null,
+    home_gym_id: homeGymId,
+    bench_lbs: pounds(account.bench),
+    squat_lbs: pounds(account.squat),
+    deadlift_lbs: pounds(account.deadlift),
+    custom_lift_name: account.customLiftName || null,
+    custom_lift_lbs: pounds(account.customLift),
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+
+  await replaceRows(
+    "profile_photo",
+    userId,
+    account.photos.map((path, index) => ({
+      photo_id: photoFileId(),
+      user_id: userId,
+      storage_path: path,
+      caption: account.photoCaptions[index] || null,
+      sort_order: index + 1,
+    })),
+  );
+  await replaceRows(
+    "profile_prompt",
+    userId,
+    account.prompts.map((item, index) => ({ user_id: userId, prompt: item.prompt, answer: item.answer, sort_order: index + 1 })),
+  );
+  await replaceRows(
+    "user_availability",
+    userId,
+    account.availabilityDays.flatMap((day) => account.availabilityTimes.map((time) => ({ user_id: userId, day, time_of_day: time }))),
+  );
+  await replaceRows(
+    "user_goal",
+    userId,
+    account.selectedGoals.map((goal) => ({ user_id: userId, goal })),
+  );
+}
+
 export async function loadProfile(): Promise<UserProfile | null> {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -402,13 +554,15 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
     longitude: place?.longitude ?? null,
   };
 
+  let account: AccountProfile;
   try {
     for (const photo of profile.photos.slice(0, 6)) {
       uploaded.push(await uploadPhoto(userId, photo));
     }
 
+    account = accountProfile(profile, uploaded, location);
     const { error } = await supabase.auth.updateUser({
-      data: { profile: accountProfile(profile, uploaded, location) },
+      data: { profile: account },
     });
     if (error) throw error;
   } catch (error) {
@@ -424,6 +578,14 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
     await supabase.storage.from(PHOTO_BUCKET).remove(removed);
   }
   clearStoredPhotos(userId);
+
+  // The JSON copy above still drives the app while the screens move over to the tables.
+  try {
+    await saveProfileTables(userId, account);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : (error as { message?: string })?.message ?? "";
+    throw new Error(`Your profile was saved, but not to the user_account tables. ${detail}`.trim());
+  }
 
   return { ...profile, ...location, photos: uploaded.map(publicPhotoUrl) };
 }

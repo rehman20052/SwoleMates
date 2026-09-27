@@ -47,6 +47,8 @@ function publicProfile(profile: UserProfile) {
     gymLatitude: null,
     gymLongitude: null,
     zipCode: "",
+    // Other people see the age, never the exact birthdate.
+    birthDate: "",
   };
 }
 

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { experienceLevels } from "@/data/partners";
 import { pickProfilePhoto } from "@/lib/pick-photo";
-import { dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
+import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
@@ -27,6 +27,24 @@ const WEIGHTS = ["N/A", ...Array.from({ length: 200 }, (_, index) => `${(index +
 const GENDERS: readonly Exclude<ProfileGender, "">[] = ["Male", "Female", "Other"];
 
 type LiftField = "bench" | "squat" | "deadlift" | "customLift";
+
+// "01151999" or "01/15/1999" -> "01/15/1999", adding slashes as digits are typed.
+function formatBirthInput(text: string) {
+  const digits = text.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("/");
+}
+
+// "01/15/1999" -> "1999-01-15"; empty until all 8 digits are in.
+function birthDateFromInput(text: string) {
+  const digits = text.replace(/\D/g, "");
+  if (digits.length !== 8) return "";
+  return `${digits.slice(4)}-${digits.slice(0, 2)}-${digits.slice(2, 4)}`;
+}
+
+function birthDateText(iso: string) {
+  const [year, month, day] = iso.split("-");
+  return year && month && day ? `${month}/${day}/${year}` : "";
+}
 
 type PickerChoice =
   | { id: string; kind: "label"; text: string }
@@ -75,6 +93,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   const [addressResults, setAddressResults] = useState<GymPlace[]>([]);
   const [gymStatus, setGymStatus] = useState<string | null>(null);
   const [addressStatus, setAddressStatus] = useState<string | null>(null);
+  const [birthText, setBirthText] = useState(() => birthDateText(profile.birthDate));
 
   useEffect(() => {
     const zip = profile.zipCode.trim();
@@ -355,8 +374,25 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
           <Field label="Full name">
             <Input value={profile.fullName} onChangeText={(fullName) => update({ fullName })} autoCapitalize="words" />
           </Field>
-          <Field label="Age">
-            <Input value={profile.age} onChangeText={(age) => update({ age: age.replace(/[^\d]/g, "") })} keyboardType="number-pad" maxLength={3} />
+          <Field label="Birthdate">
+            <Input
+              value={birthText}
+              onChangeText={(text) => {
+                const typed = formatBirthInput(text);
+                setBirthText(typed);
+                const birthDate = birthDateFromInput(typed);
+                const age = ageFromBirthDate(birthDate);
+                update({ birthDate, age: age != null ? String(age) : "" });
+              }}
+              placeholder="MM/DD/YYYY"
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+            {profile.birthDate && profile.age ? (
+              <AppText size={12} muted>
+                Age {profile.age}
+              </AppText>
+            ) : null}
           </Field>
           <Field label="Gender">
             <View style={styles.chips}>
@@ -459,7 +495,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                 setGymTown("");
                 setAddressResults([]);
                 setAddressStatus(null);
-                update({ primaryGym, gymAddress: "", gymLatitude: null, gymLongitude: null });
+                update({ primaryGym, gymAddress: "", gymLatitude: null, gymLongitude: null, gymPlaceId: "" });
               }}
               placeholder="Enter gym name"
               autoCapitalize="words"
@@ -481,6 +517,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                         gymAddress: gym.address,
                         gymLatitude: gym.latitude,
                         gymLongitude: gym.longitude,
+                        gymPlaceId: gym.id,
                       });
                       setGymResults([]);
                       setGymStatus(null);
@@ -513,7 +550,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                 setStreetQuery(street);
                 setGymResults([]);
                 setGymStatus(null);
-                update({ gymAddress: "", gymLatitude: null, gymLongitude: null });
+                update({ gymAddress: "", gymLatitude: null, gymLongitude: null, gymPlaceId: "" });
               }}
               placeholder="Enter street address"
               autoCapitalize="words"
@@ -526,7 +563,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                 setGymTown(town);
                 setGymResults([]);
                 setGymStatus(null);
-                update({ gymAddress: "", gymLatitude: null, gymLongitude: null });
+                update({ gymAddress: "", gymLatitude: null, gymLongitude: null, gymPlaceId: "" });
               }}
               placeholder="Enter town"
               autoCapitalize="words"
@@ -554,6 +591,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                         gymAddress: place.address,
                         gymLatitude: place.latitude,
                         gymLongitude: place.longitude,
+                        gymPlaceId: place.id,
                       });
                       setAddressResults([]);
                       setAddressStatus(null);
