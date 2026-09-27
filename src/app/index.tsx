@@ -14,7 +14,7 @@ import {
 import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
 import { chatAlertCount, subscribeChatAlerts } from '@/lib/matches';
-import { MIN_PROFILE_PROMPTS, answeredPrompts, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
+import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
@@ -31,12 +31,14 @@ import { useAppData } from '@/state/app-data';
 
 const emptyProfile = (): UserProfile => ({
   fullName: '',
+  birthDate: '',
   age: '',
   gender: '',
   primaryGym: '',
   gymAddress: '',
   gymLatitude: null,
   gymLongitude: null,
+  gymPlaceId: '',
   hometown: '',
   zipCode: '',
   latitude: null,
@@ -112,8 +114,11 @@ export default function App() {
         return;
       }
 
-      continueAfterAuth(profileFromUser(data.session.user));
+      const profile = profileFromUser(data.session.user);
+      continueAfterAuth(profile);
       setCheckingSession(false);
+      // Refresh the public Discover card so the age shown to others stays current after birthdays.
+      if (profile) publishDiscoverProfile(profile).catch(() => {});
     };
 
     const {
@@ -142,6 +147,12 @@ export default function App() {
   const saveAndMatch = async (requirePhoto = false) => {
     if (!profileData.fullName.trim()) {
       setProfileError('Enter your name before saving.');
+      return false;
+    }
+
+    const birthError = birthDateError(profileData.birthDate);
+    if (birthError) {
+      setProfileError(birthError);
       return false;
     }
 
