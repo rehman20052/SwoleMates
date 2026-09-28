@@ -250,7 +250,11 @@ end;
 $$;
 
 -- Sending a request back at someone who already asked accepts their request immediately.
-create or replace function public.send_match_request(to_user_id uuid)
+-- The argument must not be named to_user_id. That name is also a column, and Postgres
+-- then rejects the function with "column reference to_user_id is ambiguous".
+drop function if exists public.send_match_request(uuid);
+
+create function public.send_match_request(target_user uuid)
 returns void
 language plpgsql
 security definer
@@ -258,7 +262,6 @@ set search_path = public
 as $$
 declare
   me uuid := auth.uid();
-  target uuid := to_user_id;
   reverse_id uuid;
   reverse_status text;
   mine_id uuid;
@@ -267,22 +270,22 @@ begin
   if me is null then
     raise exception 'Sign in again before sending a request.';
   end if;
-  if me = target then
+  if me = target_user then
     raise exception 'You can''t send a request to yourself.';
   end if;
 
   perform pg_advisory_xact_lock(
-    hashtext(least(me::text, target::text) || ':' || greatest(me::text, target::text))
+    hashtext(least(me::text, target_user::text) || ':' || greatest(me::text, target_user::text))
   );
 
   select id, status into reverse_id, reverse_status
   from public.match_requests
-  where from_user_id = target and match_requests.to_user_id = me
+  where from_user_id = target_user and match_requests.to_user_id = me
   for update;
 
   select id, status into mine_id, mine_status
   from public.match_requests
-  where from_user_id = me and match_requests.to_user_id = target
+  where from_user_id = me and match_requests.to_user_id = target_user
   for update;
 
   -- Unmatch hides the chat but keeps the row. A new request has to be accepted again.
@@ -296,7 +299,7 @@ begin
 
     update public.match_requests
     set from_user_id = me,
-        to_user_id = target,
+        to_user_id = target_user,
         status = 'pending',
         created_at = now(),
         ended_at = null,
@@ -309,18 +312,18 @@ begin
     if reverse_status <> 'accepted' then
       update public.match_requests
       set status = 'accepted'
-      where from_user_id = target and match_requests.to_user_id = me;
+      where from_user_id = target_user and match_requests.to_user_id = me;
     end if;
 
     delete from public.match_requests
     where from_user_id = me
-      and match_requests.to_user_id = target
+      and match_requests.to_user_id = target_user
       and status <> 'accepted';
     return;
   end if;
 
   insert into public.match_requests (from_user_id, to_user_id, status)
-  values (me, target, 'pending')
+  values (me, target_user, 'pending')
   on conflict (from_user_id, to_user_id)
   do update set status = 'pending', created_at = now(), ended_at = null, ended_by = null
   where public.match_requests.status in ('declined', 'unmatched');

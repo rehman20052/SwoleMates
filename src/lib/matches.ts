@@ -293,11 +293,11 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
   if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Dashboard settings before matching again.");
 
-  const { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
-  if (error) {
-    if (!missingFunction(error, "send_match_request")) throw setupError(error);
-    await sendMatchRequestDirect(me, toUserId);
-  }
+  // The database function's argument used to be named to_user_id, which clashes with the
+  // column and raises "column reference to_user_id is ambiguous". A normal request does
+  // not need that function.
+  const { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
+  if (error) await sendMatchRequestDirect(me, toUserId);
   notifyChatAlerts();
 }
 

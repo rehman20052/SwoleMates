@@ -142,7 +142,7 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
         },
       ]}
     >
-      <AppText size={13} weight="bold" color={selected ? theme.colors.primary : theme.colors.text}>
+      <AppText size={13} weight="bold" color={selected ? theme.colors.accent : theme.colors.text}>
         {label}
       </AppText>
     </Pressable>

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
@@ -88,7 +88,7 @@ function Conversation({ partner }: { partner: Partner }) {
         </View>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
           ref={scrollRef}
           style={{ flex: 1 }}
@@ -141,7 +141,7 @@ function Conversation({ partner }: { partner: Partner }) {
             onPress={scheduleWorkout}
             style={[styles.roundButton, { backgroundColor: theme.colors.surfaceRaised }]}
           >
-            <Icon source={icons.plusWhite} size={16} />
+            <Icon source={icons.plusWhite} size={16} tint={theme.colors.primaryText} />
           </Pressable>
           <TextInput
             value={draft}
@@ -163,7 +163,7 @@ function Conversation({ partner }: { partner: Partner }) {
             disabled={!draft.trim()}
             style={[styles.roundButton, { backgroundColor: theme.colors.primary, opacity: draft.trim() ? 1 : 0.5 }]}
           >
-            <Icon source={icons.arrowUp} size={16} />
+            <Icon source={icons.arrowUp} size={16} tint={theme.colors.primaryText} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>

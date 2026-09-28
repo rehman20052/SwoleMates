@@ -253,7 +253,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         title="Home"
         right={
           <Pressable accessibilityRole="button" accessibilityLabel="Settings" hitSlop={8} onPress={() => setShowSettings(true)}>
-            <AppText size={22} primary>
+            <AppText size={28} primary>
               ⚙
             </AppText>
           </Pressable>
@@ -615,7 +615,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                       : isSelected
                         ? theme.colors.surface
                         : theme.colors.surfaceRaised;
-                    const dayTextColor = hasActivity ? theme.colors.primaryText : isToday || isSelected ? theme.colors.primary : theme.colors.text;
+                    const dayTextColor = hasActivity ? theme.colors.primaryText : isToday || isSelected ? theme.colors.accent : theme.colors.text;
 
                     return (
                       <Pressable

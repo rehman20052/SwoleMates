@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
-  Platform,
   SafeAreaView,
   ImageBackground,
   Modal,
@@ -29,6 +28,7 @@ import { RequestProfileScreen } from '@/screens/request-profile';
 import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
+import { useAppTheme } from '@/theme';
 
 const emptyProfile = (): UserProfile => ({
   fullName: '',
@@ -60,6 +60,7 @@ const emptyProfile = (): UserProfile => ({
 });
 
 export default function App() {
+  const theme = useAppTheme();
   const [currentScreen, setCurrentScreen] = useState('launch');
   const [checkingSession, setCheckingSession] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('Discover');
@@ -287,7 +288,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           style={styles.authInnerContainer}
         >
           <View style={styles.authHeader}>
@@ -320,15 +321,17 @@ export default function App() {
   if (currentScreen === 'profile-setup') {
     return (
       <NavigationContext.Provider value={nav}>
-        <ProfileScreen
-          profile={profileData}
-          saving={savingProfile}
-          error={profileError}
-          title="Create your profile"
-          initialMode="edit"
-          onChange={setProfileData}
-          onSave={() => saveAndMatch(true)}
-        />
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <ProfileScreen
+            profile={profileData}
+            saving={savingProfile}
+            error={profileError}
+            title="Create your profile"
+            initialMode="edit"
+            onChange={setProfileData}
+            onSave={() => saveAndMatch(true)}
+          />
+        </SafeAreaView>
       </NavigationContext.Provider>
     );
   }
@@ -422,12 +425,12 @@ export default function App() {
 
   return (
     <NavigationContext.Provider value={nav}>
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.mainAppContainer}>
         {topRoute ? renderRoute(topRoute) : renderMainTabContent()}
 
         {!(topRoute && fullScreenRoutes.includes(topRoute.name)) && (
-        <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
           {([
             { name: 'Discover', icon: '✨' },
             { name: 'Chat', icon: '💬' },
@@ -451,7 +454,7 @@ export default function App() {
                     </View>
                   ) : null}
                 </View>
-                <Text style={[styles.navLabel, isActive && styles.activeNavLabel]}>{tab.name}</Text>
+                <Text style={[styles.navLabel, { color: theme.colors.muted }, isActive && { color: theme.colors.accent }]}>{tab.name}</Text>
               </TouchableOpacity>
             );
           })}

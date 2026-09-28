@@ -148,7 +148,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
       ) : null}
 
       {notice ? (
-        <AppText size={13} weight="medium" color={theme.colors.primary}>
+        <AppText size={13} weight="medium" color={theme.colors.accent}>
           {notice}
         </AppText>
       ) : null}

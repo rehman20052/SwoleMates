@@ -3,7 +3,7 @@ import { PropsWithChildren, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
-import { AppText, Card, Icon, IconButton, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";
+import { AppText, Card, Icon, IconButton, PhotoScrim, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";
 import { firstName, getPartner, Partner } from "@/data/partners";
 import { useNavigation } from "@/navigation";
 import { useAppData } from "@/state/app-data";
@@ -113,31 +113,31 @@ export function PartnerDetails({
       <ScrollBody contentContainerStyle={{ paddingHorizontal: 20 }}>
         <View style={styles.hero}>
           <Image source={partner.photos[0]} style={StyleSheet.absoluteFill} contentFit="cover" />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0, 0, 0, 0.3)" }]} />
+          <PhotoScrim />
           <View style={styles.heroBadges}>
             <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
               <AppText size={13} weight="extrabold" color={theme.colors.primaryText}>
                 {partner.match}% Match
               </AppText>
             </View>
-            <View style={[styles.badge, styles.row, { backgroundColor: theme.colors.scrim, gap: 4 }]}>
+            <View style={[styles.badge, styles.row, { backgroundColor: "rgba(0, 0, 0, 0.55)", gap: 4 }]}>
               <Icon source={icons.shieldAlt} size={14} />
-              <AppText size={12} weight="bold">
+              <AppText size={12} weight="bold" color="#FFFFFF">
                 {partner.safety} Safety Rating
               </AppText>
             </View>
           </View>
           <View style={styles.heroDetails}>
-            <AppText size={26} weight="black">
+            <AppText size={26} weight="black" color="#FFFFFF">
               {partner.name}, {partner.age}
             </AppText>
-            <AppText weight="semibold" primary>
+            <AppText weight="semibold" color="#FFFFFF">
               {partner.style} • {partner.gym}
             </AppText>
             <View style={[styles.row, { flexWrap: "wrap", gap: 8, marginTop: 8 }]}>
               {[`${partner.distance} miles away`, `${partner.frequency} Availability`].map((fact) => (
-                <View key={fact} style={[styles.fact, { backgroundColor: theme.colors.glass }]}>
-                  <AppText size={12} weight="medium">
+                <View key={fact} style={[styles.fact, { backgroundColor: "rgba(0, 0, 0, 0.45)" }]}>
+                  <AppText size={12} weight="medium" color="#FFFFFF">
                     {fact}
                   </AppText>
                 </View>
@@ -201,8 +201,8 @@ export function PartnerDetails({
         </Section>
 
         <Section title="Scores">
-          <StatBox label="Reliability" value={`${partner.reliability}%`} {...scoreStyle} valueColor={theme.colors.primary} />
-          <StatBox label="Safety" value={`${partner.safety}`} {...scoreStyle} valueColor={theme.colors.primary} />
+          <StatBox label="Reliability" value={`${partner.reliability}%`} {...scoreStyle} valueColor={theme.colors.accent} />
+          <StatBox label="Safety" value={`${partner.safety}`} {...scoreStyle} valueColor={theme.colors.accent} />
         </Section>
 
         <Card padding={16} radius={18} gap={12}>
