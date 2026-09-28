@@ -415,7 +415,50 @@ export function SelectField<T extends string>({
 function buttonLabel(children: ReactNode) {
   const parts = Children.toArray(children);
   if (parts.length === 0 || parts.some((part) => typeof part !== "string" && typeof part !== "number")) return null;
-  return parts.join("");
+  const label = parts.join("").replace(/\s+/g, " ").trim();
+  return label || null;
+}
+
+function ButtonLabel({
+  children,
+  fontSize,
+  color,
+  weight,
+}: {
+  children: string;
+  fontSize: number;
+  color?: string;
+  weight: Weight;
+}) {
+  return (
+    <AppText size={fontSize} weight={weight} color={color} numberOfLines={1} style={styles.buttonLabel}>
+      {children}
+    </AppText>
+  );
+}
+
+function buttonBody(children: ReactNode, fontSize: number, color: string | undefined, weight: Weight) {
+  const label = buttonLabel(children);
+  if (label != null) {
+    return (
+      <ButtonLabel fontSize={fontSize} color={color} weight={weight}>
+        {label}
+      </ButtonLabel>
+    );
+  }
+
+  return Children.map(children, (child) => {
+    if (typeof child === "string" || typeof child === "number") {
+      const text = String(child).replace(/\s+/g, " ").trim();
+      if (!text) return null;
+      return (
+        <ButtonLabel fontSize={fontSize} color={color} weight={weight}>
+          {text}
+        </ButtonLabel>
+      );
+    }
+    return child;
+  });
 }
 
 type ButtonProps = Omit<PressableProps, "children" | "style"> & {
@@ -425,7 +468,6 @@ type ButtonProps = Omit<PressableProps, "children" | "style"> & {
 
 export function PrimaryButton({ children, style, height = 52, fontSize = 15, ...props }: ButtonProps & { height?: number; fontSize?: number }) {
   const theme = useAppTheme();
-  const label = buttonLabel(children);
 
   return (
     <Pressable
@@ -437,13 +479,7 @@ export function PrimaryButton({ children, style, height = 52, fontSize = 15, ...
         style,
       ]}
     >
-      {label != null ? (
-        <AppText size={fontSize} weight="extrabold" color={theme.colors.primaryText}>
-          {label}
-        </AppText>
-      ) : (
-        children
-      )}
+      {buttonBody(children, fontSize, theme.colors.primaryText, "extrabold")}
     </Pressable>
   );
 }
@@ -474,9 +510,7 @@ export function SecondaryButton({
         style,
       ]}
     >
-      <AppText size={fontSize} weight="bold" color={textColor}>
-        {children}
-      </AppText>
+      {buttonBody(children, fontSize, textColor, "bold")}
     </Pressable>
   );
 }
@@ -930,6 +964,10 @@ const styles = StyleSheet.create({
     gap: 8,
     justifyContent: "center",
     paddingHorizontal: 12,
+  },
+  buttonLabel: {
+    flexShrink: 1,
+    textAlign: "center",
   },
   chip: {
     borderWidth: 1,
