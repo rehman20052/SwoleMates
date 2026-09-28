@@ -7,13 +7,24 @@ import { blockedUserIds } from "@/lib/safety";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
+type RequestTab = "received" | "sent";
+
+// The inbox unmounts while a request profile is open, so this keeps Sent selected
+// when that screen closes.
+let savedRequestTab: RequestTab = "received";
+
 export function InboxScreen({ empty }: { empty: ReactNode }) {
   const nav = useNavigation();
   const [connections, setConnections] = useState<MatchConnection[]>([]);
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
-  const [requestTab, setRequestTab] = useState<"received" | "sent">("received");
+  const [requestTab, setRequestTab] = useState<RequestTab>(savedRequestTab);
+
+  const selectRequestTab = (tab: RequestTab) => {
+    savedRequestTab = tab;
+    setRequestTab(tab);
+  };
 
   const load = useCallback(() => {
     let active = true;
@@ -88,9 +99,9 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
                   label="Received"
                   count={received.length}
                   selected={requestTab === "received"}
-                  onPress={() => setRequestTab("received")}
+                  onPress={() => selectRequestTab("received")}
                 />
-                <RequestTab label="Sent" selected={requestTab === "sent"} onPress={() => setRequestTab("sent")} />
+                <RequestTab label="Sent" selected={requestTab === "sent"} onPress={() => selectRequestTab("sent")} />
               </View>
               {shownRequests.length > 0 ? (
                 <RequestBox people={shownRequests} onView={(person) => nav.push({ name: "request-profile", userId: person.userId })} />

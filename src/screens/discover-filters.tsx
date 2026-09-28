@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Screen, ScrollBody, SectionLabel, TitleBar } from "@/components/ui";
@@ -16,11 +16,12 @@ type DiscoverFiltersScreenProps = {
 export function DiscoverFiltersScreen({ filters, profile, onChange, onClose }: DiscoverFiltersScreenProps) {
   const canMatchAvailability = profile.availabilityDays.length > 0 && profile.availabilityTimes.length > 0;
   const availability = [profile.availabilityDays.join(", "), profile.availabilityTimes.join(", ")].filter(Boolean).join(" · ");
+  const [draggingSlider, setDraggingSlider] = useState(false);
 
   return (
     <Screen>
       <TitleBar title="Filters" onBack={onClose} />
-      <ScrollBody style={{ flex: 1 }}>
+      <ScrollBody style={{ flex: 1 }} scrollEnabled={!draggingSlider}>
         <AppText size={13} muted>
           Every filter you set is required. Leave a filter open to include more people.
         </AppText>
@@ -28,7 +29,13 @@ export function DiscoverFiltersScreen({ filters, profile, onChange, onClose }: D
         <Card>
           <SectionLabel>Distance</SectionLabel>
           <AppText weight="extrabold">{filters.distance} miles</AppText>
-          <RangeSlider min={5} max={50} value={filters.distance} onChange={(distance) => onChange({ ...filters, distance })} />
+          <RangeSlider
+            min={5}
+            max={50}
+            value={filters.distance}
+            onChange={(distance) => onChange({ ...filters, distance })}
+            onDragging={setDraggingSlider}
+          />
           <AppText size={12} muted>
             People within this many miles of your zip code.
           </AppText>
@@ -70,6 +77,7 @@ export function DiscoverFiltersScreen({ filters, profile, onChange, onClose }: D
             max={70}
             value={filters.ageMin}
             onChange={(ageMin) => onChange({ ...filters, ageMin, ageMax: Math.max(filters.ageMax, ageMin) })}
+            onDragging={setDraggingSlider}
           />
           <AppText size={12} muted>
             Maximum age
@@ -79,6 +87,7 @@ export function DiscoverFiltersScreen({ filters, profile, onChange, onClose }: D
             max={70}
             value={filters.ageMax}
             onChange={(ageMax) => onChange({ ...filters, ageMax, ageMin: Math.min(filters.ageMin, ageMax) })}
+            onDragging={setDraggingSlider}
           />
         </Card>
 
@@ -149,50 +158,103 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
   );
 }
 
+const THUMB = 28;
+
 function RangeSlider({
   min,
   max,
   value,
   onChange,
+  onDragging,
 }: {
   min: number;
   max: number;
   value: number;
   onChange: (value: number) => void;
+  onDragging: (dragging: boolean) => void;
 }) {
   const theme = useAppTheme();
+  const trackRef = useRef<View>(null);
   const width = useRef(1);
+  const originX = useRef(0);
   const change = useRef(onChange);
+  const dragging = useRef(onDragging);
+  const active = useRef(false);
   change.current = onChange;
+  dragging.current = onDragging;
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [shown, setShown] = useState(value);
+  if (!active.current && shown !== value) setShown(value);
 
-  const setFromX = (x: number) => {
-    const ratio = Math.min(1, Math.max(0, x / width.current));
-    change.current(Math.round(min + ratio * (max - min)));
+  const rememberTrack = () => {
+    trackRef.current?.measureInWindow((x, _y, measuredWidth) => {
+      originX.current = x;
+      if (measuredWidth > 0) width.current = measuredWidth;
+    });
+  };
+
+  const setFromPageX = (pageX: number) => {
+    const span = Math.max(1, width.current - THUMB);
+    const ratio = Math.min(1, Math.max(0, (pageX - originX.current - THUMB / 2) / span));
+    const next = Math.round(min + ratio * (max - min));
+    setShown(next);
+    change.current(next);
+  };
+
+  const finishDrag = () => {
+    active.current = false;
+    dragging.current(false);
   };
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (event) => setFromX(event.nativeEvent.locationX),
-      onPanResponderMove: (event) => setFromX(event.nativeEvent.locationX),
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: (event) => {
+        active.current = true;
+        dragging.current(true);
+        const pageX = event.nativeEvent.pageX;
+        trackRef.current?.measureInWindow((x, _y, measuredWidth) => {
+          originX.current = x;
+          if (measuredWidth > 0) width.current = measuredWidth;
+          setFromPageX(pageX);
+        });
+      },
+      onPanResponderMove: (event) => setFromPageX(event.nativeEvent.pageX),
+      onPanResponderRelease: finishDrag,
+      onPanResponderTerminate: finishDrag,
     }),
   ).current;
 
-  const fill = ((value - min) / (max - min)) * 100;
+  const span = Math.max(1, trackWidth - THUMB);
+  const ratio = (shown - min) / (max - min);
+  const thumbLeft = ratio * span;
 
   return (
     <View
+      ref={trackRef}
       accessibilityRole="adjustable"
-      accessibilityLabel={`${value}`}
+      accessibilityLabel={`${shown}`}
+      collapsable={false}
       onLayout={(event) => {
-        width.current = event.nativeEvent.layout.width || 1;
+        const nextWidth = event.nativeEvent.layout.width || 1;
+        width.current = nextWidth;
+        setTrackWidth(nextWidth);
+        rememberTrack();
       }}
       {...pan.panHandlers}
-      style={[styles.track, { backgroundColor: theme.colors.surfaceRaised }]}
+      style={styles.hit}
     >
-      <View style={[styles.fill, { width: `${fill}%`, backgroundColor: theme.colors.primary }]} />
-      <View style={[styles.thumb, { left: `${fill}%`, backgroundColor: theme.colors.primary }]} />
+      <View pointerEvents="none" style={[styles.track, { backgroundColor: theme.colors.surfaceRaised }]} />
+      <View
+        pointerEvents="none"
+        style={[styles.fill, { width: thumbLeft + THUMB / 2, backgroundColor: theme.colors.primary }]}
+      />
+      <View pointerEvents="none" style={[styles.thumb, { left: thumbLeft, backgroundColor: theme.colors.primary }]} />
     </View>
   );
 }
@@ -209,20 +271,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
+  hit: {
+    height: 44,
+    justifyContent: "center",
+  },
   track: {
     borderRadius: 999,
-    height: 28,
-    justifyContent: "center",
+    height: 6,
   },
   fill: {
     borderRadius: 999,
     height: 6,
+    left: 0,
+    position: "absolute",
   },
   thumb: {
-    borderRadius: 10,
-    height: 20,
-    marginLeft: -10,
+    borderRadius: THUMB / 2,
+    height: THUMB,
     position: "absolute",
-    width: 20,
+    top: (44 - THUMB) / 2,
+    width: THUMB,
   },
 });
