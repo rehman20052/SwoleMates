@@ -7,6 +7,7 @@ import {
   Card,
   Field,
   Input,
+  PhotoScrim,
   PrimaryButton,
   Screen,
   ScrollBody,
@@ -412,7 +413,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                       },
                     ]}
                   >
-                    <AppText size={13} weight="bold" color={selected ? theme.colors.primary : theme.colors.muted}>
+                    <AppText size={13} weight="bold" color={selected ? theme.colors.accent : theme.colors.muted}>
                       {gender}
                     </AppText>
                   </Pressable>
@@ -438,7 +439,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                       },
                     ]}
                   >
-                    <AppText size={13} weight="bold" color={selected ? theme.colors.primary : theme.colors.muted}>
+                    <AppText size={13} weight="bold" color={selected ? theme.colors.accent : theme.colors.muted}>
                       {level}
                     </AppText>
                   </Pressable>
@@ -1000,21 +1001,21 @@ export function ProfilePreview({
             </AppText>
           </View>
         )}
-        <View style={[StyleSheet.absoluteFill, styles.heroShade]} />
+        <PhotoScrim />
         <View style={styles.heroDetails}>
-          <AppText size={28} weight="black">
+          <AppText size={28} weight="black" color="#FFFFFF">
             {headline}
           </AppText>
           {subtitle ? (
-            <AppText weight="semibold" primary>
+            <AppText weight="semibold" color="#FFFFFF">
               {subtitle}
             </AppText>
           ) : null}
           {facts.length > 0 ? (
             <View style={styles.factRow}>
               {facts.map((fact) => (
-                <View key={fact} style={[styles.fact, { backgroundColor: theme.colors.glass }]}>
-                  <AppText size={12} weight="medium">
+                <View key={fact} style={styles.fact}>
+                  <AppText size={12} weight="medium" color="#FFFFFF">
                     {fact}
                   </AppText>
                 </View>
@@ -1055,7 +1056,7 @@ function PhotoCaption({ text }: { text: string }) {
   return (
     <View pointerEvents="none" style={styles.captionWrap}>
       <View style={styles.captionBadge}>
-        <AppText size={13} weight="bold">
+        <AppText size={13} weight="bold" color="#FFFFFF">
           {text}
         </AppText>
       </View>
@@ -1072,7 +1073,7 @@ function ReadOnlyChips({ values }: { values: string[] }) {
           key={value}
           style={[styles.chip, { backgroundColor: theme.colors.primaryTint, borderColor: theme.colors.primary }]}
         >
-          <AppText size={13} weight="bold" color={theme.colors.primary}>
+          <AppText size={13} weight="bold" color={theme.colors.accent}>
             {value}
           </AppText>
         </View>
@@ -1125,7 +1126,7 @@ function ChoiceChips({
               },
             ]}
           >
-            <AppText size={13} weight="bold" color={isSelected ? theme.colors.primary : theme.colors.muted}>
+            <AppText size={13} weight="bold" color={isSelected ? theme.colors.accent : theme.colors.muted}>
               {option}
             </AppText>
           </Pressable>
@@ -1244,9 +1245,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroShade: {
-    backgroundColor: "rgba(0, 0, 0, 0.28)",
-  },
   heroDetails: {
     bottom: 0,
     gap: 4,
@@ -1262,6 +1260,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   fact: {
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,

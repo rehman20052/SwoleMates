@@ -13,9 +13,17 @@ import { View } from "react-native";
 
 import { PhoneFrame } from "@/components/phone-frame";
 import { AppDataProvider } from "@/state/app-data";
-import { useAppTheme } from "@/theme";
+import { ThemeProvider, useAppTheme } from "@/theme";
 
 export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootShell />
+    </ThemeProvider>
+  );
+}
+
+function RootShell() {
   const theme = useAppTheme();
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -40,7 +48,7 @@ export default function RootLayout() {
           }}
         />
       </PhoneFrame>
-      <StatusBar style="light" />
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
     </AppDataProvider>
   );
 }

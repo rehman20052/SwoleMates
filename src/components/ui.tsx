@@ -1,9 +1,13 @@
 import { Image, ImageSource } from "expo-image";
-import { PropsWithChildren, ReactNode, useRef, useState } from "react";
+import { createContext, forwardRef, PropsWithChildren, ReactNode, useCallback, useContext, useEffect, useId, useRef, useState, type Ref } from "react";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import {
+  Dimensions,
   GestureResponderEvent,
+  Keyboard,
   LayoutChangeEvent,
   PanResponder,
+  Platform,
   Pressable,
   PressableProps,
   ScrollView,
@@ -16,6 +20,7 @@ import {
   TextProps,
   View,
   ViewStyle,
+  type KeyboardEvent,
 } from "react-native";
 
 import { icons } from "@/assets";
@@ -43,7 +48,7 @@ export function AppText({
     upper?: boolean;
   }>) {
   const theme = useAppTheme();
-  const tone = color ?? (primary ? theme.colors.primary : muted ? theme.colors.muted : theme.colors.text);
+  const tone = color ?? (primary ? theme.colors.accent : muted ? theme.colors.muted : theme.colors.text);
 
   return (
     <Text
@@ -67,10 +72,59 @@ export function Icon({ source, size, width, height, tint }: { source: ImageSourc
   return <Image source={source} tintColor={tint} style={{ width: width ?? size, height: height ?? size }} contentFit="contain" />;
 }
 
+export function PhotoScrim() {
+  const id = `photo-scrim-${useId().replace(/:/g, "")}`;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#000000" stopOpacity="0" />
+            <Stop offset="0.5" stopColor="#000000" stopOpacity="0" />
+            <Stop offset="1" stopColor="#000000" stopOpacity="0.72" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+    </View>
+  );
+}
+
 export function Avatar({ source, size }: { source: ImageSource; size: number }) {
   return (
     <Image source={source} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />
   );
+}
+
+type Measurable = {
+  measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void;
+  measureLayout: (
+    relative: object,
+    onSuccess: (x: number, y: number, width: number, height: number) => void,
+    onFail?: () => void,
+  ) => void;
+};
+
+const KeyboardScrollContext = createContext<{ reveal: () => void } | null>(null);
+const focusedInputRef: { current: Measurable | null } = { current: null };
+
+function rememberFocusedInput(node: TextInput | null) {
+  const field = node as unknown as Partial<Measurable> | null;
+  if (!field || typeof field.measureLayout !== "function" || typeof field.measureInWindow !== "function") {
+    focusedInputRef.current = null;
+    return;
+  }
+  focusedInputRef.current = field as Measurable;
+}
+
+function focusedField(): Measurable | null {
+  return focusedInputRef.current;
+}
+
+function setScrollRef(ref: Ref<ScrollView> | undefined, value: ScrollView | null) {
+  if (!ref) return;
+  if (typeof ref === "function") ref(value);
+  else ref.current = value;
 }
 
 // Safe areas are handled by the app shell in app/index.tsx.
@@ -80,18 +134,88 @@ export function Screen({ children, style }: PropsWithChildren<{ style?: StylePro
   return <View style={[styles.screen, { backgroundColor: theme.colors.background }, style]}>{children}</View>;
 }
 
-export function ScrollBody({ children, contentContainerStyle, ...props }: ScrollViewProps) {
+export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function ScrollBody(
+  { children, contentContainerStyle, onScroll, scrollEventThrottle, ...props },
+  ref,
+) {
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const keyboardHeight = useRef(0);
+  const [keyboardPad, setKeyboardPad] = useState(0);
+
+  const reveal = useCallback(() => {
+    const scroll = scrollRef.current as (ScrollView & Measurable & { getInnerViewRef?: () => Measurable | null }) | null;
+    const field = focusedField();
+    const inner = scroll?.getInnerViewRef?.();
+    if (!scroll || !field || !inner || keyboardHeight.current <= 0) return;
+
+    try {
+      field.measureLayout(
+        inner,
+        () => {
+          scroll.measureInWindow((_x, y, _width, height) => {
+            const keyboardTop = Dimensions.get("window").height - keyboardHeight.current;
+            const covered = Math.max(0, y + height - keyboardTop);
+            setKeyboardPad((current) => (current === covered ? current : covered));
+            field.measureInWindow((_fieldX, fieldY, _fieldWidth, fieldHeight) => {
+              const overlap = fieldY + fieldHeight + 20 - keyboardTop;
+              if (overlap > 0) scroll.scrollTo({ y: scrollY.current + overlap, animated: true });
+            });
+          });
+        },
+        () => undefined,
+      );
+    } catch {
+      // The focused field is not inside this scroller.
+    }
+  }, []);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event: KeyboardEvent) => {
+      keyboardHeight.current = event.endCoordinates.height;
+      setTimeout(reveal, 40);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      keyboardHeight.current = 0;
+      setKeyboardPad(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [reveal]);
+
+  useEffect(() => {
+    if (keyboardPad <= 0) return;
+    const timer = setTimeout(reveal, 50);
+    return () => clearTimeout(timer);
+  }, [keyboardPad, reveal]);
+
   return (
-    <ScrollView
-      {...props}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.scrollBody, contentContainerStyle]}
-    >
-      {children}
-    </ScrollView>
+    <KeyboardScrollContext.Provider value={{ reveal }}>
+      <ScrollView
+        ref={(node) => {
+          scrollRef.current = node;
+          setScrollRef(ref, node);
+        }}
+        {...props}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={scrollEventThrottle ?? 16}
+        onScroll={(event) => {
+          scrollY.current = event.nativeEvent.contentOffset.y;
+          onScroll?.(event);
+        }}
+        contentContainerStyle={[styles.scrollBody, contentContainerStyle]}
+      >
+        {children}
+        {keyboardPad > 0 ? <View style={{ height: keyboardPad }} /> : null}
+      </ScrollView>
+    </KeyboardScrollContext.Provider>
   );
-}
+});
 
 export function TitleBar({ title, right, onBack }: { title: string; right?: ReactNode; onBack?: () => void }) {
   return (
@@ -118,6 +242,7 @@ export function IconButton({
   onPress?: () => void;
   label: string;
 }) {
+  const theme = useAppTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -126,7 +251,7 @@ export function IconButton({
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
     >
-      <Icon source={source} size={size} />
+      <Icon source={source} size={size} tint={theme.colors.text} />
     </Pressable>
   );
 }
@@ -193,13 +318,22 @@ export function Input({
   bordered,
   style,
   multiline,
+  onFocus,
   ...props
 }: TextInputProps & { bordered?: boolean }) {
   const theme = useAppTheme();
+  const keyboardScroll = useContext(KeyboardScrollContext);
+  const inputRef = useRef<TextInput>(null);
 
   return (
     <TextInput
       {...props}
+      ref={inputRef}
+      onFocus={(event) => {
+        onFocus?.(event);
+        rememberFocusedInput(inputRef.current);
+        setTimeout(() => keyboardScroll?.reveal(), 80);
+      }}
       multiline={multiline}
       placeholderTextColor={theme.colors.muted}
       selectionColor={theme.colors.primary}
@@ -250,7 +384,7 @@ export function SelectField<T extends string>({
             {label(value)}
           </AppText>
         </View>
-        <Icon source={icon} size={16} />
+        <Icon source={icon} size={16} tint={theme.colors.text} />
       </Pressable>
       {open ? (
         <View style={[styles.selectMenu, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
@@ -406,7 +540,7 @@ export function Segmented<T extends string>({
             <AppText
               size={height > 40 ? 14 : 13}
               weight={active ? "bold" : height > 40 ? "medium" : "semibold"}
-              color={active ? theme.colors.primary : theme.colors.muted}
+              color={active ? theme.colors.accent : theme.colors.muted}
             >
               {option.label}
             </AppText>
@@ -471,7 +605,7 @@ export function OptionRow<T extends string>({
               color={
                 outline
                   ? active
-                    ? theme.colors.primary
+                    ? theme.colors.accent
                     : theme.colors.muted
                   : active
                     ? theme.colors.primaryText

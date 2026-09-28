@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
 import { daysFromToday, type FoodLogEntry, type NutritionProfile, type NutritionTotals, type SavedMeal, useAppData } from "@/state/app-data";
@@ -288,7 +288,7 @@ export function NutritionTrackerScreen() {
       </ScrollBody>
 
       <Modal animationType="slide" transparent visible={showAddFood} onRequestClose={() => setShowAddFood(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowAddFood(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>
@@ -315,7 +315,7 @@ export function NutritionTrackerScreen() {
       </Modal>
 
       <Modal animationType="slide" transparent visible={showGoals} onRequestClose={() => setShowGoals(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowGoals(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>
@@ -330,7 +330,7 @@ export function NutritionTrackerScreen() {
       </Modal>
 
       <Modal animationType="slide" transparent visible={showCalculator} onRequestClose={() => setShowCalculator(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowCalculator(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>

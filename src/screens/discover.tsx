@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { WorkoutHandshake } from "@/components/workout-handshake";
-import { AppText, Card, PrimaryButton, Screen, SecondaryButton } from "@/components/ui";
+import { AppText, Card, PrimaryButton, Screen, SecondaryButton, TitleBar } from "@/components/ui";
 import {
   discoverSetupMessage,
   fetchDiscoverProfiles,
@@ -23,6 +23,8 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const nav = useNavigation();
   const { discoverFilters, updateDiscoverFilters, reviewed, blocked, conversations, invites, review } = useAppData();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [reviewingSkipped, setReviewingSkipped] = useState(false);
+  const [skippedIndex, setSkippedIndex] = useState(0);
   const [candidates, setCandidates] = useState<DiscoverCandidate[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -82,6 +84,18 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
     [candidates, hidden, requestedIds, discoverFilters, profile],
   );
 
+  const skipped = useMemo(
+    () =>
+      candidates.filter((candidate) => {
+        if (!reviewed.includes(candidate.id) || requestedIds.includes(candidate.id)) return false;
+        if (blocked.includes(candidate.id) || blockedIds.includes(candidate.id)) return false;
+        if (conversations.some((item) => item.partnerId === candidate.id)) return false;
+        if (invites.some((item) => item.partnerId === candidate.id)) return false;
+        return matchesDiscoverFilters(candidate, discoverFilters, profile);
+      }),
+    [candidates, reviewed, requestedIds, blocked, blockedIds, conversations, invites, discoverFilters, profile],
+  );
+
   if (filtersOpen) {
     return (
       <DiscoverFiltersScreen
@@ -93,19 +107,26 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
     );
   }
 
-  const current = queue[0];
+  const current = reviewingSkipped ? skipped[skippedIndex] : queue[0];
   const needsZip = profile.latitude == null || profile.longitude == null;
+  const filtersButton = (
+    <SecondaryButton height={36} fontSize={13} onPress={() => setFiltersOpen(true)} style={styles.filters}>
+      Filters
+    </SecondaryButton>
+  );
 
   return (
     <Screen>
-      <View style={styles.bar}>
-        <AppText size={20} weight="extrabold">
-          Discover
-        </AppText>
-        <SecondaryButton height={36} fontSize={13} onPress={() => setFiltersOpen(true)} style={styles.filters}>
-          Filters
-        </SecondaryButton>
-      </View>
+      {reviewingSkipped ? (
+        <TitleBar title="Skipped" onBack={() => setReviewingSkipped(false)} right={filtersButton} />
+      ) : (
+        <View style={styles.bar}>
+          <AppText size={20} weight="extrabold">
+            Discover
+          </AppText>
+          {filtersButton}
+        </View>
+      )}
 
       {status === "loading" ? (
         <Card style={styles.notice}>
@@ -153,17 +174,55 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
               >
                 Work Out Together
               </PrimaryButton>
-              <SecondaryButton onPress={() => review(current.id, false)}>Skip</SecondaryButton>
+              <SecondaryButton
+                onPress={() => {
+                  if (reviewingSkipped) {
+                    setSkippedIndex((index) => index + 1);
+                    return;
+                  }
+                  review(current.id, false);
+                }}
+              >
+                {reviewingSkipped ? "Next" : "Skip"}
+              </SecondaryButton>
             </Card>
           }
         />
       ) : (
         <Card style={styles.notice}>
-          <AppText size={18} weight="extrabold">
-            No one fits these filters
-          </AppText>
-          <AppText muted>Widen the distance, age, or other filters to see more profiles.</AppText>
-          <PrimaryButton onPress={() => setFiltersOpen(true)}>Open filters</PrimaryButton>
+          {reviewingSkipped ? (
+            <>
+              <AppText size={18} weight="extrabold">
+                That's everyone you skipped
+              </AppText>
+              <AppText muted>They stay out of Discover. You can look through them again anytime.</AppText>
+              <PrimaryButton onPress={() => setReviewingSkipped(false)}>Back to Discover</PrimaryButton>
+            </>
+          ) : skipped.length > 0 ? (
+            <>
+              <AppText size={18} weight="extrabold">
+                You've seen everyone nearby
+              </AppText>
+              <AppText muted>Look through people you skipped. They will not show up in Discover again.</AppText>
+              <PrimaryButton
+                onPress={() => {
+                  setSkippedIndex(0);
+                  setReviewingSkipped(true);
+                }}
+              >
+                Look at skipped ({skipped.length})
+              </PrimaryButton>
+              <SecondaryButton onPress={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
+            </>
+          ) : (
+            <>
+              <AppText size={18} weight="extrabold">
+                No one fits these filters
+              </AppText>
+              <AppText muted>Widen the distance, age, or other filters to see more profiles.</AppText>
+              <PrimaryButton onPress={() => setFiltersOpen(true)}>Open filters</PrimaryButton>
+            </>
+          )}
         </Card>
       )}
       {handshake ? (

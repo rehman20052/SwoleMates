@@ -1,46 +1,82 @@
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
-import { AppText, Avatar, Screen, TitleBar } from "@/components/ui";
-import { listBlockedPeople, unblockPerson, type BlockedPerson } from "@/lib/safety";
+import { AppText, Avatar, Field, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
+import { changeEmail, changePassword, currentEmail, discoverPaused, setDiscoverPaused } from "@/lib/account";
 import { notifyChatAlerts } from "@/lib/matches";
-import { useAppTheme } from "@/theme";
+import { listBlockedPeople, unblockPerson, type BlockedPerson } from "@/lib/safety";
+import { useNavigation } from "@/navigation";
+import { useAppTheme, useColorScheme } from "@/theme";
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const theme = useAppTheme();
+  const nav = useNavigation();
+  const { scheme, setScheme } = useColorScheme();
+  const [email, setEmail] = useState("");
   const [people, setPeople] = useState<BlockedPerson[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  const [blockedStatus, setBlockedStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [pauseMessage, setPauseMessage] = useState<string | null>(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   useEffect(() => {
     let active = true;
+    currentEmail()
+      .then((value) => {
+        if (active) setEmail(value);
+      })
+      .catch(() => {
+        if (active) setEmail("");
+      });
+    discoverPaused()
+      .then((value) => {
+        if (!active) return;
+        setPaused(value);
+        setPauseMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setPauseMessage(error instanceof Error ? error.message : "Could not load Discover visibility.");
+      });
     listBlockedPeople()
       .then((blocked) => {
         if (!active) return;
         setPeople(blocked);
-        setStatus("ready");
+        setBlockedStatus("ready");
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setStatus("error");
-        setMessage(error instanceof Error ? error.message : "Could not load blocked people.");
+        setBlockedStatus("error");
+        setBlockedMessage(error instanceof Error ? error.message : "Could not load blocked people.");
       });
     return () => {
       active = false;
     };
   }, []);
 
+  async function togglePause(next: boolean) {
+    setPauseMessage(null);
+    setPaused(next);
+    try {
+      await setDiscoverPaused(next);
+    } catch (error) {
+      setPaused(!next);
+      setPauseMessage(error instanceof Error ? error.message : "Could not update Discover.");
+    }
+  }
+
   async function unblock(userId: string) {
     setBusyId(userId);
-    setMessage(null);
+    setBlockedMessage(null);
     try {
       await unblockPerson(userId);
       setPeople((current) => current.filter((person) => person.userId !== userId));
       notifyChatAlerts();
-      setStatus("ready");
+      setBlockedStatus("ready");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not unblock that person.");
+      setBlockedMessage(error instanceof Error ? error.message : "Could not unblock that person.");
     } finally {
       setBusyId(null);
     }
@@ -49,13 +85,74 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   return (
     <Screen>
       <TitleBar title="Settings" onBack={onClose} />
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollBody contentContainerStyle={styles.list}>
         <AppText size={13} weight="bold" primary upper>
+          Account
+        </AppText>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <AppText size={12} weight="bold" muted upper>
+            Email
+          </AppText>
+          <AppText weight="semibold">{email || "Loading email..."}</AppText>
+          <EmailForm onChanged={setEmail} />
+        </View>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <AppText size={12} weight="bold" muted upper>
+            Password
+          </AppText>
+          <PasswordForm />
+        </View>
+        {confirmLogout ? (
+          <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <AppText weight="semibold">Log out of SwoleMates?</AppText>
+            <View style={styles.actions}>
+              <SecondaryButton height={44} fontSize={14} style={styles.actionButton} onPress={() => setConfirmLogout(false)}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton height={44} fontSize={14} style={styles.actionButton} onPress={() => nav.signOut()}>
+                Log out
+              </PrimaryButton>
+            </View>
+          </View>
+        ) : (
+          <SecondaryButton height={48} fontSize={15} onPress={() => setConfirmLogout(true)}>
+            Log out
+          </SecondaryButton>
+        )}
+
+        <AppText size={13} weight="bold" primary upper style={styles.section}>
+          Appearance
+        </AppText>
+        <View style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <AppText weight="semibold">Dark mode</AppText>
+            <AppText size={13} muted>
+              {scheme === "dark" ? "The app is using the dark theme." : "The app is using the light theme."}
+            </AppText>
+          </View>
+          <Toggle accessibilityLabel="Dark mode" value={scheme === "dark"} onChange={(on) => setScheme(on ? "dark" : "light")} />
+        </View>
+
+        <AppText size={13} weight="bold" primary upper style={styles.section}>
+          Safety
+        </AppText>
+        <View style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <AppText weight="semibold">Hide me from Discover</AppText>
+            <AppText size={13} muted style={{ lineHeight: 18 }}>
+              Your account stays. Other people stop seeing you in Discover until you turn this off. Chats you already have stay open.
+            </AppText>
+            {pauseMessage ? <AppText size={13} color={theme.colors.danger}>{pauseMessage}</AppText> : null}
+          </View>
+          <Toggle accessibilityLabel="Hide me from Discover" value={paused} onChange={(next) => void togglePause(next)} />
+        </View>
+
+        <AppText size={12} weight="bold" muted upper>
           Blocked users
         </AppText>
-        {status === "loading" ? <AppText muted>Loading blocked people...</AppText> : null}
-        {status === "error" ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
-        {status === "ready" && people.length === 0 ? (
+        {blockedStatus === "loading" ? <AppText muted>Loading blocked people...</AppText> : null}
+        {blockedStatus === "error" ? <AppText color={theme.colors.danger}>{blockedMessage}</AppText> : null}
+        {blockedStatus === "ready" && people.length === 0 ? (
           <AppText muted style={{ lineHeight: 20 }}>
             You haven't blocked anyone. People you block disappear from Discover, chat, and matching until you unblock them here.
           </AppText>
@@ -79,9 +176,129 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
             </Pressable>
           </View>
         ))}
-        {message && status === "ready" ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
-      </ScrollView>
+        {blockedMessage && blockedStatus === "ready" ? <AppText color={theme.colors.danger}>{blockedMessage}</AppText> : null}
+      </ScrollBody>
     </Screen>
+  );
+}
+
+function EmailForm({ onChanged }: { onChanged: (email: string) => void }) {
+  const theme = useAppTheme();
+  const [open, setOpen] = useState(false);
+  const [nextEmail, setNextEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await changeEmail(nextEmail, password);
+      onChanged(nextEmail.trim());
+      setMessage("Check that inbox to confirm the new email.");
+      setNextEmail("");
+      setPassword("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change your email.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <SecondaryButton height={40} fontSize={14} onPress={() => setOpen(true)}>
+        Change email
+      </SecondaryButton>
+    );
+  }
+
+  return (
+    <View style={styles.form}>
+      <Field label="New email">
+        <Input value={nextEmail} onChangeText={setNextEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" placeholder="name@email.com" />
+      </Field>
+      <Field label="Current password">
+        <Input value={password} onChangeText={setPassword} secureTextEntry placeholder="Current password" />
+      </Field>
+      {error ? <AppText size={13} color={theme.colors.danger}>{error}</AppText> : null}
+      {message ? <AppText size={13} primary>{message}</AppText> : null}
+      <View style={styles.actions}>
+        <SecondaryButton height={44} fontSize={14} style={styles.actionButton} disabled={busy} onPress={() => setOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton height={44} fontSize={14} style={styles.actionButton} disabled={busy} onPress={() => void save()}>
+          {busy ? "Saving…" : "Save email"}
+        </PrimaryButton>
+      </View>
+    </View>
+  );
+}
+
+function PasswordForm() {
+  const theme = useAppTheme();
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setError(null);
+    setMessage(null);
+    if (next !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await changePassword(current, next);
+      setMessage("Password updated.");
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change your password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <SecondaryButton height={40} fontSize={14} onPress={() => setOpen(true)}>
+        Change password
+      </SecondaryButton>
+    );
+  }
+
+  return (
+    <View style={styles.form}>
+      <Field label="Current password">
+        <Input value={current} onChangeText={setCurrent} secureTextEntry placeholder="Current password" />
+      </Field>
+      <Field label="New password">
+        <Input value={next} onChangeText={setNext} secureTextEntry placeholder="At least 6 characters" />
+      </Field>
+      <Field label="Confirm new password">
+        <Input value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="Repeat the new password" />
+      </Field>
+      {error ? <AppText size={13} color={theme.colors.danger}>{error}</AppText> : null}
+      {message ? <AppText size={13} primary>{message}</AppText> : null}
+      <View style={styles.actions}>
+        <SecondaryButton height={44} fontSize={14} style={styles.actionButton} disabled={busy} onPress={() => setOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton height={44} fontSize={14} style={styles.actionButton} disabled={busy} onPress={() => void save()}>
+          {busy ? "Saving…" : "Save password"}
+        </PrimaryButton>
+      </View>
+    </View>
   );
 }
 
@@ -89,6 +306,26 @@ const styles = StyleSheet.create({
   list: {
     gap: 12,
     padding: 20,
+    paddingBottom: 32,
+  },
+  section: {
+    marginTop: 8,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  form: {
+    gap: 10,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
   },
   row: {
     alignItems: "center",

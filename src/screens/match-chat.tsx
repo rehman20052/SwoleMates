@@ -301,7 +301,7 @@ export function MatchChat({ userId }: { userId: string }) {
           </View>
           {person ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Chat options" onPress={() => setSafety("menu")} hitSlop={8}>
-              <Icon source={icons.moreHorizontal} size={22} tint={theme.colors.primary} />
+              <Icon source={icons.moreHorizontal} size={22} tint={theme.colors.accent} />
             </Pressable>
           ) : null}
         </View>
@@ -390,7 +390,7 @@ export function MatchChat({ userId }: { userId: string }) {
             disabled={!draft.trim() || !person}
             style={[styles.send, { backgroundColor: theme.colors.primary, opacity: draft.trim() && person ? 1 : 0.45 }]}
           >
-            <Icon source={icons.arrowUp} size={16} />
+            <Icon source={icons.arrowUp} size={16} tint={theme.colors.primaryText} />
           </Pressable>
         </View>
       </Animated.View>

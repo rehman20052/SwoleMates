@@ -9,6 +9,9 @@ create table if not exists public.discover_profiles (
   updated_at timestamptz not null default now()
 );
 
+alter table public.discover_profiles
+  add column if not exists paused boolean not null default false;
+
 alter table public.discover_profiles enable row level security;
 
 drop policy if exists "users read their own discover profile" on public.discover_profiles;
@@ -81,6 +84,7 @@ as $$
     and me.longitude is not null
     and other.latitude is not null
     and other.longitude is not null
+    and coalesce(other.paused, false) = false
     and public.miles_between(me.latitude, me.longitude, other.latitude, other.longitude) <= 50;
 $$;
 

@@ -18,7 +18,7 @@ export function PhoneFrame({ children }: PropsWithChildren) {
   }
 
   return (
-    <View style={styles.backdrop}>
+    <View style={[styles.backdrop, { backgroundColor: theme.colors.canvas }]}>
       <View
         style={[
           styles.phone,
@@ -38,7 +38,7 @@ export function PhoneFrame({ children }: PropsWithChildren) {
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: "center",
-    backgroundColor: "#1C1C20",
+    backgroundColor: "transparent",
     flex: 1,
     justifyContent: "center",
   },

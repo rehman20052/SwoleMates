@@ -325,6 +325,7 @@ erDiagram
     float8 longitude "never sent to others"
     timestamptz updated_at
     boolean is_tester "fake profiles for testing"
+    boolean paused "hidden from other people's Discover"
   }
   auth_users ||--o| discover_profiles : "publishes card"
 ```
@@ -344,7 +345,7 @@ erDiagram
 
 ## Database functions
 
-- `discover_people()`: Returns people within 50 miles with a rounded distance. Reads `discover_profiles` today.
+- `discover_people()`: Returns people within 50 miles with a rounded distance. Reads `discover_profiles` today. A paused profile stays saved and is left out of everyone else's results.
 - `my_connections()`: Lists your requests and matches with the other person's card and last message.
 - `send_match_request(to_user_id)`: Sends a request, accepts theirs if they already asked, and reopens declined or unmatched ones.
 - `collapse_mutual_requests()`: Turns two requests between the same people into one match.

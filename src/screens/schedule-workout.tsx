@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
 import {
@@ -76,7 +76,7 @@ export function ScheduleWorkoutScreen({ partnerId: presetPartner }: { partnerId?
         }
       />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollBody>
           <Card gap={14}>
             <Field label="SwoleMate Partner">
