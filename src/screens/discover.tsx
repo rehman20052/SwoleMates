@@ -210,7 +210,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
                   setReviewingSkipped(true);
                 }}
               >
-                Look at skipped ({skipped.length})
+                {`Look at skipped (${skipped.length})`}
               </PrimaryButton>
               <SecondaryButton onPress={() => setFiltersOpen(true)}>Open filters</SecondaryButton>
             </>

@@ -1,5 +1,5 @@
 import { Image, ImageSource } from "expo-image";
-import { createContext, forwardRef, PropsWithChildren, ReactNode, useCallback, useContext, useEffect, useId, useRef, useState, type Ref } from "react";
+import { Children, createContext, forwardRef, PropsWithChildren, ReactNode, useCallback, useContext, useEffect, useId, useRef, useState, type Ref } from "react";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import {
   Dimensions,
@@ -412,6 +412,12 @@ export function SelectField<T extends string>({
   );
 }
 
+function buttonLabel(children: ReactNode) {
+  const parts = Children.toArray(children);
+  if (parts.length === 0 || parts.some((part) => typeof part !== "string" && typeof part !== "number")) return null;
+  return parts.join("");
+}
+
 type ButtonProps = Omit<PressableProps, "children" | "style"> & {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -419,6 +425,7 @@ type ButtonProps = Omit<PressableProps, "children" | "style"> & {
 
 export function PrimaryButton({ children, style, height = 52, fontSize = 15, ...props }: ButtonProps & { height?: number; fontSize?: number }) {
   const theme = useAppTheme();
+  const label = buttonLabel(children);
 
   return (
     <Pressable
@@ -430,9 +437,9 @@ export function PrimaryButton({ children, style, height = 52, fontSize = 15, ...
         style,
       ]}
     >
-      {typeof children === "string" ? (
+      {label != null ? (
         <AppText size={fontSize} weight="extrabold" color={theme.colors.primaryText}>
-          {children}
+          {label}
         </AppText>
       ) : (
         children
