@@ -359,6 +359,8 @@ export function SelectField<T extends string>({
   renderLabel,
   leading,
   icon = icons.chevronDown,
+  menuMaxHeight,
+  centerOn,
 }: {
   value: T;
   options: readonly T[];
@@ -366,9 +368,12 @@ export function SelectField<T extends string>({
   renderLabel?: (value: T) => string;
   leading?: (value: T) => ReactNode;
   icon?: ImageSource;
+  menuMaxHeight?: number;
+  centerOn?: T;
 }) {
   const theme = useAppTheme();
   const [open, setOpen] = useState(false);
+  const menuScroll = useRef<ScrollView>(null);
   const label = renderLabel ?? ((option: T) => option);
 
   return (
@@ -387,7 +392,13 @@ export function SelectField<T extends string>({
         <Icon source={icon} size={16} tint={theme.colors.text} />
       </Pressable>
       {open ? (
-        <View style={[styles.selectMenu, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border }]}>
+        <View style={[styles.selectMenu, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border, maxHeight: menuMaxHeight }]}>
+          <ScrollView
+            ref={menuScroll}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            style={menuMaxHeight ? { maxHeight: menuMaxHeight } : undefined}
+          >
           {options.map((option) => {
             const selected = option === value;
             return (
@@ -397,6 +408,15 @@ export function SelectField<T extends string>({
                   onChange(option);
                   setOpen(false);
                 }}
+                onLayout={
+                  option === centerOn
+                    ? (event) => {
+                        const { y, height } = event.nativeEvent.layout;
+                        const view = menuMaxHeight ?? height;
+                        menuScroll.current?.scrollTo({ y: Math.max(0, y - (view - height) / 2), animated: false });
+                      }
+                    : undefined
+                }
                 style={({ pressed }) => [styles.selectOption, pressed && { backgroundColor: theme.colors.border }]}
               >
                 {leading?.(option)}
@@ -406,6 +426,7 @@ export function SelectField<T extends string>({
               </Pressable>
             );
           })}
+          </ScrollView>
         </View>
       ) : null}
     </View>

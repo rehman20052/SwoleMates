@@ -4,8 +4,10 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { icons } from "@/assets";
-import { AppText, Avatar, Icon, IconButton, Screen } from "@/components/ui";
+import { WorkoutPlanCard } from "@/components/workout-plan";
+import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
 import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { clearCanceledWorkoutMessages, listMatchWorkouts, workoutPlanId, type PlannedWorkout } from "@/lib/workouts";
 import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
@@ -34,6 +36,8 @@ export function MatchChat({ userId }: { userId: string }) {
   const [person, setPerson] = useState<MatchConnection | null>(null);
   const [me, setMe] = useState("");
   const [messages, setMessages] = useState<MatchMessage[]>([]);
+  const [plans, setPlans] = useState<PlannedWorkout[]>([]);
+  const [plansLoaded, setPlansLoaded] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [safety, setSafety] = useState<null | "menu" | "unmatch" | "block" | "report" | "reported">(null);
@@ -71,9 +75,11 @@ export function MatchChat({ userId }: { userId: string }) {
   }, [userId]);
 
   useEffect(() => {
-    if (!person) return;
-    void markChatRead(person.requestId);
-  }, [person]);
+    if (!person || !plansLoaded) return;
+    const newest = messages[messages.length - 1]?.createdAt;
+    if (!newest) return;
+    void markChatRead(person.requestId, newest);
+  }, [person, messages, plansLoaded]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -114,9 +120,14 @@ export function MatchChat({ userId }: { userId: string }) {
   useEffect(() => {
     if (!person || !me) return;
     let active = true;
-    listMessages(person.requestId, me)
-      .then((items) => {
-        if (active) setMessages(items);
+    Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
+      .then(async ([items, workouts]) => {
+        if (!active) return;
+        const cleaned = await clearCanceledWorkoutMessages(person.requestId, workouts);
+        if (!active) return;
+        setMessages(cleaned.changed ? await listMessages(person.requestId, me) : items);
+        setPlans(cleaned.plans);
+        setPlansLoaded(true);
       })
       .catch((err: unknown) => {
         if (active) setError(err instanceof Error ? err.message : "Could not load messages.");
@@ -173,7 +184,11 @@ export function MatchChat({ userId }: { userId: string }) {
 
   async function refreshMessages() {
     if (!person) return;
-    setMessages(await listMessages(person.requestId, me));
+    const [items, loadedPlans] = await Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)]);
+    const cleaned = await clearCanceledWorkoutMessages(person.requestId, loadedPlans);
+    setMessages(cleaned.changed ? await listMessages(person.requestId, me) : items);
+    setPlans(cleaned.plans);
+    setPlansLoaded(true);
   }
 
   async function send() {
@@ -320,6 +335,11 @@ export function MatchChat({ userId }: { userId: string }) {
             </AppText>
           </Pressable>
         ) : null}
+        {person ? (
+          <PrimaryButton height={40} fontSize={14} onPress={() => nav.push({ name: "schedule", partnerId: person.userId })}>
+            Schedule workout
+          </PrimaryButton>
+        ) : null}
       </View>
 
       <Animated.View style={[styles.thread, { paddingBottom: keyboardLift }]}>
@@ -338,18 +358,36 @@ export function MatchChat({ userId }: { userId: string }) {
               </AppText>
             </View>
           ) : (
-            messages.map((message) => (
-              <Bubble
-                key={message.id}
-                message={message}
-                hidden={held?.id === message.id}
-                onHold={message.mine ? () => holdMessage(message) : undefined}
-                onBind={message.mine ? (node) => {
-                  if (node) bubbleNodes.current.set(message.id, node);
-                  else bubbleNodes.current.delete(message.id);
-                } : undefined}
-              />
-            ))
+            messages.map((message) => {
+              const planId = workoutPlanId(message.body);
+              const plan = planId ? plans.find((item) => item.id === planId) : undefined;
+              const otherPersonDeclined = plan?.status === "cancelled" && !!plan.cancelledBy && plan.cancelledBy !== plan.createdBy;
+              if (planId && plansLoaded && !plan) return null;
+              if (plan?.status === "cancelled" && !otherPersonDeclined) return null;
+              if (plan && person) {
+                return (
+                  <WorkoutPlanCard
+                    key={message.id}
+                    plan={plan}
+                    me={me}
+                    partnerName={person.name.split(/\s+/)[0] || person.name}
+                    onChange={() => void refreshMessages()}
+                  />
+                );
+              }
+              return (
+                <Bubble
+                  key={message.id}
+                  message={message}
+                  hidden={held?.id === message.id}
+                  onHold={message.mine && !planId ? () => holdMessage(message) : undefined}
+                  onBind={message.mine && !planId ? (node) => {
+                    if (node) bubbleNodes.current.set(message.id, node);
+                    else bubbleNodes.current.delete(message.id);
+                  } : undefined}
+                />
+              );
+            })
           )}
           {error ? (
             <AppText size={12} color={theme.colors.danger}>
@@ -610,7 +648,7 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     borderBottomWidth: 1,
-    gap: 12,
+    gap: 8,
     paddingBottom: 14,
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -629,7 +667,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginLeft: 32,
     paddingHorizontal: 14,
     paddingVertical: 11,
   },

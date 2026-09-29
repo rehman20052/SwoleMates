@@ -12,7 +12,7 @@ export type Route =
   | { name: "scheduled"; workoutId: string }
   | { name: "nutrition" };
 
-export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "scheduled"];
+export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "schedule", "scheduled"];
 
 type Navigation = {
   push: (route: Route) => void;

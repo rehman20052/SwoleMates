@@ -8,11 +8,13 @@ import {
   SafeAreaView,
   ImageBackground,
   Modal,
+  AppState,
+  Platform,
 } from 'react-native';
 
 import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
-import { chatAlertCount, subscribeChatAlerts } from '@/lib/matches';
+import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomingMessages } from '@/lib/matches';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
@@ -83,11 +85,20 @@ export default function App() {
     };
     refresh();
     const unsubscribe = subscribeChatAlerts(refresh);
-    const timer = setInterval(refresh, 15000);
+    const unsubscribeMessages = subscribeIncomingMessages();
+    const timer = setInterval(() => notifyChatAlerts(), 15000);
+    const appState = AppState.addEventListener('change', (next) => {
+      if (next === 'active') notifyChatAlerts();
+    });
+    const onFocus = () => notifyChatAlerts();
+    if (Platform.OS === 'web' && typeof window !== 'undefined') window.addEventListener('focus', onFocus);
     return () => {
       active = false;
       unsubscribe();
+      unsubscribeMessages();
       clearInterval(timer);
+      appState.remove();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.removeEventListener('focus', onFocus);
     };
   }, [currentScreen, activeTab, stack.length]);
 
@@ -620,12 +631,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     justifyContent: 'space-around',
   },
-  navItem: { alignItems: 'center', flex: 1 },
-  navIconWrap: { position: 'relative' },
+  navItem: { alignItems: 'center', flex: 1, overflow: 'visible' },
+  navIconWrap: { position: 'relative', overflow: 'visible' },
   chatBadge: {
     position: 'absolute',
-    top: -7,
-    right: -12,
+    top: -2,
+    right: -6,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -633,6 +644,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    zIndex: 2,
   },
   chatBadgeText: { color: '#000000', fontSize: 10, fontWeight: '800' },
   navIcon: { fontSize: 18, marginBottom: 2, opacity: 0.4 },

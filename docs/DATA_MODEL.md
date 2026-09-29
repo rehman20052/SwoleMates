@@ -21,14 +21,14 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 | `profile_prompt` | Profile | Prompt answers (3 or more) | Your own rows | Saved on profile save |
 | `user_availability` | Profile, Discover | Free days × times of day | Your own rows | Saved on profile save |
 | `user_goal` | Profile | Fitness goals | Your own rows | Saved on profile save |
-| `discover_filter` | Discover | Discover filter settings | Your own row | Not yet |
-| `discover_skip` | Discover | Profiles you skipped | Your own rows | Not yet |
+| `discover_filter` | Discover | Discover filter settings | Your own row | Yes |
+| `discover_skip` | Discover | Profiles you skipped | Your own rows | Yes |
 | `block` | Discover, Chat | People you blocked | Your own rows | Yes |
 | `report` | Chat | Why you reported someone, plus an explanation | You can file and read your own reports | Yes |
 | `match_requests` | Discover, Chat | Requests and matches, including unmatches | The two people involved; rules for accept, decline, cancel and unmatch | Yes |
 | `match_messages` | Chat | Chat messages | The two people in an accepted match | Yes |
 | `chat_read` | Chat | When you last read each chat | Your own rows | Not yet (stored on the device) |
-| `planned_workout` | Plans | Workouts planned with a match | Both people in the accepted match | Not yet |
+| `planned_workout` | Plans | Workouts planned with a match | Both people in the accepted match | Yes |
 | `attendance` | Plans | Who showed up | Both people can read; you check yourself in | Not yet |
 | `workout_logs` | Dashboard | Every workout, solo or planned | Your own rows | Not yet |
 | `nutrition_goal` | Nutrition | Daily targets and calculator inputs | Your own row | Not yet |
@@ -167,7 +167,7 @@ erDiagram
 
 ## Plans & workout logs
 
-*Plans and Dashboard tabs.* A planned workout belongs to an accepted match, and either person in it can see and edit it. It happens at a gym (`gym_id`) or somewhere else (`location`), never both. Each person checks themselves in through `attendance`. `workout_logs` holds every workout: solo ones you log yourself (`verified` false, no plan) and completed plans (`verified` true, linked to the plan), one log per person per plan. The streak and calendar are counted from `workout_logs`, so no table stores them.
+*Plans and Dashboard tabs.* A planned workout belongs to an accepted match, and either person in it can see and edit it. A chat request starts as `proposed`, with `notes` holding `{"acceptedBy":[...]}`. It becomes `scheduled` only after both people have accepted. It happens at a gym (`gym_id`) or somewhere else (`location`), never both. Each person checks themselves in through `attendance`. `workout_logs` holds every workout: solo ones you log yourself (`verified` false, no plan) and completed plans (`verified` true, linked to the plan), one log per person per plan. The streak and calendar are counted from `workout_logs`, so no table stores them.
 
 ```mermaid
 erDiagram
@@ -191,7 +191,7 @@ erDiagram
     time start_time
     varchar focus "Push, Pull, Legs, Upper, Full Body, Cardio"
     text notes
-    varchar status "scheduled (default), completed, cancelled"
+    varchar status "proposed until both accept, then scheduled, completed, cancelled"
     timestamptz created_at
   }
   attendance {

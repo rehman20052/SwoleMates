@@ -115,6 +115,105 @@ export function formatDistance(miles: number) {
   return rounded === 1 ? "1 mile away" : `${rounded} miles away`;
 }
 
+const accountId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isAccountId(id: string) {
+  return accountId.test(id);
+}
+
+function clampInt(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+async function currentUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
+type FilterRow = {
+  max_distance_miles?: number | null;
+  genders?: string[] | null;
+  min_age?: number | null;
+  max_age?: number | null;
+  experience_levels?: string[] | null;
+  match_availability?: boolean | null;
+};
+
+export function filtersFromRow(row: FilterRow | null): DiscoverFilters {
+  if (!row) return defaultDiscoverFilters;
+  const genders = (row.genders ?? []).filter((gender): gender is DiscoverGender => gender === "Male" || gender === "Female");
+  const experience = (row.experience_levels ?? []).filter((level): level is string =>
+    (experienceLevels as readonly string[]).includes(level),
+  );
+  const ageMin = clampInt(Number(row.min_age ?? defaultDiscoverFilters.ageMin), 18, 70);
+  const ageMax = clampInt(Number(row.max_age ?? defaultDiscoverFilters.ageMax), ageMin, 70);
+  return {
+    distance: clampInt(Number(row.max_distance_miles ?? defaultDiscoverFilters.distance), 5, 50),
+    genders,
+    ageMin,
+    ageMax,
+    experience,
+    matchAvailability: Boolean(row.match_availability),
+  };
+}
+
+function filterRow(userId: string, filters: DiscoverFilters) {
+  const ageMin = clampInt(filters.ageMin, 18, 70);
+  return {
+    user_id: userId,
+    max_distance_miles: clampInt(filters.distance, 5, 50),
+    genders: filters.genders.filter((gender) => gender === "Male" || gender === "Female"),
+    min_age: ageMin,
+    max_age: clampInt(filters.ageMax, ageMin, 70),
+    experience_levels: filters.experience.filter((level) => (experienceLevels as readonly string[]).includes(level)),
+    match_availability: filters.matchAvailability,
+  };
+}
+
+export async function loadDiscoverFilters() {
+  const me = await currentUserId();
+  if (!me) return null;
+  const { data, error } = await supabase
+    .from("discover_filter")
+    .select("max_distance_miles, genders, min_age, max_age, experience_levels, match_availability")
+    .eq("user_id", me)
+    .maybeSingle();
+  if (error || !data) return null;
+  return filtersFromRow(data);
+}
+
+export async function saveDiscoverFilters(filters: DiscoverFilters) {
+  const me = await currentUserId();
+  if (!me) return;
+  await supabase.from("discover_filter").upsert(filterRow(me, filters));
+}
+
+export async function loadSkippedIds() {
+  const me = await currentUserId();
+  if (!me) return [];
+  const { data, error } = await supabase.from("discover_skip").select("skipped_user_id").eq("user_id", me);
+  if (error || !data) return [];
+  return data.map((row) => row.skipped_user_id).filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+export async function rememberSkip(skippedUserId: string) {
+  if (!isAccountId(skippedUserId)) return;
+  const me = await currentUserId();
+  if (!me || me === skippedUserId) return;
+  await supabase.from("discover_skip").upsert(
+    { user_id: me, skipped_user_id: skippedUserId },
+    { onConflict: "user_id,skipped_user_id" },
+  );
+}
+
+export async function forgetSkip(skippedUserId: string) {
+  if (!isAccountId(skippedUserId)) return;
+  const me = await currentUserId();
+  if (!me) return;
+  await supabase.from("discover_skip").delete().eq("user_id", me).eq("skipped_user_id", skippedUserId);
+}
+
 export function discoverSetupMessage(error: unknown) {
   const message =
     error instanceof Error
