@@ -1,7 +1,17 @@
-import { createContext, PropsWithChildren, useContext, useMemo, useState } from "react";
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
-import { defaultDiscoverFilters, type DiscoverFilters } from "@/lib/discover";
+import {
+  defaultDiscoverFilters,
+  forgetSkip,
+  isAccountId,
+  loadDiscoverFilters,
+  loadSkippedIds,
+  rememberSkip,
+  saveDiscoverFilters,
+  type DiscoverFilters,
+} from "@/lib/discover";
+import { supabase } from "@/lib/supabase";
 
 export type Gender = "Male" | "Female" | "Any";
 
@@ -115,6 +125,7 @@ type AppDataContextValue = AppData & {
   block: (partnerId: string) => void;
   updatePreferences: (preferences: Partial<Preferences>) => void;
   updateDiscoverFilters: (filters: DiscoverFilters) => void;
+  discoverPrefsLoaded: boolean;
   completeWorkout: (workoutId: string) => void;
   updateNutrition: (nutrition: Partial<NutritionTotals>) => void;
   addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">) => void;
@@ -277,6 +288,62 @@ const focusTitles: Record<WorkoutFocus, string> = {
 
 export function AppDataProvider({ children }: PropsWithChildren) {
   const [data, setData] = useState<AppData>(seedData);
+  const [discoverPrefsLoaded, setDiscoverPrefsLoaded] = useState(false);
+  const filtersTouched = useRef(false);
+  const filterSave = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFilters = useRef<DiscoverFilters | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const applySaved = async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!active) return;
+      if (!session.session?.user.id) {
+        setDiscoverPrefsLoaded(true);
+        return;
+      }
+      const [filters, skipped] = await Promise.all([loadDiscoverFilters(), loadSkippedIds()]);
+      if (!active) return;
+      setData((current) => ({
+        ...current,
+        discoverFilters: filtersTouched.current ? current.discoverFilters : (filters ?? current.discoverFilters),
+        reviewed: [...new Set([...current.reviewed, ...skipped])],
+      }));
+      setDiscoverPrefsLoaded(true);
+    };
+
+    void applySaved();
+    const { data: auth } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        filtersTouched.current = false;
+        setDiscoverPrefsLoaded(false);
+        setTimeout(() => {
+          void applySaved();
+        }, 0);
+      }
+      if (event === "SIGNED_OUT") {
+        filtersTouched.current = false;
+        if (filterSave.current) clearTimeout(filterSave.current);
+        setData((current) => ({
+          ...current,
+          discoverFilters: defaultDiscoverFilters,
+          reviewed: current.reviewed.filter((id) => !isAccountId(id)),
+        }));
+        setDiscoverPrefsLoaded(true);
+      }
+    });
+
+    return () => {
+      active = false;
+      auth.subscription.unsubscribe();
+      if (filterSave.current) {
+        clearTimeout(filterSave.current);
+        filterSave.current = null;
+        if (pendingFilters.current) void saveDiscoverFilters(pendingFilters.current);
+      }
+    };
+  }, []);
 
   const value = useMemo<AppDataContextValue>(() => {
     const update = (fn: (current: AppData) => AppData) => setData(fn);
@@ -290,19 +357,21 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             current.invites.some((i) => i.partnerId === partnerId);
           return {
             ...current,
-            reviewed: [...current.reviewed, partnerId],
+            reviewed: current.reviewed.includes(partnerId) ? current.reviewed : [...current.reviewed, partnerId],
             invites:
               interested && !connected && getPartner(partnerId)
                 ? [...current.invites, { partnerId, direction: "outgoing" }]
                 : current.invites,
           };
         });
+        if (!interested) void rememberSkip(partnerId);
       },
       clearReview(partnerId) {
         update((current) => ({
           ...current,
           reviewed: current.reviewed.filter((id) => id !== partnerId),
         }));
+        void forgetSkip(partnerId);
       },
       respondToInvite(partnerId, accept) {
         update((current) => {
@@ -388,8 +457,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       updatePreferences(preferences) {
         update((current) => ({ ...current, preferences: { ...current.preferences, ...preferences } }));
       },
+      discoverPrefsLoaded,
       updateDiscoverFilters(filters) {
+        filtersTouched.current = true;
+        pendingFilters.current = filters;
         update((current) => ({ ...current, discoverFilters: filters }));
+        if (filterSave.current) clearTimeout(filterSave.current);
+        filterSave.current = setTimeout(() => {
+          pendingFilters.current = null;
+          void saveDiscoverFilters(filters);
+        }, 250);
       },
       completeWorkout(workoutId) {
         update((current) => {
@@ -503,7 +580,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         update((current) => ({ ...current, reviewed: [] }));
       },
     };
-  }, [data]);
+  }, [data, discoverPrefsLoaded]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }

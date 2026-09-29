@@ -9,6 +9,7 @@ import {
   formatDistance,
   matchesDiscoverFilters,
   publishDiscoverProfile,
+  saveDiscoverFilters,
   type DiscoverCandidate,
 } from "@/lib/discover";
 import { isDiscoverTester, listConnections, sendMatchRequest } from "@/lib/matches";
@@ -21,7 +22,7 @@ import { useAppData } from "@/state/app-data";
 
 export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const nav = useNavigation();
-  const { discoverFilters, updateDiscoverFilters, reviewed, blocked, conversations, invites, review } = useAppData();
+  const { discoverFilters, discoverPrefsLoaded, updateDiscoverFilters, reviewed, blocked, conversations, invites, review } = useAppData();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [reviewingSkipped, setReviewingSkipped] = useState(false);
   const [skippedIndex, setSkippedIndex] = useState(0);
@@ -102,7 +103,10 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
         filters={discoverFilters}
         profile={profile}
         onChange={updateDiscoverFilters}
-        onClose={() => setFiltersOpen(false)}
+        onClose={() => {
+          void saveDiscoverFilters(discoverFilters);
+          setFiltersOpen(false);
+        }}
       />
     );
   }
@@ -128,7 +132,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
         </View>
       )}
 
-      {status === "loading" ? (
+      {!discoverPrefsLoaded || status === "loading" ? (
         <Card style={styles.notice}>
           <AppText muted>Looking for people near you...</AppText>
         </Card>

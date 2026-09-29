@@ -144,6 +144,16 @@ export function notifyChatAlerts() {
   alertListeners.forEach((listener) => listener());
 }
 
+export function subscribeIncomingMessages() {
+  const channel = supabase
+    .channel("match-message-alerts")
+    .on("postgres_changes", { event: "*", schema: "public", table: "match_messages" }, () => notifyChatAlerts())
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 async function signedInUserId() {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
@@ -202,6 +212,14 @@ export async function clearUnopenedMatchReads(matchIds: string[]) {
   if (changed) notifyChatAlerts();
 }
 
+export async function syncIncomingReadCursors(matchIds: string[]) {
+  const me = await signedInUserId();
+  const ids = [...new Set(matchIds)];
+  if (!me || ids.length === 0) return;
+  const { data } = await supabase.from("match_messages").select("match_id, sender_id, created_at").in("match_id", ids);
+  reconcileChatReads(me, (data ?? []) as MessageStamp[]);
+}
+
 export async function chatReadTimes() {
   const me = await signedInUserId();
   if (!me) return {};
@@ -214,13 +232,78 @@ export async function openedChatIds() {
   return new Set(Object.keys(readMap(me)));
 }
 
-export async function markChatRead(requestId: string) {
+export async function markChatRead(requestId: string, at?: string) {
   const me = await signedInUserId();
-  if (!me) return;
+  if (!me || !at) return;
+  const parsed = new Date(at);
+  if (Number.isNaN(parsed.getTime())) return;
+  const stamp = parsed.toISOString();
   const reads = readMap(me);
-  reads[requestId] = new Date().toISOString();
+  const previous = reads[requestId];
+  if (previous && new Date(previous).getTime() >= new Date(stamp).getTime()) return;
+  reads[requestId] = stamp;
   saveReadMap(me, reads);
   notifyChatAlerts();
+}
+
+type MessageStamp = { match_id?: string; sender_id?: string; created_at?: string; body?: string };
+
+const workoutPlanMarker = "workout-plan:";
+
+function workoutPlanIdFromBody(body: string) {
+  const line = body
+    .split("\n")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(workoutPlanMarker));
+  return line ? line.slice(workoutPlanMarker.length).trim() : null;
+}
+
+async function answeredWorkoutIds(me: string, matchIds: string[]) {
+  const ids = [...new Set(matchIds)];
+  const answered = new Set<string>();
+  if (ids.length === 0) return answered;
+  const { data } = await supabase.from("planned_workout").select("planned_workout_id, created_by, notes").in("match_id", ids);
+  for (const row of (data ?? []) as { planned_workout_id?: string; created_by?: string; notes?: string | null }[]) {
+    if (!row.planned_workout_id || !row.created_by) continue;
+    let notes: { acceptedBy?: unknown; cancelledBy?: unknown } = {};
+    try {
+      notes = JSON.parse(row.notes ?? "") as { acceptedBy?: unknown; cancelledBy?: unknown };
+    } catch {
+      notes = {};
+    }
+    const acceptedBy = Array.isArray(notes.acceptedBy) ? notes.acceptedBy.filter((id): id is string => typeof id === "string") : [];
+    const declinedByMe = notes.cancelledBy === me;
+    const acceptedTheirs = row.created_by !== me && acceptedBy.includes(me);
+    if (declinedByMe || acceptedTheirs) answered.add(row.planned_workout_id);
+  }
+  return answered;
+}
+
+function reconcileChatReads(me: string, rows: MessageStamp[]) {
+  const reads = readMap(me);
+  const byMatch = new Map<string, { at: string; mine: boolean }[]>();
+  for (const row of rows) {
+    if (!row.match_id || !row.sender_id || !row.created_at) continue;
+    const items = byMatch.get(row.match_id) ?? [];
+    items.push({ at: row.created_at, mine: row.sender_id === me });
+    byMatch.set(row.match_id, items);
+  }
+  let changed = false;
+  for (const [matchId, items] of byMatch) {
+    const readAt = reads[matchId];
+    if (!readAt) continue;
+    const readMs = new Date(readAt).getTime();
+    if (Number.isNaN(readMs)) continue;
+    const newest = items.reduce((left, right) => (new Date(left.at).getTime() >= new Date(right.at).getTime() ? left : right));
+    if (newest.mine || readMs <= new Date(newest.at).getTime()) continue;
+    const stampedOnMessage = items.some((item) => Math.abs(new Date(item.at).getTime() - readMs) < 1500);
+    if (stampedOnMessage) continue;
+    const outgoing = items.filter((item) => item.mine).sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())[0];
+    if (outgoing) reads[matchId] = new Date(outgoing.at).toISOString();
+    else delete reads[matchId];
+    changed = true;
+  }
+  if (changed) saveReadMap(me, reads);
 }
 
 export async function chatAlertCount() {
@@ -234,31 +317,38 @@ export async function chatAlertCount() {
     return 0;
   }
 
-  const reads = readMap(me);
+  let reads = readMap(me);
   const blocked = await blockedUserIds();
   const visible = connections.filter((person) => !blocked.has(person.userId));
   const incoming = visible.filter((person) => person.status === "pending" && person.direction === "incoming").length;
   const accepted = visible.filter((person) => person.status === "accepted");
-  const latest = new Map<string, { sender: string; at: string }>();
+  const latest = new Map<string, { sender: string; at: string; body: string }>();
   const chatted = new Set<string>();
 
   if (accepted.length > 0) {
     const { data } = await supabase
       .from("match_messages")
-      .select("match_id, sender_id, created_at")
+      .select("match_id, sender_id, created_at, body")
       .in("match_id", accepted.map((person) => person.requestId))
       .order("created_at", { ascending: false });
-    for (const row of (data ?? []) as { match_id?: string; sender_id?: string; created_at?: string }[]) {
+    const rows = (data ?? []) as MessageStamp[];
+    reconcileChatReads(me, rows);
+    reads = readMap(me);
+    for (const row of rows) {
       if (!row.match_id || !row.sender_id || !row.created_at) continue;
       if (row.sender_id === me) chatted.add(row.match_id);
-      if (!latest.has(row.match_id)) latest.set(row.match_id, { sender: row.sender_id, at: row.created_at });
+      if (!latest.has(row.match_id)) latest.set(row.match_id, { sender: row.sender_id, at: row.created_at, body: row.body ?? "" });
     }
   }
+
+  const answeredPlans = await answeredWorkoutIds(me, accepted.map((person) => person.requestId));
 
   const unreadChats = accepted.filter((person) => {
     const last = latest.get(person.requestId);
     if (!last) return true;
     if (last.sender === me) return false;
+    const planId = workoutPlanIdFromBody(last.body ?? "");
+    if (planId && answeredPlans.has(planId)) return false;
     if (!chatted.has(person.requestId)) return true;
     const readAt = reads[person.requestId];
     if (!readAt) return true;

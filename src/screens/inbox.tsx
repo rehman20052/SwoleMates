@@ -2,8 +2,9 @@ import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, Avatar, Screen, TitleBar } from "@/components/ui";
-import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, subscribeChatAlerts, type MatchConnection } from "@/lib/matches";
+import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, subscribeChatAlerts, syncIncomingReadCursors, type MatchConnection } from "@/lib/matches";
 import { blockedUserIds } from "@/lib/safety";
+import { answeredIncomingWorkoutIds, clearCanceledWorkoutPreviews, workoutPlanId } from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -17,6 +18,8 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   const nav = useNavigation();
   const [connections, setConnections] = useState<MatchConnection[]>([]);
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
+  const [readTimes, setReadTimes] = useState<Record<string, string>>({});
+  const [answeredWorkouts, setAnsweredWorkouts] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [requestTab, setRequestTab] = useState<RequestTab>(savedRequestTab);
@@ -26,30 +29,39 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
     setRequestTab(tab);
   };
 
-  const load = useCallback(() => {
+  const load = useCallback((background = false) => {
     let active = true;
-    setStatus("loading");
+    if (!background) setStatus("loading");
     listConnections()
       .then(async (people) => {
         const acceptedIds = people.filter((person) => person.status === "accepted").map((person) => person.requestId);
-        const [reads, latest] = await Promise.all([chatReadTimes(), latestMessageBodies(acceptedIds)]);
+        await clearCanceledWorkoutPreviews(acceptedIds);
+        await syncIncomingReadCursors(acceptedIds);
+        const [reads, latest, answered] = await Promise.all([
+          chatReadTimes(),
+          latestMessageBodies(acceptedIds),
+          answeredIncomingWorkoutIds(acceptedIds),
+        ]);
         const withMessages = people.map((person) => {
           const message = latest.get(person.requestId);
           return message ? { ...person, lastMessage: message.body, lastMessageMine: message.mine, lastMessageAt: message.at } : person;
         });
         await clearUnopenedMatchReads(withMessages.filter((person) => person.status === "accepted" && !person.lastMessage).map((person) => person.requestId));
         const blocked = await blockedUserIds();
-        return { people: withMessages.filter((person) => !blocked.has(person.userId)), reads: await chatReadTimes() };
+        return { people: withMessages.filter((person) => !blocked.has(person.userId)), reads: await chatReadTimes(), answered };
       })
-      .then(({ people, reads }) => {
+      .then(({ people, reads, answered }) => {
         if (!active) return;
         setConnections(people);
+        setReadTimes(reads);
+        setAnsweredWorkouts(answered);
         setOpenedIds(new Set(Object.keys(reads)));
         setStatus("ready");
         setMessage(null);
       })
       .catch((error: unknown) => {
         if (!active) return;
+        if (background) return;
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Could not load chats.");
       });
@@ -60,7 +72,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
 
   useEffect(() => load(), [load]);
 
-  useEffect(() => subscribeChatAlerts(() => load()), [load]);
+  useEffect(() => subscribeChatAlerts(() => load(true)), [load]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || document.getElementById("chat-scroll-style")) return;
@@ -75,7 +87,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   const sent = requests.filter((person) => person.direction === "outgoing");
   const shownRequests = requestTab === "received" ? received : sent;
   const chats = connections.filter((person) => person.status === "accepted");
-  const grouped = groupChats(chats);
+  const grouped = groupChats(chats, answeredWorkouts);
 
   return (
     <Screen style={styles.screen}>
@@ -116,8 +128,8 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
           <View style={styles.groups}>
             {chats.length > 0 ? (
               <>
-                <ChatGroup people={grouped.attention} openedIds={openedIds} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
-                <ChatGroup title="Waiting" people={grouped.waiting} openedIds={openedIds} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
+                <ChatGroup people={grouped.attention} openedIds={openedIds} readTimes={readTimes} answeredWorkouts={answeredWorkouts} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
+                <ChatGroup title="Waiting" people={grouped.waiting} openedIds={openedIds} readTimes={readTimes} answeredWorkouts={answeredWorkouts} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} />
               </>
             ) : (
               <AppText size={13} muted>
@@ -131,11 +143,16 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   );
 }
 
-function groupChats(chats: MatchConnection[]) {
+function repliedToWorkout(person: MatchConnection, answeredWorkouts: Set<string>) {
+  const planId = workoutPlanId(person.lastMessage);
+  return !!planId && answeredWorkouts.has(planId);
+}
+
+function groupChats(chats: MatchConnection[], answeredWorkouts: Set<string>) {
   const attention: MatchConnection[] = [];
   const waiting: MatchConnection[] = [];
   for (const person of chats) {
-    if (person.lastMessageMine) waiting.push(person);
+    if (person.lastMessageMine || repliedToWorkout(person, answeredWorkouts)) waiting.push(person);
     else attention.push(person);
   }
   const byRecent = (left: MatchConnection, right: MatchConnection) => right.lastMessageAt.localeCompare(left.lastMessageAt);
@@ -145,17 +162,29 @@ function groupChats(chats: MatchConnection[]) {
   };
 }
 
+function hasUnreadMessage(person: MatchConnection, readTimes: Record<string, string>, answeredWorkouts: Set<string>) {
+  if (!person.lastMessage || person.lastMessageMine || repliedToWorkout(person, answeredWorkouts) || !person.lastMessageAt) return false;
+  const readAt = readTimes[person.requestId];
+  if (!readAt) return true;
+  return new Date(person.lastMessageAt).getTime() > new Date(readAt).getTime();
+}
+
 function ChatGroup({
   title,
   people,
   openedIds,
+  readTimes,
+  answeredWorkouts,
   onOpen,
 }: {
   title?: string;
   people: MatchConnection[];
   openedIds: Set<string>;
+  readTimes: Record<string, string>;
+  answeredWorkouts: Set<string>;
   onOpen: (person: MatchConnection) => void;
 }) {
+  const theme = useAppTheme();
   if (people.length === 0) return null;
   return (
     <View style={styles.section}>
@@ -181,8 +210,11 @@ function ChatGroup({
               person={person}
               isNew={!person.lastMessage && !openedIds.has(person.requestId)}
               startChat={!person.lastMessage && openedIds.has(person.requestId)}
+              unread={hasUnreadMessage(person, readTimes, answeredWorkouts)}
+              replied={repliedToWorkout(person, answeredWorkouts)}
             />
           </View>
+          {hasUnreadMessage(person, readTimes, answeredWorkouts) ? <View style={[styles.newDot, { backgroundColor: theme.colors.primary }]} /> : null}
         </Pressable>
       ))}
     </View>
@@ -254,7 +286,7 @@ function RequestBox({ people, onView }: { people: MatchConnection[]; onView: (pe
   );
 }
 
-function ChatPreview({ person, isNew, startChat }: { person: MatchConnection; isNew: boolean; startChat: boolean }) {
+function ChatPreview({ person, isNew, startChat, unread, replied }: { person: MatchConnection; isNew: boolean; startChat: boolean; unread?: boolean; replied?: boolean }) {
   const theme = useAppTheme();
   if (startChat) {
     return (
@@ -264,10 +296,10 @@ function ChatPreview({ person, isNew, startChat }: { person: MatchConnection; is
     );
   }
   if (!isNew) {
-    const sent = !person.lastMessage || person.lastMessageMine;
+    const sent = !unread && (!person.lastMessage || person.lastMessageMine || replied);
     return (
-      <AppText size={13} weight={sent ? "regular" : "medium"} muted={sent} numberOfLines={1}>
-        {person.lastMessage || "Say hello"}
+      <AppText size={13} weight={sent ? "regular" : "extrabold"} muted={sent} numberOfLines={1}>
+        {person.lastMessage.split("\n")[0] || "Say hello"}
       </AppText>
     );
   }
