@@ -234,8 +234,8 @@ export async function openedChatIds() {
 
 export async function markChatRead(requestId: string, at?: string) {
   const me = await signedInUserId();
-  if (!me || !at) return;
-  const parsed = new Date(at);
+  if (!me) return;
+  const parsed = new Date(at ?? Date.now());
   if (Number.isNaN(parsed.getTime())) return;
   const stamp = parsed.toISOString();
   const reads = readMap(me);
@@ -383,10 +383,13 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
   if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Dashboard settings before matching again.");
 
-  // The database function's argument used to be named to_user_id, which clashes with the
-  // column and raises "column reference to_user_id is ambiguous". A normal request does
-  // not need that function.
-  const { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
+  // The database this project is using still names the argument to_user_id.
+  // A newer script renames it to target_user so it does not clash with the column.
+  let { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
+  if (error && `${error.message} ${error.hint ?? ""}`.includes("to_user_id")) {
+    const retry = await supabase.rpc("send_match_request", { to_user_id: toUserId });
+    error = retry.error;
+  }
   if (error) await sendMatchRequestDirect(me, toUserId);
   notifyChatAlerts();
 }

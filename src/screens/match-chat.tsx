@@ -118,6 +118,14 @@ export function MatchChat({ userId }: { userId: string }) {
   }, [editing]);
 
   useEffect(() => {
+    if (Platform.OS !== "web" || document.getElementById("thread-scroll-style")) return;
+    const style = document.createElement("style");
+    style.id = "thread-scroll-style";
+    style.textContent = "#thread-scroll, #thread-scroll * { scrollbar-width: none; } #thread-scroll::-webkit-scrollbar, #thread-scroll *::-webkit-scrollbar { display: none; width: 0; height: 0; }";
+    document.head.appendChild(style);
+  }, []);
+
+  useEffect(() => {
     if (!person || !me) return;
     let active = true;
     Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
@@ -134,6 +142,50 @@ export function MatchChat({ userId }: { userId: string }) {
       });
     return () => {
       active = false;
+    };
+  }, [person, me]);
+
+  useEffect(() => {
+    if (!person || !me) return;
+    let active = true;
+    const pull = () => {
+      void Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
+        .then(([items, workouts]) => {
+          if (!active) return;
+          setMessages((current) => {
+            const same =
+              current.length === items.length &&
+              current.every((item, index) => item.id === items[index]?.id && item.body === items[index]?.body && item.editedAt === items[index]?.editedAt);
+            return same ? current : items;
+          });
+          setPlans((current) => {
+            const same =
+              current.length === workouts.length &&
+              current.every((plan, index) => {
+                const next = workouts[index];
+                return (
+                  plan.id === next?.id &&
+                  plan.status === next.status &&
+                  plan.cancelledBy === next.cancelledBy &&
+                  plan.acceptedBy.join() === next.acceptedBy.join() &&
+                  plan.attendedBy.join() === next.attendedBy.join()
+                );
+              });
+            return same ? current : workouts;
+          });
+        })
+        .catch(() => undefined);
+    };
+    const timer = setInterval(pull, 2000);
+    const channel = supabase
+      .channel(`match-messages-${person.requestId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, pull)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, pull)
+      .subscribe();
+    return () => {
+      active = false;
+      clearInterval(timer);
+      void supabase.removeChannel(channel);
     };
   }, [person, me]);
 
@@ -345,10 +397,12 @@ export function MatchChat({ userId }: { userId: string }) {
       <Animated.View style={[styles.thread, { paddingBottom: keyboardLift }]}>
         <ScrollView
           ref={scrollRef}
+          nativeID="thread-scroll"
           style={{ flex: 1 }}
           contentContainerStyle={styles.messages}
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.length === 0 ? (

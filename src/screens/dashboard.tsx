@@ -1,8 +1,9 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import {
   AppText,
+  Avatar,
   Card,
   Input,
   PrimaryButton,
@@ -13,8 +14,15 @@ import {
   SectionLabel,
   TitleBar,
 } from "@/components/ui";
-import { getPartner } from "@/data/partners";
 import { type UserProfile } from "@/lib/profile";
+import {
+  completeWorkout as checkInWorkout,
+  listCheckInWorkouts,
+  meetupMissed,
+  showUpPromptReady,
+  type CheckInWorkout,
+  type PlannedWorkout,
+} from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { SettingsScreen } from "@/screens/settings";
 import {
@@ -135,6 +143,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [dashTab, setDashTab] = useState<"home" | "check-in">("home");
+  const [reminders, setReminders] = useState<CheckInWorkout[]>([]);
+  const [reminderNow, setReminderNow] = useState(() => new Date());
+  const [reminderBusy, setReminderBusy] = useState<string | null>(null);
+  const [reminderError, setReminderError] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -143,15 +156,33 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const {
-    completedWorkoutIds,
-    completeWorkout,
     deleteWorkoutLog,
     logWorkout,
     logs,
     nutrition,
     updateWorkoutLog,
-    workouts,
   } = useAppData();
+
+  useEffect(() => {
+    const timer = setInterval(() => setReminderNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (dashTab !== "home") return;
+    let active = true;
+    listCheckInWorkouts()
+      .then((items) => {
+        if (!active) return;
+        setReminders(items.filter((item) => item.plan.status === "scheduled").slice(0, 2));
+      })
+      .catch(() => {
+        if (active) setReminders([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [dashTab]);
 
   const todayIso = daysFromToday(0);
   const currentWeekStart = useMemo(() => startOfWeek(new Date()), []);
@@ -171,10 +202,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const weeklyLogs = logs.filter((log) => log.date >= weekStartIso && log.date <= weekEndIso);
   const weeklyStreak = getWeeklyStreak(logs, WEEKLY_WORKOUT_GOAL);
   const weeklyProgress = Math.min(weeklyLogs.length / WEEKLY_WORKOUT_GOAL, 1);
-  const nextWorkout = [...workouts]
-    .filter((workout) => workout.date >= todayIso && !completedWorkoutIds.includes(workout.id))
-    .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)))[0];
-  const nextPartner = nextWorkout ? getPartner(nextWorkout.partnerId) : null;
   const sortedLogs = [...logs].sort(sortByDateDesc);
   const visibleLogs = showAllActivities ? sortedLogs : sortedLogs.slice(0, 2);
   const selectedDayLogs = [...(logsByDate.get(selectedCalendarDate) ?? [])].sort(sortByDateDesc);
@@ -194,10 +221,19 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setTimeout(() => setNotice(null), 2400);
   }
 
-  function handleCompleteWorkout() {
-    if (!nextWorkout) return;
-    completeWorkout(nextWorkout.id);
-    showNotice("Workout added to your session log.");
+  async function checkInReminder(item: CheckInWorkout) {
+    if (reminderBusy) return;
+    setReminderBusy(item.plan.id);
+    setReminderError(null);
+    try {
+      await checkInWorkout(item.plan);
+      const items = await listCheckInWorkouts();
+      setReminders(items.filter((row) => row.plan.status === "scheduled").slice(0, 2));
+    } catch (err) {
+      setReminderError(err instanceof Error ? err.message : "Could not check in.");
+    } finally {
+      setReminderBusy(null);
+    }
   }
 
   function handleSaveLog() {
@@ -260,7 +296,14 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         }
       />
 
-      <ScrollBody contentContainerStyle={styles.body}>
+      <View style={styles.dashTabs}>
+        <DashTab label="Home" selected={dashTab === "home"} onPress={() => setDashTab("home")} />
+        <DashTab label="Check in" selected={dashTab === "check-in"} onPress={() => setDashTab("check-in")} />
+      </View>
+
+      {dashTab === "check-in" ? <CheckInPanel /> : null}
+
+      {dashTab === "home" ? <ScrollBody contentContainerStyle={styles.body}>
         <View style={styles.hero}>
           <AppText size={13} weight="bold" primary upper>
             SwoleMates
@@ -345,49 +388,37 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           </View>
         </Card>
 
-        <Card padding={18} radius={22} gap={16}>
-          <View style={styles.sectionHeader}>
-            <SectionLabel>Today</SectionLabel>
-            {nextWorkout ? (
-              <View style={[styles.pill, { backgroundColor: theme.colors.primaryTint }]}>
-                <AppText size={11} weight="bold" primary>
-                  {relativeDay(nextWorkout.date)}
-                </AppText>
+        {reminders.length > 0 ? (
+          <Card padding={18} radius={22} gap={16}>
+            {reminders.map((item, index) => (
+              <View key={item.plan.id} style={[styles.reminder, index > 0 && styles.reminderNext, index > 0 && { borderTopColor: theme.colors.border }]}>
+                <View style={styles.partnerRow}>
+                  <PartnerFace name={item.partnerName} photo={item.partnerPhoto} size={48} />
+                  <View style={styles.partnerCopy}>
+                    <SectionLabel>{relativeDay(item.plan.date)}</SectionLabel>
+                    <AppText size={18} weight="extrabold">
+                      {item.partnerName}
+                    </AppText>
+                    <AppText size={13} muted style={{ lineHeight: 20 }}>
+                      {item.plan.focus} • {item.plan.time}
+                    </AppText>
+                  </View>
+                </View>
+                {item.checkedIn ? (
+                  <AppText size={13} muted>
+                    Checked in. Waiting on {item.partnerName}.
+                  </AppText>
+                ) : null}
+                {showUpPromptReady(item.plan, reminderNow) && !item.checkedIn && !meetupMissed(item.plan, reminderNow) ? (
+                  <PrimaryButton height={44} disabled={reminderBusy === item.plan.id} onPress={() => void checkInReminder(item)}>
+                    {reminderBusy === item.plan.id ? "Checking in..." : "Check in"}
+                  </PrimaryButton>
+                ) : null}
               </View>
-            ) : null}
-          </View>
-
-          {nextWorkout ? (
-            <>
-              <View style={{ gap: 6 }}>
-                <AppText size={21} weight="extrabold">
-                  {nextWorkout.title}
-                </AppText>
-                <AppText size={13} muted style={{ lineHeight: 20 }}>
-                  {nextWorkout.gym} • {nextWorkout.time}
-                  {nextPartner ? ` • ${nextPartner.name.split(" ")[0]}` : ""}
-                </AppText>
-              </View>
-              <PrimaryButton height={48} onPress={handleCompleteWorkout}>
-                Mark Workout Complete
-              </PrimaryButton>
-            </>
-          ) : (
-            <>
-              <View style={{ gap: 6 }}>
-                <AppText size={21} weight="extrabold">
-                  No workout planned yet
-                </AppText>
-                <AppText size={13} muted style={{ lineHeight: 20 }}>
-                  Schedule with a match or log your own workout after training.
-                </AppText>
-              </View>
-              <PrimaryButton height={48} onPress={() => nav.push({ name: "schedule" })}>
-                Schedule Workout
-              </PrimaryButton>
-            </>
-          )}
-        </Card>
+            ))}
+          </Card>
+        ) : null}
+        {reminderError ? <AppText size={13} color={theme.colors.danger}>{reminderError}</AppText> : null}
 
         <View style={styles.quickActions}>
           <SecondaryButton height={46} fontSize={13} style={styles.quickButton} onPress={() => nav.setTab("Discover")}>
@@ -538,7 +569,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             </Card>
           </Pressable>
         ) : null}
-      </ScrollBody>
+      </ScrollBody> : null}
 
       <Modal animationType="slide" transparent visible={showCalendar} onRequestClose={() => setShowCalendar(false)}>
         <View style={styles.modalOverlay}>
@@ -706,7 +737,179 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   );
 }
 
+function checkInOpensLabel(plan: PlannedWorkout) {
+  return plan.time;
+}
+
+function DashTab({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const theme = useAppTheme();
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[
+        styles.dashTab,
+        {
+          backgroundColor: selected ? theme.colors.primary : theme.colors.surface,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
+        },
+      ]}
+    >
+      <AppText size={13} weight="extrabold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
+function PartnerFace({ name, photo, size }: { name: string; photo: string | null; size: number }) {
+  const theme = useAppTheme();
+  if (photo) return <Avatar source={{ uri: photo }} size={size} />;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: theme.colors.primaryTint,
+      }}
+    >
+      <AppText size={size * 0.38} weight="black" primary>
+        {name.slice(0, 1).toUpperCase()}
+      </AppText>
+    </View>
+  );
+}
+
+function CheckInPanel() {
+  const theme = useAppTheme();
+  const [items, setItems] = useState<CheckInWorkout[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    listCheckInWorkouts()
+      .then((workouts) => {
+        if (!active) return;
+        setItems(workouts);
+        setStatus("ready");
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setStatus("error");
+        setMessage(err instanceof Error ? err.message : "Could not load workouts.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function checkIn(item: CheckInWorkout) {
+    if (busyId) return;
+    setBusyId(item.plan.id);
+    setMessage(null);
+    try {
+      await checkInWorkout(item.plan);
+      const workouts = await listCheckInWorkouts();
+      setItems(workouts);
+      setStatus("ready");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not check in.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <ScrollBody contentContainerStyle={styles.body}>
+      <AppText muted style={{ lineHeight: 20 }}>
+        Check in when a workout starts. It counts when both of you do.
+      </AppText>
+      {status === "loading" ? <AppText muted>Loading workouts...</AppText> : null}
+      {status === "error" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
+      {status === "ready" && items.length === 0 ? (
+        <Card padding={16} radius={20} gap={8}>
+          <AppText size={16} weight="extrabold">
+            Nothing to check in for
+          </AppText>
+          <AppText size={13} muted style={{ lineHeight: 20 }}>
+            Scheduled workouts show up here.
+          </AppText>
+        </Card>
+      ) : null}
+      {items.map((item) => {
+        const { plan, partnerName, checkedIn, partnerCheckedIn } = item;
+        const both = plan.status === "completed" || (checkedIn && partnerCheckedIn);
+        const missed = meetupMissed(plan, now);
+        const ready = showUpPromptReady(plan, now) && !checkedIn && !missed && !both;
+        const detail = both
+          ? `You and ${partnerName} both checked in.`
+          : missed
+            ? "Check-in for this workout is closed."
+            : checkedIn
+              ? `Checked in. Waiting on ${partnerName}.`
+              : `Check in opens at ${checkInOpensLabel(plan)}.`;
+        return (
+          <Card key={plan.id} padding={16} radius={20} gap={8}>
+            <View style={styles.partnerRow}>
+              <PartnerFace name={partnerName} photo={item.partnerPhoto} size={48} />
+              <View style={styles.partnerCopy}>
+                <AppText size={12} weight="extrabold" primary upper>
+                  {plan.focus}
+                </AppText>
+                <AppText size={18} weight="extrabold">
+                  {partnerName}
+                </AppText>
+                <AppText size={13}>
+                  {formatShortDate(plan.date)}
+                  {plan.time ? ` at ${plan.time}` : ""}
+                </AppText>
+              </View>
+            </View>
+            {ready ? null : (
+              <AppText size={13} muted>
+                {detail}
+              </AppText>
+            )}
+            {ready ? (
+              <PrimaryButton height={44} disabled={busyId === plan.id} onPress={() => void checkIn(item)}>
+                {busyId === plan.id ? "Checking in..." : "Check in"}
+              </PrimaryButton>
+            ) : null}
+          </Card>
+        );
+      })}
+      {status === "ready" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
+    </ScrollBody>
+  );
+}
+
 const styles = StyleSheet.create({
+  dashTabs: {
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  dashTab: {
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 40,
+  },
   body: {
     gap: 14,
   },
@@ -732,6 +935,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  reminder: {
+    gap: 6,
+  },
+  partnerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+  },
+  partnerCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  reminderNext: {
+    borderTopWidth: 1,
+    paddingTop: 16,
   },
   pill: {
     borderRadius: 999,

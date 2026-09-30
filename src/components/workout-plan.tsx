@@ -23,7 +23,6 @@ export function WorkoutPlanCard({
   const [confirm, setConfirm] = useState<"accept" | "decline" | null>(null);
   const accepted = plan.acceptedBy.includes(me);
   const waiting = plan.status === "proposed";
-  const scheduled = plan.status === "scheduled" || plan.status === "completed";
 
   async function cancel() {
     if (busy) return;
@@ -51,13 +50,16 @@ export function WorkoutPlanCard({
     }
   }
 
-  const statusLine = scheduled
-    ? "Scheduled"
-    : plan.status === "cancelled"
-      ? "Canceled"
-      : accepted
-        ? `Waiting for ${partnerName} to accept`
-        : `${partnerName} proposed this. Accept to schedule it.`;
+  const statusLine =
+    plan.status === "completed"
+      ? "Completed"
+      : plan.status === "scheduled"
+        ? "Scheduled. Check in from Dashboard after it starts."
+        : plan.status === "cancelled"
+          ? "Canceled"
+          : accepted
+            ? `Waiting for ${partnerName} to accept`
+            : `${partnerName} proposed this. Accept to schedule it.`;
 
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>

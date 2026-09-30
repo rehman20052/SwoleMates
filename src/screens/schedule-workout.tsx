@@ -18,7 +18,7 @@ import {
 import { getPartner, gyms, WorkoutFocus, workoutFocuses } from "@/data/partners";
 import { listConnections } from "@/lib/matches";
 import { isAccountId } from "@/lib/discover";
-import { proposeWorkout, workoutTimeSlots } from "@/lib/workouts";
+import { listMatchWorkouts, occupiedTimeLabels, proposeWorkout, upcomingTimeSlots, type PlannedWorkout } from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { daysFromToday, formatDate, relativeDay, useAppData } from "@/state/app-data";
 
@@ -36,23 +36,42 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
   const nav = useNavigation();
   const [partnerName, setPartnerName] = useState("");
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [plans, setPlans] = useState<PlannedWorkout[]>([]);
   const [location, setLocation] = useState("Gym");
   const [type, setType] = useState<(typeof workoutTypeOptions)[number]>("Push");
   const [customType, setCustomType] = useState("");
   const [date, setDate] = useState(matchDateOptions[0]);
-  const [time, setTime] = useState("6:30 PM");
+  const [now, setNow] = useState(() => new Date());
+  const timeOptions = useMemo(() => {
+    const taken = new Set(occupiedTimeLabels(plans, date));
+    return upcomingTimeSlots(date, now).filter((slot) => !taken.has(slot));
+  }, [date, now, plans]);
+  const [time, setTime] = useState(() => upcomingTimeSlots(matchDateOptions[0])[0] ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (timeOptions.length === 0 || timeOptions.includes(time)) return;
+    setTime(timeOptions[0]);
+  }, [time, timeOptions]);
+
+  useEffect(() => {
     let active = true;
-    void listConnections().then((connections) => {
+    void listConnections().then(async (connections) => {
       if (!active) return;
       const person = connections.find((item) => item.userId === partnerId && item.status === "accepted");
       if (!person) return;
       setPartnerName(person.name.split(/\s+/)[0] || person.name);
       setMatchId(person.requestId);
       if (person.gym) setLocation(person.gym);
+      const workouts = await listMatchWorkouts(person.requestId).catch(() => []);
+      if (!active) return;
+      setPlans(workouts);
     });
     return () => {
       active = false;
@@ -60,7 +79,7 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
   }, [partnerId]);
 
   async function send() {
-    if (busy || !matchId) return;
+    if (busy || !matchId || !timeOptions.includes(time)) return;
     const focus = type === "Other" ? customType : type;
     setBusy(true);
     setError(null);
@@ -91,12 +110,21 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
               <SelectField value={date} options={matchDateOptions} onChange={setDate} renderLabel={formatDate} />
             </Field>
             <Field label="Time">
-              <SelectField value={time} options={workoutTimeSlots} onChange={setTime} menuMaxHeight={220} centerOn="12:00 PM" />
+              <SelectField
+                value={time}
+                options={timeOptions}
+                onChange={setTime}
+                menuMaxHeight={220}
+                centerOn={timeOptions.includes("12:00 PM") ? "12:00 PM" : timeOptions[0]}
+              />
             </Field>
           </Card>
           {error ? <AppText size={13} color="#FF3B30">{error}</AppText> : null}
+          {timeOptions.length === 0 ? (
+            <AppText muted>No open times that day. Pick another time or day.</AppText>
+          ) : null}
           {!matchId ? <AppText muted>This chat is not an accepted match yet.</AppText> : null}
-          <PrimaryButton disabled={busy || !matchId} onPress={() => void send()}>
+          <PrimaryButton disabled={busy || !matchId || !timeOptions.includes(time)} onPress={() => void send()}>
             {busy ? "Sending..." : "Send request"}
           </PrimaryButton>
         </ScrollBody>
