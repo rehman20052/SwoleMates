@@ -52,9 +52,15 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
 
     setSubmitting(true);
     try {
+      const redirectTo =
+        typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : undefined;
       const result =
         mode === "signup"
-          ? await supabase.auth.signUp({ email: trimmedEmail, password })
+          ? await supabase.auth.signUp({
+              email: trimmedEmail,
+              password,
+              options: { emailRedirectTo: redirectTo },
+            })
           : await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
 
       if (result.error) {
