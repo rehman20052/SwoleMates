@@ -22,6 +22,8 @@ npm run ios
 npm run android
 ```
 
+For automatic compression of Social videos over 50MB, use a rebuilt native app instead of Expo Go. See [Social video uploads](docs/SOCIAL_VIDEO_UPLOADS.md) for build instructions and browser support.
+
 ## Core MVP
 
 - Account onboarding and a public fitness profile
