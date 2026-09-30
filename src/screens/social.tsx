@@ -16,7 +16,6 @@ import {
   Feed,
   fetchFeed,
   subscribeFeed,
-  MAX_MEDIA_BYTES,
   Post,
   POST_LIMIT,
   PostMedia,
@@ -24,6 +23,8 @@ import {
   setPostLike,
   timeAgo,
 } from "@/lib/social";
+import { MAX_MEDIA_BYTES } from "@/lib/media-limits";
+import { prepareVideo } from "@/lib/prepare-video";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -196,34 +197,72 @@ function Composer() {
   const [media, setMedia] = useState<PostMedia | undefined>();
   const [pickError, setPickError] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const preparation = useRef<AbortController | null>(null);
+  const releaseMedia = useRef<(() => void) | undefined>(undefined);
+
+  useEffect(() => () => {
+    preparation.current?.abort();
+    releaseMedia.current?.();
+  }, []);
+
+  function clearMedia() {
+    setMedia(undefined);
+    releaseMedia.current?.();
+    releaseMedia.current = undefined;
+  }
 
   async function addMedia() {
+    if (preparation.current || posting) return;
+    const controller = new AbortController();
+    preparation.current = controller;
     setPickError(null);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      quality: 0.7,
-      videoMaxDuration: 60,
-    });
-    const asset = result.canceled ? undefined : result.assets[0];
-    if (!asset) return;
-    if (asset.fileSize && asset.fileSize > MAX_MEDIA_BYTES) {
-      setPickError("Photos and clips must be under 50MB.");
-      return;
+    setPreparing(true);
+    setProgress(0);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.7,
+      });
+      const asset = result.canceled ? undefined : result.assets[0];
+      if (!asset || controller.signal.aborted) return;
+      const isVideo = asset.type === "video";
+      if (!isVideo && asset.fileSize && asset.fileSize > MAX_MEDIA_BYTES) {
+        throw new Error("This photo is over 50MB. Choose a smaller photo.");
+      }
+      const source = { uri: asset.uri, mimeType: asset.mimeType ?? undefined };
+      const prepared = isVideo
+        ? await prepareVideo(source, (value) => {
+            if (!controller.signal.aborted) setProgress(Math.round(value * 100));
+          }, controller.signal)
+        : { ...source, release() {} };
+      if (controller.signal.aborted) {
+        prepared.release();
+        return;
+      }
+      releaseMedia.current?.();
+      releaseMedia.current = prepared.release;
+      setMedia({ type: isVideo ? "video" : "image", uri: prepared.uri, mimeType: prepared.mimeType });
+    } catch (error) {
+      if (!controller.signal.aborted) setPickError(errorMessage(error, "Couldn't prepare this attachment. Please try again."));
+    } finally {
+      if (!controller.signal.aborted) setPreparing(false);
+      if (preparation.current === controller) preparation.current = null;
     }
-    setMedia({ type: asset.type === "video" ? "video" : "image", uri: asset.uri, mimeType: asset.mimeType ?? undefined });
   }
 
   async function post() {
-    if (posting) return;
+    if (posting || preparation.current) return;
     setPosting(true);
     const posted = await run(() => createPost(text, media));
     setPosting(false);
     if (!posted) return;
     setText("");
-    setMedia(undefined);
+    clearMedia();
   }
 
-  const canPost = (!!text.trim() || !!media) && !posting;
+  const canPost = (!!text.trim() || !!media) && !posting && !preparing;
 
   return (
     <Card padding={14} radius={18} gap={12}>
@@ -240,24 +279,33 @@ function Composer() {
       </View>
       {media ? (
         <View>
-          <MediaView media={media} />
+          <MediaView key={media.uri} media={media} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Remove attachment"
-            onPress={() => setMedia(undefined)}
+            disabled={posting || preparing}
+            onPress={clearMedia}
             style={[styles.removeMedia, { backgroundColor: theme.colors.scrim }]}
           >
             <AppText weight="bold">✕</AppText>
           </Pressable>
         </View>
       ) : null}
+      {preparing ? (
+        <AppText size={12} color={theme.colors.muted}>
+          {progress > 0 ? `Preparing video… ${progress}%` : "Preparing attachment…"} Keep the app open.
+        </AppText>
+      ) : null}
+      <AppText size={12} color={theme.colors.muted}>
+        Videos over 50MB are compressed before uploading.
+      </AppText>
       {pickError ? (
         <AppText size={12} color={theme.colors.danger}>
           {pickError}
         </AppText>
       ) : null}
       <View style={styles.composerActions}>
-        <Pressable accessibilityRole="button" onPress={addMedia} disabled={posting} hitSlop={8}>
+        <Pressable accessibilityRole="button" onPress={addMedia} disabled={posting || preparing} hitSlop={8}>
           <AppText weight="bold" primary>
             + Photo / Clip
           </AppText>
