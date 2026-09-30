@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 
 import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, TitleBar } from "@/components/ui";
@@ -15,6 +15,7 @@ import {
   editComment,
   Feed,
   fetchFeed,
+  subscribeFeed,
   MAX_MEDIA_BYTES,
   Post,
   POST_LIMIT,
@@ -73,6 +74,9 @@ export function SocialScreen({ me }: { me: Me }) {
 
   useEffect(() => {
     void reload();
+    return subscribeFeed(() => {
+      void reload();
+    });
   }, [reload]);
 
   async function refresh() {
@@ -275,7 +279,9 @@ function MediaView({ media }: { media: PostMedia }) {
 }
 
 function PostVideo({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (p) => {
+  // The feed reloads while this stays on screen. A new link would rebuild the player and buffer again.
+  const source = useRef(uri);
+  const player = useVideoPlayer(source.current, (p) => {
     p.loop = true;
   });
   return <VideoView player={player} style={styles.postMedia} contentFit="cover" nativeControls />;

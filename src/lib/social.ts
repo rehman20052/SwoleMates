@@ -99,12 +99,27 @@ function profilePhotoUrl(path: string | null | undefined) {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+// A new signed link is a new video address, so the player restarts and buffers.
+// Reuse a link until it is close to expiring.
+const signedMediaCache = new Map<string, { url: string; expiresAt: number }>();
+const REFRESH_MEDIA_BEFORE_MS = 5 * 60 * 1000;
+
 async function signedMediaUrls(paths: string[]) {
   const urls = new Map<string, string>();
-  if (paths.length === 0) return urls;
-  const { data } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(paths, MEDIA_LINK_SECONDS);
+  const now = Date.now();
+  const missing: string[] = [];
+  for (const path of [...new Set(paths)]) {
+    const cached = signedMediaCache.get(path);
+    if (cached && cached.expiresAt - REFRESH_MEDIA_BEFORE_MS > now) urls.set(path, cached.url);
+    else missing.push(path);
+  }
+  if (missing.length === 0) return urls;
+  const { data } = await supabase.storage.from(MEDIA_BUCKET).createSignedUrls(missing, MEDIA_LINK_SECONDS);
+  const expiresAt = Date.now() + MEDIA_LINK_SECONDS * 1000;
   for (const item of data ?? []) {
-    if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+    if (!item.path || !item.signedUrl) continue;
+    signedMediaCache.set(item.path, { url: item.signedUrl, expiresAt });
+    urls.set(item.path, item.signedUrl);
   }
   return urls;
 }
@@ -193,6 +208,31 @@ export async function fetchFeed(): Promise<Feed> {
   for (const [id, person] of await lookupPeople([...unknown])) people[id] = person;
 
   return { posts, friendIds: friends.map((friend) => friend.userId), people };
+}
+
+const liveTables = ["post", "post_like", "post_comment", "comment_like"] as const;
+
+// Reloads the feed when someone posts, likes, or comments. A short poll covers a dropped event.
+export function subscribeFeed(onChange: () => void) {
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const pull = () => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      onChange();
+    }, 300);
+  };
+  const channel = supabase.channel("social-feed");
+  for (const table of liveTables) {
+    channel.on("postgres_changes", { event: "*", schema: "public", table }, pull);
+  }
+  channel.subscribe();
+  const poll = setInterval(pull, 4000);
+  return () => {
+    if (pending) clearTimeout(pending);
+    clearInterval(poll);
+    void supabase.removeChannel(channel);
+  };
 }
 
 const extensions: Record<string, string> = {
