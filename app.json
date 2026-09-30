@@ -32,7 +32,8 @@
         {
           "photosPermission": "SwoleMates uses your photos for your profile."
         }
-      ]
+      ],
+      "expo-video"
     ]
   }
 }

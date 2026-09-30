@@ -4,7 +4,6 @@ export const icons = {
   arrowLeft: require("../assets/figma/icons/arrow-left.svg"),
   arrowUp: require("../assets/figma/icons/arrow-up.svg"),
   award: require("../assets/figma/icons/award.svg"),
-  calendarLime: require("../assets/figma/icons/calendar-lime.svg"),
   calendarMuted: require("../assets/figma/icons/calendar-muted.svg"),
   checkCircle: require("../assets/figma/icons/check-circle.svg"),
   chevronDown: require("../assets/figma/icons/chevron-down.svg"),
