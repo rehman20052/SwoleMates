@@ -23,7 +23,7 @@ export const supabase =
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: typeof window !== "undefined",
     },
   });
 
