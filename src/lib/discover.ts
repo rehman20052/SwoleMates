@@ -37,11 +37,15 @@ function photoUrl(photo: string) {
 }
 
 function publicProfile(profile: UserProfile) {
-  const photos = profile.photos.map(photoUrl).filter(Boolean).slice(0, 6);
+  const kept = profile.photos
+    .map((photo, index) => ({ photo: photoUrl(photo), kind: profile.photoMedia[index] ?? "image" }))
+    .filter((item) => item.photo)
+    .slice(0, 6);
   return {
     ...profile,
-    photos,
-    photoCaptions: profile.photoCaptions.slice(0, photos.length),
+    photos: kept.map((item) => item.photo),
+    photoMedia: kept.map((item) => item.kind),
+    photoCaptions: profile.photoCaptions.slice(0, kept.length),
     latitude: null,
     longitude: null,
     gymLatitude: null,

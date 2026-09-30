@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
 
 import { PhoneFrame } from "@/components/phone-frame";
+import { VideoCompressorHost } from "@/components/video-compressor-host";
 import { AppDataProvider } from "@/state/app-data";
 import { ThemeProvider, useAppTheme } from "@/theme";
 
@@ -48,6 +49,7 @@ function RootShell() {
           }}
         />
       </PhoneFrame>
+      <VideoCompressorHost />
       <StatusBar style={theme.isDark ? "light" : "dark"} />
     </AppDataProvider>
   );

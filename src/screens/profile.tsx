@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 import {
   AppText,
@@ -15,8 +16,9 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import { experienceLevels } from "@/data/partners";
-import { pickProfilePhoto } from "@/lib/pick-photo";
-import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
+import { photoDisplayUri } from "@/lib/heic-media";
+import { pickProfileMedia } from "@/lib/pick-photo";
+import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profileMediaKind, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfileMediaKind, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
@@ -82,6 +84,8 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   const theme = useAppTheme();
   const nav = useNavigation();
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [activeLift, setActiveLift] = useState<LiftField | null>(null);
   const [picker, setPicker] = useState<{ kind: "caption" | "prompt"; index: number } | null>(null);
   const [mode, setMode] = useState<"edit" | "view">(initialMode);
@@ -204,26 +208,44 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
 
   const addPhoto = async (index: number) => {
     setPhotoError(null);
+    setPhotoNote(null);
     try {
-      const photo = await pickProfilePhoto();
-      if (!photo) return;
+      const picked = await pickProfileMedia({
+        onCompressProgress: (progress) => {
+          setCompressing(true);
+          const percent = Math.min(99, Math.round(progress * 100));
+          setPhotoNote(`Compressing clip so it fits under 50MB… ${percent}%`);
+        },
+      });
+      if (!picked) return;
       const photos = [...profile.photos];
+      const photoMedia = [...(profile.photoMedia ?? [])];
       const photoCaptions = [...(profile.photoCaptions ?? [])];
       if (index < photos.length) {
-        photos[index] = photo;
+        photos[index] = picked.uri;
+        photoMedia[index] = picked.kind;
       } else {
-        photos.push(photo);
+        photos.push(picked.uri);
+        photoMedia.push(picked.kind);
         photoCaptions.push("");
       }
-      update({ photos: photos.slice(0, MAX_PHOTOS), photoCaptions: photoCaptions.slice(0, photos.length) });
+      update({
+        photos: photos.slice(0, MAX_PHOTOS),
+        photoMedia: photoMedia.slice(0, photos.length),
+        photoCaptions: photoCaptions.slice(0, photos.length),
+      });
     } catch (err) {
-      setPhotoError(err instanceof Error ? err.message : "Could not add that photo.");
+      setPhotoError(err instanceof Error ? err.message : "Could not add that photo or clip.");
+    } finally {
+      setCompressing(false);
+      setPhotoNote(null);
     }
   };
 
   const removePhoto = (index: number) => {
     update({
       photos: profile.photos.filter((_, photoIndex) => photoIndex !== index),
+      photoMedia: (profile.photoMedia ?? []).filter((_, photoIndex) => photoIndex !== index),
       photoCaptions: (profile.photoCaptions ?? []).filter((_, photoIndex) => photoIndex !== index),
     });
   };
@@ -284,11 +306,12 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         <Card>
           <SectionLabel>Photos</SectionLabel>
           <AppText size={12} muted>
-            Add a profile photo first, then up to {MAX_PHOTOS} photos total. At least 1 is required.
+            Add a photo or a clip in each spot, up to {MAX_PHOTOS}. Clips over 50MB are compressed to fit. At least 1 is required.
           </AppText>
           <View style={styles.photoGrid}>
             {Array.from({ length: MAX_PHOTOS }, (_, index) => {
               const photo = profile.photos[index];
+              const kind = photo ? profileMediaKind(photo, profile.photoMedia?.[index]) : "image";
               const isNextEmpty = !photo && index === profile.photos.length;
               const locked = !photo && index > profile.photos.length;
               return (
@@ -305,20 +328,20 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                 >
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={photo ? `Replace photo ${index + 1}` : index === 0 ? "Add profile photo" : `Add photo ${index + 1}`}
-                    disabled={locked || saving}
+                    accessibilityLabel={photo ? `Replace photo or clip ${index + 1}` : index === 0 ? "Add profile photo or clip" : `Add photo or clip ${index + 1}`}
+                    disabled={locked || saving || compressing}
                     onPress={() => addPhoto(index)}
                     style={styles.photoPress}
                   >
                     {photo ? (
-                      <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      <ProfileMedia key={`${kind}:${photo}`} uri={photo} kind={kind} />
                     ) : (
                       <View style={styles.photoEmpty}>
                         <AppText size={22} weight="bold" primary>
                           +
                         </AppText>
                         <AppText size={10} weight="bold" muted style={styles.photoLabel}>
-                          {index === 0 ? "Profile photo" : isNextEmpty ? "Add" : ""}
+                          {index === 0 ? "Photo or clip" : isNextEmpty ? "Add" : ""}
                         </AppText>
                       </View>
                     )}
@@ -340,6 +363,11 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
               );
             })}
           </View>
+          {photoNote ? (
+            <AppText size={13} weight="medium" muted>
+              {photoNote}
+            </AppText>
+          ) : null}
           {photoError ? (
             <AppText size={13} weight="medium" color={theme.colors.danger}>
               {photoError}
@@ -348,10 +376,10 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
           {profile.photos.length > 0 ? (
             <View style={styles.promptList}>
               <AppText size={12} muted>
-                Add a caption to a photo if you want. It shows at the top of that photo.
+                Add a caption if you want. It shows on that photo or clip.
               </AppText>
               {profile.photos.map((_, index) => (
-                <Field key={index} label={index === 0 ? "Profile photo caption" : `Photo ${index + 1} caption`}>
+                <Field key={index} label={index === 0 ? "Main caption" : `Caption ${index + 1}`}>
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => setPicker({ kind: "caption", index })}
@@ -923,7 +951,7 @@ export function ProfilePreview({
     </Card>,
     ...morePhotos.map((photo, index) => (
       <View key={`photo-${index}-${photo.slice(0, 24)}`} style={styles.hero}>
-        <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <ProfileMedia key={photo} uri={photo} kind={profileMediaKind(photo, profile.photoMedia?.[index + 1])} play />
         {profile.photoCaptions?.[index + 1] ? <PhotoCaption text={profile.photoCaptions[index + 1]} /> : null}
       </View>
     )),
@@ -993,7 +1021,7 @@ export function ProfilePreview({
       {chrome && onChangeMode ? <ModeTabs mode={mode} onChange={onChangeMode} inset={false} /> : null}
       <View style={styles.hero}>
         {hero ? (
-          <Image source={{ uri: hero }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <ProfileMedia key={hero} uri={hero} kind={profileMediaKind(hero, profile.photoMedia?.[0])} play />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.heroEmpty, { backgroundColor: theme.colors.surfaceRaised }]}>
             <AppText size={48} weight="black" primary>
@@ -1036,6 +1064,39 @@ export function ProfilePreview({
         </SecondaryButton>
       ) : null}
     </ScrollBody>
+  );
+}
+
+function ProfileMedia({ uri, kind, play = false }: { uri: string; kind: ProfileMediaKind; play?: boolean }) {
+  if (kind === "video") return <ProfileClip uri={uri} play={play} />;
+  return <ProfileStill uri={uri} />;
+}
+
+function ProfileStill({ uri }: { uri: string }) {
+  return <Image source={{ uri: photoDisplayUri(uri) }} style={StyleSheet.absoluteFill} contentFit="cover" />;
+}
+
+function ProfileClip({ uri, play }: { uri: string; play: boolean }) {
+  const player = useVideoPlayer(uri, (clip) => {
+    clip.loop = true;
+    clip.muted = true;
+  });
+  useEffect(() => {
+    const start = () => {
+      if (play) player.play();
+    };
+    start();
+    const subscription = player.addListener("statusChange", start);
+    return () => subscription.remove();
+  }, [player, play]);
+  return (
+    <VideoView
+      player={player}
+      style={[StyleSheet.absoluteFill, { width: "100%", height: "100%" }]}
+      contentFit="cover"
+      nativeControls={false}
+      playsInline
+    />
   );
 }
 

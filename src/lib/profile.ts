@@ -1,3 +1,7 @@
+import { compressProfileVideo } from "@/lib/compress-video";
+import { jpegBytesFromHeic } from "@/lib/heic-jpeg";
+import { isHeicMedia, looksLikeHeic, renderJpegUrl } from "@/lib/heic-media";
+import { readLocalBytes } from "@/lib/local-file";
 import { supabase } from "@/lib/supabase";
 import { lookupUsZip } from "@/lib/zip-location";
 
@@ -110,9 +114,31 @@ export type UserProfile = {
   customLiftName: string;
   customLift: string;
   photos: string[];
+  photoMedia: ProfileMediaKind[];
   photoCaptions: string[];
   prompts: ProfilePromptAnswer[];
 };
+
+export type ProfileMediaKind = "image" | "video";
+export const MAX_PROFILE_MEDIA_BYTES = 50 * 1024 * 1024;
+
+export function profileMediaKind(uri: string, hinted?: unknown): ProfileMediaKind {
+  if (hinted === "video" || hinted === "image") return hinted;
+  const path = uri.split("?")[0].toLowerCase();
+  if (path.startsWith("data:video") || /\.(mp4|mov|m4v|webm)$/.test(path)) return "video";
+  return "image";
+}
+
+const pickedMime = new Map<string, string>();
+
+export function rememberPickedMime(uri: string, mimeType?: string) {
+  if (mimeType) pickedMime.set(uri, mimeType);
+}
+
+export function profilePortrait(profile: Pick<UserProfile, "photos" | "photoMedia">): string | null {
+  const index = profile.photos.findIndex((photo, photoIndex) => profileMediaKind(photo, profile.photoMedia[photoIndex]) === "image");
+  return index >= 0 ? profile.photos[index] : null;
+}
 
 const genders: readonly ProfileGender[] = ["Male", "Female", "Other"];
 
@@ -234,13 +260,13 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     customLiftName: typeof profile.customLiftName === "string" ? profile.customLiftName : "",
     customLift: typeof profile.customLift === "string" ? profile.customLift : "N/A",
     photos,
+    photoMedia: photos.map((photo, index) => profileMediaKind(photo, Array.isArray(profile.photoMedia) ? profile.photoMedia[index] : undefined)),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photos.length),
     prompts: normalizePrompts(profile.prompts),
   };
 }
 
 const PHOTO_BUCKET = "profile-photos";
-const MAX_PHOTO_BYTES = 2_000_000;
 const photoStorageKey = (userId: string) => `swolemates.photos.${userId}`;
 
 function readStoredPhotos(userId: string): string[] {
@@ -287,10 +313,13 @@ export function profileFromUser(user: { id: string; user_metadata?: Record<strin
   const profile = normalizeProfile(user?.user_metadata?.profile);
   if (!profile || !user) return profile;
 
-  const remote = profile.photos
-    .map((photo) => displayPhoto(photo, user.id))
-    .filter((photo): photo is string => photo !== null);
-  if (remote.length > 0) return { ...profile, photos: remote };
+  const remote = profile.photos.flatMap((photo, index) => {
+    const shown = displayPhoto(photo, user.id);
+    return shown ? [{ uri: shown, kind: profile.photoMedia[index] ?? "image" }] : [];
+  });
+  if (remote.length > 0) {
+    return { ...profile, photos: remote.map((item) => item.uri), photoMedia: remote.map((item) => item.kind) };
+  }
 
   // Photos picked before Storage was connected still live in this browser.
   // The next save uploads them and keeps only the short file path on the account.
@@ -332,6 +361,7 @@ function accountProfile(profile: UserProfile, photoPaths: string[], location: { 
     customLiftName: clip(profile.customLiftName, 40),
     customLift: clip(profile.customLift, 12),
     photos: photoPaths,
+    photoMedia: photoPaths.map((_, index) => profile.photoMedia[index] ?? "image"),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photoPaths.length),
     prompts: answeredPrompts(profile.prompts),
   };
@@ -378,26 +408,70 @@ function decodeBase64(value: string) {
   return bytes.slice(0, index);
 }
 
-async function photoBytes(photo: string) {
-  if (photo.startsWith("data:")) {
-    return decodeBase64(photo.slice(photo.indexOf(",") + 1));
-  }
-  const response = await fetch(photo);
-  return new Uint8Array(await response.arrayBuffer());
+async function loadRenderedJpeg(url: string | null) {
+  if (!url) throw new Error("Could not open that photo.");
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Could not open that photo.");
+  return { bytes: new Uint8Array(await response.arrayBuffer()), mime: "image/jpeg" };
 }
 
-async function uploadPhoto(userId: string, photo: string): Promise<string> {
-  const existing = storagePath(photo, userId);
-  if (existing) return existing;
+async function loadMedia(photo: string) {
+  if (photo.startsWith("data:")) {
+    const header = photo.slice(5, photo.indexOf(","));
+    return { bytes: decodeBase64(photo.slice(header.length + 6)), mime: header.split(";")[0] };
+  }
+  const local = await readLocalBytes(photo);
+  if (local) return local;
+  const response = await fetch(photo);
+  const mime = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+  return { bytes: new Uint8Array(await response.arrayBuffer()), mime };
+}
 
-  const bytes = await photoBytes(photo);
-  if (bytes.byteLength > MAX_PHOTO_BYTES) {
-    throw new Error("Each photo must be under 2MB.");
+const mediaFiles: Record<string, { extension: string; contentType: string }> = {
+  "image/jpeg": { extension: "jpg", contentType: "image/jpeg" },
+  "image/png": { extension: "png", contentType: "image/png" },
+  "image/webp": { extension: "webp", contentType: "image/webp" },
+  "image/heic": { extension: "heic", contentType: "image/heic" },
+  "video/mp4": { extension: "mp4", contentType: "video/mp4" },
+  "video/quicktime": { extension: "mov", contentType: "video/quicktime" },
+};
+
+async function uploadProfileMedia(userId: string, photo: string, kind: ProfileMediaKind, mimeType?: string): Promise<string> {
+  const existing = storagePath(photo, userId);
+  // A HEIC already in storage still has to be rewritten. Chrome and other desktop browsers cannot show it.
+  if (existing && !isHeicMedia(existing)) return existing;
+
+  const rendered = Boolean(existing && isHeicMedia(existing));
+  const loaded = rendered
+    ? await loadRenderedJpeg(renderJpegUrl(publicPhotoUrl(existing)))
+    : await loadMedia(photo);
+  const heic = !rendered && kind === "image" && looksLikeHeic(loaded.bytes, mimeType || loaded.mime, photo);
+  if (heic) {
+    loaded.bytes = await jpegBytesFromHeic(loaded.bytes);
+    loaded.mime = "image/jpeg";
+  }
+  if (kind === "video" && loaded.bytes.byteLength > MAX_PROFILE_MEDIA_BYTES) {
+    const source = loaded.bytes;
+    const compressed = await compressProfileVideo(
+      new Blob([source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength) as ArrayBuffer], { type: loaded.mime || "video/mp4" }),
+      MAX_PROFILE_MEDIA_BYTES,
+    );
+    loaded.bytes = new Uint8Array(await compressed.arrayBuffer());
+    loaded.mime = "video/mp4";
+  }
+  if (loaded.bytes.byteLength > MAX_PROFILE_MEDIA_BYTES) {
+    throw new Error(kind === "video" ? "That clip is too long to fit under 50MB, even after compressing." : "Photos must be under 50MB.");
   }
 
-  const path = `${userId}/${photoFileId()}.jpg`;
-  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, bytes, {
-    contentType: "image/jpeg",
+  const file = rendered || heic
+    ? mediaFiles["image/jpeg"]
+    : (mediaFiles[mimeType ?? ""] ??
+      mediaFiles[pickedMime.get(photo) ?? ""] ??
+      mediaFiles[loaded.mime] ??
+      (kind === "video" ? mediaFiles["video/mp4"] : mediaFiles["image/jpeg"]));
+  const path = `${userId}/${photoFileId()}.${file.extension}`;
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, loaded.bytes, {
+    contentType: file.contentType,
     upsert: false,
   });
   if (!error) return path;
@@ -521,9 +595,9 @@ async function saveProfileTables(userId: string, account: AccountProfile) {
 }
 
 export async function loadProfile(): Promise<UserProfile | null> {
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  return profileFromUser(data.session?.user ?? null);
+  return profileFromUser(data.user);
 }
 
 async function sessionForSave() {
@@ -572,8 +646,9 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
 
   let account: AccountProfile;
   try {
-    for (const photo of profile.photos.slice(0, 6)) {
-      uploaded.push(await uploadPhoto(userId, photo));
+    const chosen = profile.photos.slice(0, 6);
+    for (let index = 0; index < chosen.length; index += 1) {
+      uploaded.push(await uploadProfileMedia(userId, chosen[index], profile.photoMedia[index] ?? "image"));
     }
 
     account = accountProfile(profile, uploaded, location);

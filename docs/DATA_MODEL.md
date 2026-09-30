@@ -17,7 +17,7 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 |---|---|---|---|---|
 | `user_account` | Profile | One row per person: name, birthdate, location, lifts | Your own row only | Saved on profile save |
 | `gym` | Profile, Plans | Shared list of gyms | Anyone signed in can read and add; missing osm_id can be filled in | Saved on profile save |
-| `profile_photo` | Profile | Up to 6 photos with captions | Your own rows | Saved on profile save |
+| `profile_photo` | Profile | Up to 6 photos or clips with captions | Your own rows | Saved on profile save |
 | `profile_prompt` | Profile | Prompt answers (3 or more) | Your own rows | Saved on profile save |
 | `user_availability` | Profile, Discover | Free days × times of day | Your own rows | Saved on profile save |
 | `user_goal` | Profile | Fitness goals | Your own rows | Saved on profile save |
@@ -44,7 +44,7 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 
 ## Accounts & profiles
 
-*Profile tab.* One `user_account` row per person, using the same ID as their Supabase login (`auth.users`). Anything a person can have several of gets its own table. A profile has 1–6 photos (the files are in the `profile-photos` storage bucket, and `storage_path` points to them) and at least 3 prompt answers. Lifts are in pounds, and an empty value means N/A. Gyms are shared: two people at the same gym point to one `gym` row, matched by OpenStreetMap ID.
+*Profile tab.* One `user_account` row per person, using the same ID as their Supabase login (`auth.users`). Anything a person can have several of gets its own table. A profile has 1–6 photos or clips (the files are in the `profile-photos` storage bucket, each under 50MB, and `storage_path` points to them; a `.mp4` or `.mov` path is a clip) and at least 3 prompt answers. Lifts are in pounds, and an empty value means N/A. Gyms are shared: two people at the same gym point to one `gym` row, matched by OpenStreetMap ID.
 
 ```mermaid
 erDiagram
@@ -82,7 +82,7 @@ erDiagram
   profile_photo {
     uuid photo_id PK
     uuid user_id FK
-    varchar storage_path "required, user_id/file.jpg"
+    varchar storage_path "required, user_id/file.jpg or user_id/file.mp4"
     varchar caption "optional"
     bigint sort_order "1 to 6, 1 = main photo"
   }
