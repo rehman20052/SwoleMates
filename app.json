@@ -33,7 +33,8 @@
           "photosPermission": "SwoleMates uses your photos for your profile."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "react-native-compressor"
     ]
   }
 }

@@ -1,3 +1,4 @@
+import { readMediaBytes } from "@/lib/media-bytes";
 import { listConnections } from "@/lib/matches";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
@@ -7,7 +8,6 @@ const PHOTO_BUCKET = "profile-photos";
 const FEED_LIMIT = 50;
 // Signed links to post photos and clips last this long; the feed reloads well before then.
 const MEDIA_LINK_SECONDS = 60 * 60;
-export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
 export const POST_LIMIT = 1000;
 export const COMMENT_LIMIT = 500;
 
@@ -250,9 +250,7 @@ function mediaFileName() {
 
 async function uploadMedia(me: string, media: PostMedia) {
   const contentType = media.mimeType && extensions[media.mimeType] ? media.mimeType : media.type === "video" ? "video/mp4" : "image/jpeg";
-  const response = await fetch(media.uri);
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength > MAX_MEDIA_BYTES) throw new Error("Photos and clips must be under 50MB.");
+  const bytes = await readMediaBytes(media.uri, media.type === "video");
 
   const path = `${me}/${mediaFileName()}.${extensions[contentType]}`;
   const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, bytes, { contentType, upsert: false });
