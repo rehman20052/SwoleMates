@@ -94,7 +94,7 @@ async function currentUserId() {
 }
 
 function profilePhotoUrl(path: string | null | undefined) {
-  if (!path) return null;
+  if (!path || /\.(mp4|mov|m4v|webm)(\?|$)/i.test(path)) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }

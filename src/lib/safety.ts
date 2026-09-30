@@ -60,7 +60,8 @@ export async function listBlockedPeople(): Promise<BlockedPerson[]> {
   for (const row of (connections.data ?? []) as { other_user_id?: string; profile?: unknown }[]) {
     if (!row.other_user_id) continue;
     const profile = normalizeProfile(row.profile);
-    const photo = profile?.photos.map(photoUrl).find(Boolean) ?? null;
+    const photo =
+      profile?.photos.map(photoUrl).find((url, index) => url && profile.photoMedia[index] !== "video") ?? null;
     names.set(row.other_user_id, { name: profile?.fullName?.trim() || "Blocked user", photo });
   }
 

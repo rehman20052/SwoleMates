@@ -14,8 +14,9 @@ import {
 
 import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
+import { isHeicMedia } from '@/lib/heic-media';
 import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomingMessages } from '@/lib/matches';
-import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, saveProfile, type UserProfile } from '@/lib/profile';
+import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
@@ -31,6 +32,16 @@ import { SocialScreen } from '@/screens/social';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
 import { useAppTheme } from '@/theme';
+
+let heicRepair: Promise<UserProfile> | null = null;
+
+function repairHeicProfile(profile: UserProfile) {
+  if (!profile.photos.some((photo) => isHeicMedia(photo))) return Promise.resolve(profile);
+  heicRepair ??= saveProfile(profile).finally(() => {
+    heicRepair = null;
+  });
+  return heicRepair;
+}
 
 const emptyProfile = (): UserProfile => ({
   fullName: '',
@@ -57,6 +68,7 @@ const emptyProfile = (): UserProfile => ({
   customLiftName: '',
   customLift: 'N/A',
   photos: [],
+  photoMedia: [],
   photoCaptions: [],
   prompts: [],
 });
@@ -118,6 +130,29 @@ export default function App() {
       setCurrentScreen('launch');
     };
 
+    // The cached session can be older than a save made on another device. Publishing that
+    // copy would wipe the newer Discover card, so always read the account from the server first.
+    const profileFromServer = async () => {
+      const fresh = await supabase.auth.getUser();
+      if (fresh.error || !fresh.data.user) return null;
+      return profileFromUser(fresh.data.user);
+    };
+
+    const publishLatest = async (profile: UserProfile) => {
+      let current = profile;
+      if (current.photos.some((photo) => isHeicMedia(photo))) {
+        try {
+          current = await repairHeicProfile(current);
+          if (!active) return;
+          continueAfterAuth(current);
+        } catch {
+          // Keep showing the profile. The photo is still served as a JPEG, and the next launch tries the upload again.
+        }
+      }
+      if (!active) return;
+      publishDiscoverProfile(current).catch(() => {});
+    };
+
     const restoreSession = async () => {
       const { data, error } = await supabase.auth.getSession();
       if (!active) return;
@@ -129,12 +164,20 @@ export default function App() {
         return;
       }
 
-      const profile = profileFromUser(data.session.user);
+      const profile = await profileFromServer();
+      if (!active) return;
+      if (!profile) {
+        const cached = await supabase.auth.getSession();
+        if (!active) return;
+        continueAfterAuth(profileFromUser(cached.data.session?.user ?? null));
+        restored = true;
+        setCheckingSession(false);
+        return;
+      }
       continueAfterAuth(profile);
       restored = true;
       setCheckingSession(false);
-      // Refresh the public Discover card so the age shown to others stays current after birthdays.
-      if (profile) publishDiscoverProfile(profile).catch(() => {});
+      void publishLatest(profile);
     };
 
     const {
@@ -149,7 +192,9 @@ export default function App() {
       }
 
       if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session) {
-        continueAfterAuth(profileFromUser(session.user));
+        void profileFromServer().then((profile) => {
+          if (active) continueAfterAuth(profile);
+        });
       }
     });
 
@@ -405,7 +450,7 @@ export default function App() {
           } />
         );
       case 'Social':
-        return <SocialScreen me={{ name: profileData.fullName, photo: profileData.photos[0] }} />;
+        return <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />;
       case 'Profile':
         return (
           <ProfileScreen

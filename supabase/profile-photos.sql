@@ -1,10 +1,19 @@
 -- Profile photos live in Storage. The account only keeps the short file path,
 -- so the login token stays small.
 
-insert into storage.buckets (id, name, public)
-values ('profile-photos', 'profile-photos', true)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'profile-photos',
+  'profile-photos',
+  true,
+  52428800,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime']
+)
 on conflict (id) do update
-set public = true;
+set
+  public = true,
+  file_size_limit = 52428800,
+  allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime'];
 
 drop policy if exists "profile photo bucket is visible" on storage.buckets;
 create policy "profile photo bucket is visible"

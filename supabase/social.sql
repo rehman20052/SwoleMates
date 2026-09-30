@@ -238,6 +238,7 @@ as $$
       select photo.storage_path::text
       from public.profile_photo photo
       where photo.user_id = account.id
+        and photo.storage_path !~* '\.(mp4|mov|m4v|webm)$'
       order by photo.sort_order
       limit 1
     )

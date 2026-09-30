@@ -85,8 +85,12 @@ function personFrom(row: {
   if (row.direction !== "incoming" && row.direction !== "outgoing") return null;
   if (row.status !== "pending" && row.status !== "accepted" && row.status !== "declined") return null;
   const normalized = normalizeProfile(row.profile);
-  const photos = normalized?.photos.map(photoUrl).filter(Boolean) ?? [];
-  const profile = normalized ? { ...normalized, photos } : null;
+  const shown = (normalized?.photos ?? []).flatMap((photo, index) => {
+    const url = photoUrl(photo);
+    return url ? [{ url, kind: normalized?.photoMedia[index] ?? "image" }] : [];
+  });
+  const photos = shown.map((item) => item.url);
+  const profile = normalized ? { ...normalized, photos, photoMedia: shown.map((item) => item.kind) } : null;
   if (profile) matchProfiles.set(row.other_user_id, profile);
   const person: MatchConnection = {
     requestId: row.id,
@@ -96,7 +100,7 @@ function personFrom(row: {
     name: profile?.fullName?.trim() || "SwoleMate",
     age: profile?.age?.trim() || "",
     gym: profile?.primaryGym?.trim() || "",
-    photo: photos[0] ?? null,
+    photo: shown.find((item) => item.kind === "image")?.url ?? null,
     lastMessage: row.last_message?.trim() || "",
     lastMessageMine: false,
     lastMessageAt: "",
