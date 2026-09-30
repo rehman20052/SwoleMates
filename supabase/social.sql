@@ -308,4 +308,23 @@ using (
   and (storage.foldername(name))[1] = (select auth.uid()::text)
 );
 
+-- New posts, likes, and comments can arrive while the Social tab is open.
+do $$
+declare
+  live_table text;
+begin
+  foreach live_table in array array['post', 'post_like', 'post_comment', 'comment_like']
+  loop
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = live_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', live_table);
+    end if;
+  end loop;
+end $$;
+
 notify pgrst, 'reload schema';
