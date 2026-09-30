@@ -36,6 +36,10 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 | `saved_meal` | Nutrition | Reusable meals | Your own rows | Not yet |
 | `group_events` | Gym events | Classes and events at gyms | Anyone signed in can read; the host manages theirs | Not yet |
 | `event_rsvp` | Gym events | RSVPs and waitlist | Your own rows | Not yet |
+| `post` | Social | Posts, with an optional photo or clip | You and your matches can read; you write and delete your own | Waiting for Noor to run `supabase/social.sql` |
+| `post_like` | Social | Who liked each post | Anyone who can see the post; you add and remove your own | Waiting for Noor |
+| `post_comment` | Social | Comments and one level of replies | Anyone who can see the post; you edit your own; you or the post's author can delete | Waiting for Noor |
+| `comment_like` | Social | Who liked each comment | Anyone who can see the comment; you add and remove your own | Waiting for Noor |
 | `discover_profiles` | Discover | Old public profile copy | Your own row; others through discover_people() | Yes, remove later |
 
 ## Accounts & profiles
@@ -308,6 +312,52 @@ erDiagram
   user_account ||--o{ event_rsvp : makes
 ```
 
+## Social
+
+*Social tab.* A feed of posts from you and the people you're matched with (an accepted `match_requests` row). Nobody else can see your posts, and a block in either direction hides them. Likes and comments can be seen by anyone who can see the post, so a match of the author can see comments from the author's other matches. `social_people()` supplies those commenters' names and main photos. Replies point at a top-level comment through `parent_id`, one level deep. Photos and clips are in the private `post-media` storage bucket under `<author id>/`, read through signed links that expire after an hour. Script: `supabase/social.sql`, waiting for Noor to run it.
+
+```mermaid
+erDiagram
+  user_account {
+    uuid id PK
+  }
+  post {
+    uuid id PK
+    uuid author_id FK "required"
+    text body "0 to 1000 chars"
+    text media_path "post-media bucket, author_id/file"
+    text media_type "image or video, set with media_path"
+    timestamptz created_at
+  }
+  post_like {
+    uuid post_id PK, FK
+    uuid user_id PK, FK
+    timestamptz created_at
+  }
+  post_comment {
+    uuid id PK
+    uuid post_id FK "required"
+    uuid author_id FK "required"
+    uuid parent_id FK "set on replies"
+    text body "1 to 500 chars"
+    timestamptz created_at
+    timestamptz edited_at "set by the database when the text changes"
+  }
+  comment_like {
+    uuid comment_id PK, FK
+    uuid user_id PK, FK
+    timestamptz created_at
+  }
+  user_account ||--o{ post : writes
+  post ||--o{ post_like : receives
+  user_account ||--o{ post_like : gives
+  post ||--o{ post_comment : has
+  post_comment |o--o{ post_comment : "replied to by"
+  user_account ||--o{ post_comment : writes
+  post_comment ||--o{ comment_like : receives
+  user_account ||--o{ comment_like : gives
+```
+
 ## Old profile copies (remove later)
 
 *Used by Discover today.* Zub's original setup, still used by the app while the screens move to the tables above. The full profile is also saved as JSON on the login account (`auth.users.user_metadata.profile`), and a public copy goes into `discover_profiles`, which `discover_people()` reads for Discover. Once Discover and the Profile screen read `user_account`, both copies can go.
@@ -340,6 +390,7 @@ erDiagram
 - `planned_workout`: exactly one of `gym_id` or `location` is filled in (`planned_workout_place_check`).
 - `workout_logs`: one log per person per planned workout (`workout_logs_one_per_plan`).
 - `food_log_entry` and `saved_meal`: meal is Breakfast, Lunch, Dinner or Snack.
+- `post`: needs text or a photo or clip (`post_has_content`). `post_comment`: only the text can be edited, and a reply must point at a top-level comment on the same post. Deleting a post removes its likes and comments, and deleting a comment removes its replies.
 - Link columns (`user_id`, `match_id`, `gym_id` and so on) have no default. Only a table's own ID column gets `gen_random_uuid()`, and `user_account.id` has none because it must equal the login ID.
 - Every table has row-level security on. A new table needs RLS and at least one policy before the app can use it.
 
@@ -349,6 +400,9 @@ erDiagram
 - `my_connections()`: Lists your requests and matches with the other person's card and last message.
 - `send_match_request(to_user_id)`: Sends a request, accepts theirs if they already asked, and reopens declined or unmatched ones.
 - `collapse_mutual_requests()`: Turns two requests between the same people into one match.
+- `shares_posts_with(author)`: True for you, and for your matches when neither of you blocked the other. The Social read rules use it.
+- `can_see_post(target_post)`: True when you can see that post.
+- `social_people(people)`: Names and main photos for people in your feed: your matches, and anyone who commented on a post you can see.
 
 ## Not built yet
 

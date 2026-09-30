@@ -58,10 +58,7 @@ export function WorkoutScheduledScreen({ workoutId }: { workoutId: string }) {
         <View style={styles.actions}>
           <PrimaryButton
             onPress={() =>
-              Alert.alert("Calendar sync isn't connected yet", "This session is saved under Plans in the meantime.", [
-                { text: "View Plans", onPress: () => nav.setTab("Plans") },
-                { text: "OK" },
-              ])
+              Alert.alert("Calendar sync isn't connected yet", "It's coming soon. Your partner has the invite in your chat.")
             }
           >
             Add to Calendar

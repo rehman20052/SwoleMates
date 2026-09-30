@@ -24,10 +24,10 @@ import { DiscoverScreen } from '@/screens/discover';
 import { InboxScreen } from '@/screens/inbox';
 import { NutritionTrackerScreen } from '@/screens/nutrition-tracker';
 import { PartnerProfileScreen } from '@/screens/partner-profile';
-import { PlansScreen } from '@/screens/plans';
 import { ProfileScreen } from '@/screens/profile';
 import { RequestProfileScreen } from '@/screens/request-profile';
 import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
+import { SocialScreen } from '@/screens/social';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
 import { useAppTheme } from '@/theme';
@@ -404,21 +404,8 @@ export default function App() {
             </View>
           } />
         );
-      case 'Plans':
-        return (
-          <PlansScreen empty={
-            <View style={styles.tabContentContainer}>
-              <View style={styles.emptyCircle}>
-                <Text style={styles.emptyIcon}>📅</Text>
-              </View>
-              <Text style={styles.emptyTitle}>No Scheduled Workouts</Text>
-              <Text style={styles.emptyDesc}>You don't have any sessions locked in. Set up a workout plan with one of your matches to stay reliable.</Text>
-              <TouchableOpacity style={styles.limeButtonSmall} onPress={() => nav.push({ name: 'schedule' })}>
-                <Text style={styles.limeButtonSmallText}>Propose a New Session</Text>
-              </TouchableOpacity>
-            </View>
-          } />
-        );
+      case 'Social':
+        return <SocialScreen me={{ name: profileData.fullName, photo: profileData.photos[0] }} />;
       case 'Profile':
         return (
           <ProfileScreen
@@ -446,7 +433,7 @@ export default function App() {
             { name: 'Discover', icon: '✨' },
             { name: 'Chat', icon: '💬' },
             { name: 'Dashboard', icon: '⚡' },
-            { name: 'Plans', icon: '📅' },
+            { name: 'Social', icon: '👥' },
             { name: 'Profile', icon: '👤' },
           ] as const).map((tab) => {
             const isActive = activeTab === tab.name;
