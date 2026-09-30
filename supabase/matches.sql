@@ -338,4 +338,23 @@ revoke all on function public.send_match_request(uuid) from public;
 revoke all on function public.send_match_request(uuid) from anon;
 grant execute on function public.send_match_request(uuid) to authenticated;
 
+-- New chat messages and workout status changes can arrive while a conversation is open.
+do $$
+declare
+  live_table text;
+begin
+  foreach live_table in array array['match_messages', 'planned_workout']
+  loop
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = live_table
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', live_table);
+    end if;
+  end loop;
+end $$;
+
 notify pgrst, 'reload schema';

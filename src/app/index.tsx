@@ -86,7 +86,7 @@ export default function App() {
     refresh();
     const unsubscribe = subscribeChatAlerts(refresh);
     const unsubscribeMessages = subscribeIncomingMessages();
-    const timer = setInterval(() => notifyChatAlerts(), 15000);
+    const timer = setInterval(() => notifyChatAlerts(), 3000);
     const appState = AppState.addEventListener('change', (next) => {
       if (next === 'active') notifyChatAlerts();
     });

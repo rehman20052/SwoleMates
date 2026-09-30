@@ -1,4 +1,4 @@
-import { deleteMatchMessage, notifyChatAlerts, sendMatchMessage } from "@/lib/matches";
+import { deleteMatchMessage, listConnections, notifyChatAlerts, sendMatchMessage } from "@/lib/matches";
 import { supabase } from "@/lib/supabase";
 
 export const workoutPlanMarker = "workout-plan:";
@@ -17,6 +17,18 @@ function buildTimeSlots() {
 
 export const workoutTimeSlots = buildTimeSlots();
 
+function localIsoDate(date: Date) {
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function upcomingTimeSlots(date: string, now = new Date()) {
+  if (date !== localIsoDate(now)) return workoutTimeSlots;
+  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+  return workoutTimeSlots.filter((slot) => toSqlTime(slot) > nowTime);
+}
+
 export type PlannedWorkout = {
   id: string;
   matchId: string;
@@ -28,6 +40,7 @@ export type PlannedWorkout = {
   location: string;
   status: "proposed" | "scheduled" | "cancelled" | "completed";
   acceptedBy: string[];
+  attendedBy: string[];
   cancelledBy: string | null;
 };
 
@@ -73,6 +86,47 @@ export function toSqlTime(label: string) {
   return `${String(hour).padStart(2, "0")}:${minute}:00`;
 }
 
+const settledMeetups = new Set<string>();
+
+export function workoutStartsAt(plan: PlannedWorkout) {
+  if (!plan.date || !plan.time) return null;
+  const start = new Date(`${plan.date}T${toSqlTime(plan.time)}`);
+  return Number.isNaN(start.getTime()) ? null : start;
+}
+
+export function showUpPromptReady(plan: PlannedWorkout, now = new Date()) {
+  if (plan.status !== "scheduled") return false;
+  const start = workoutStartsAt(plan);
+  if (!start) return false;
+  return now.getTime() >= start.getTime();
+}
+
+export function meetupMissed(plan: PlannedWorkout, now = new Date()) {
+  if (plan.status !== "scheduled" || plan.attendedBy.length >= 2) return false;
+  const end = new Date(`${plan.date}T23:59:59`);
+  return !Number.isNaN(end.getTime()) && end.getTime() <= now.getTime();
+}
+
+export function scheduledWorkoutFinished(plan: PlannedWorkout, now = new Date()) {
+  if (plan.status === "completed" || plan.status === "cancelled") return true;
+  if (plan.status !== "scheduled") return true;
+  const end = new Date(`${plan.date}T23:59:59`);
+  return !Number.isNaN(end.getTime()) && end.getTime() <= now.getTime();
+}
+
+export function openScheduledWorkout(plans: PlannedWorkout[]) {
+  return plans.find((plan) => plan.status === "scheduled" && !scheduledWorkoutFinished(plan)) ?? null;
+}
+
+function stillPlanned(plan: PlannedWorkout) {
+  if (plan.status === "proposed") return true;
+  return plan.status === "scheduled" && !scheduledWorkoutFinished(plan);
+}
+
+export function occupiedTimeLabels(plans: PlannedWorkout[], date: string) {
+  return plans.filter((plan) => stillPlanned(plan) && plan.date === date).map((plan) => plan.time);
+}
+
 function focusName(value: string) {
   const text = value.trim().replace(/\s+/g, " ").slice(0, 40);
   return text && text.toLowerCase() !== "other" ? text : "";
@@ -116,8 +170,25 @@ function fromRow(row: PlanRow): PlannedWorkout {
     location: row.location?.trim() || "Gym",
     status: planStatus(row.status),
     acceptedBy: acceptedIds(row.notes, createdBy),
+    attendedBy: [],
     cancelledBy: cancelledById(row.notes),
   };
+}
+
+async function withAttendance(plans: PlannedWorkout[]) {
+  if (plans.length === 0) return plans;
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("planned_workout_id, user_id")
+    .in("planned_workout_id", plans.map((plan) => plan.id));
+  if (error || !data) return plans;
+  const attended = new Map<string, string[]>();
+  for (const row of data as { planned_workout_id: string; user_id: string }[]) {
+    const ids = attended.get(row.planned_workout_id) ?? [];
+    ids.push(row.user_id);
+    attended.set(row.planned_workout_id, ids);
+  }
+  return plans.map((plan) => ({ ...plan, attendedBy: attended.get(plan.id) ?? [] }));
 }
 
 async function currentUserId() {
@@ -166,7 +237,50 @@ export async function listMatchWorkouts(matchId: string) {
     .eq("match_id", matchId)
     .order("created_at", { ascending: true });
   if (error) throw planError(error, "Could not load workouts for this chat.");
-  return ((data ?? []) as PlanRow[]).map(fromRow);
+  return settleShownUp(await withAttendance(((data ?? []) as PlanRow[]).map(fromRow)));
+}
+
+export type CheckInWorkout = {
+  plan: PlannedWorkout;
+  partnerName: string;
+  partnerPhoto: string | null;
+  checkedIn: boolean;
+  partnerCheckedIn: boolean;
+};
+
+export async function listCheckInWorkouts() {
+  const today = new Date();
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [connections, listed] = await Promise.all([
+    listConnections(),
+    supabase
+      .from("planned_workout")
+      .select("planned_workout_id, match_id, created_by, title, focus, workout_date, start_time, location, status, notes")
+      .in("status", ["scheduled", "completed"])
+      .gte("workout_date", iso)
+      .order("workout_date", { ascending: true })
+      .order("start_time", { ascending: true }),
+  ]);
+  if (listed.error) throw planError(listed.error, "Could not load workouts to check in.");
+  const partners = new Map(
+    connections
+      .filter((person) => person.status === "accepted")
+      .map((person) => [person.requestId, { name: person.name.trim() || "your partner", photo: person.photo }]),
+  );
+  const me = await currentUserId();
+  const plans = await settleShownUp(await withAttendance(((listed.data ?? []) as PlanRow[]).map(fromRow)));
+  return plans
+    .filter((plan) => partners.has(plan.matchId))
+    .map((plan) => {
+      const partner = partners.get(plan.matchId);
+      return {
+        plan,
+        partnerName: partner?.name || "your partner",
+        partnerPhoto: partner?.photo ?? null,
+        checkedIn: plan.attendedBy.includes(me),
+        partnerCheckedIn: plan.attendedBy.some((id) => id !== me),
+      };
+    });
 }
 
 export async function listScheduledWorkouts() {
@@ -193,6 +307,10 @@ export async function proposeWorkout(input: {
   const me = await currentUserId();
   const focus = focusName(input.focus);
   if (!focus) throw new Error("Enter the workout you want to do.");
+  const existing = await listMatchWorkouts(input.matchId);
+  if (occupiedTimeLabels(existing, input.date).includes(input.timeLabel)) {
+    throw new Error("You already have a workout with them at that time.");
+  }
   const place = input.location.trim().slice(0, 120) || "Gym";
   const { data, error } = await supabase
     .from("planned_workout")
@@ -315,4 +433,73 @@ export async function respondToWorkout(plan: PlannedWorkout, accept: boolean) {
     .eq("status", "proposed");
   if (error) throw planError(error, "Could not accept that workout.");
   notifyChatAlerts();
+}
+
+async function saveWorkoutLog(plan: PlannedWorkout, me: string, verified: boolean) {
+  const logged = await supabase.from("workout_logs").upsert(
+    {
+      user_id: me,
+      planned_workout_id: plan.id,
+      workout_date: plan.date,
+      title: plan.title.slice(0, 80),
+      verified,
+    },
+    { onConflict: "user_id,planned_workout_id" },
+  );
+  if (logged.error) throw planError(logged.error, "Could not save that workout.");
+  if (verified) settledMeetups.add(`${me}:${plan.id}`);
+}
+
+async function settleShownUp(plans: PlannedWorkout[]) {
+  const me = await currentUserId().catch(() => null);
+  if (!me) return plans;
+  const next: PlannedWorkout[] = [];
+  for (const plan of plans) {
+    const both = plan.attendedBy.length >= 2 && plan.attendedBy.includes(me);
+    if (!both) {
+      next.push(plan);
+      continue;
+    }
+    if (plan.status === "scheduled") {
+      const updated = await supabase
+        .from("planned_workout")
+        .update({ status: "completed" })
+        .eq("planned_workout_id", plan.id)
+        .eq("status", "scheduled");
+      if (!updated.error) plan.status = "completed";
+    }
+    if (plan.status === "completed" && !settledMeetups.has(`${me}:${plan.id}`)) {
+      await saveWorkoutLog(plan, me, true).catch(() => undefined);
+    }
+    next.push(plan);
+  }
+  return next;
+}
+
+export async function completeWorkout(plan: PlannedWorkout) {
+  const me = await currentUserId();
+  if (plan.attendedBy.includes(me)) return;
+  if (plan.status !== "scheduled") throw new Error("This workout is not scheduled.");
+  if (!showUpPromptReady(plan)) throw new Error("You can check in when the workout starts.");
+  const checkedIn = await supabase.from("attendance").upsert(
+    {
+      planned_workout_id: plan.id,
+      user_id: me,
+      attended: true,
+      checked_in_at: new Date().toISOString(),
+    },
+    { onConflict: "planned_workout_id,user_id" },
+  );
+  if (checkedIn.error) throw planError(checkedIn.error, "Could not record that you were there.");
+  const attendance = await supabase.from("attendance").select("user_id, attended").eq("planned_workout_id", plan.id);
+  if (attendance.error) throw planError(attendance.error, "Could not check who showed up.");
+  const showedUp = (attendance.data ?? []).filter((row) => row.attended).length >= 2;
+  if (!showedUp) return;
+  const updated = await supabase
+    .from("planned_workout")
+    .update({ status: "completed" })
+    .eq("planned_workout_id", plan.id)
+    .eq("status", "scheduled");
+  if (updated.error) throw planError(updated.error, "Could not complete that workout.");
+  await saveWorkoutLog(plan, me, true);
 }
