@@ -726,7 +726,7 @@ function LightboxVideo({ uri, style }: { uri: string; style: { top: number; left
       player.pause();
     };
   }, [player]);
-  return <VideoView player={player} style={style} contentFit="contain" nativeControls allowsFullscreen={false} />;
+  return <VideoView player={player} style={style} contentFit="contain" nativeControls fullscreenOptions={{ enable: false }} />;
 }
 
 function PostCard({ post }: { post: Post }) {
