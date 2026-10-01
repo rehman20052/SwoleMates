@@ -402,11 +402,11 @@ export default function App() {
         <View style={styles.overlay}>
           <SafeAreaView style={styles.launchContainer}>
             <View style={styles.launchContent}>
-              <View style={[styles.brandContainer, styles.launchBrandContainer]}>
+              <View style={styles.brandContainer}>
                 <View style={styles.limeSquare} />
                 <Text style={styles.title}>SwoleMates</Text>
               </View>
-              <Text style={[styles.subtitle, styles.launchSubtitle]}>Find your perfect gym partner</Text>
+              <Text style={styles.subtitle}>Find your perfect gym partner</Text>
 
               <View style={styles.socialProofCard}>
                 <Text style={styles.avatarText}>👥🔥</Text>
@@ -636,10 +636,8 @@ const styles = StyleSheet.create({
   startupRule: { backgroundColor: '#CCFF00', borderRadius: 2, height: 3, width: 38 },
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
   overlay: { flex: 1, backgroundColor: 'rgba(5, 5, 5, 0.82)' },
-  launchContainer: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
-  launchContent: { maxWidth: 360, transform: [{ translateX: 12 }], width: '100%' },
-  launchBrandContainer: { justifyContent: 'center' },
-  launchSubtitle: { textAlign: 'center' },
+  launchContainer: { flex: 1, justifyContent: 'flex-end', paddingLeft: 36, paddingRight: 12, paddingBottom: 48 },
+  launchContent: { width: '100%' },
   brandContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   limeSquare: { width: 14, height: 26, backgroundColor: '#CCFF00', borderRadius: 3, marginRight: 10 },
   title: { fontSize: 34, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
