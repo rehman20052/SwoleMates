@@ -54,7 +54,7 @@ export function WorkoutPlanCard({
     plan.status === "completed"
       ? "Completed"
       : plan.status === "scheduled"
-        ? "Scheduled. Check in from Dashboard after it starts."
+        ? "Scheduled. Check in from Home after it starts."
         : plan.status === "cancelled"
           ? "Canceled"
           : accepted

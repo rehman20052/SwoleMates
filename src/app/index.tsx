@@ -1,16 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import {
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
-  SafeAreaView,
   ImageBackground,
   Modal,
   AppState,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  Keyframe,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Line, Path, Rect } from 'react-native-svg';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
@@ -34,6 +46,88 @@ import { useAppData } from '@/state/app-data';
 import { useAppTheme } from '@/theme';
 
 let heicRepair: Promise<UserProfile> | null = null;
+const STARTUP_MINIMUM_MS = 760;
+const STARTUP_EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const startupLogoEntrance = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.94 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }], easing: STARTUP_EASE_OUT },
+})
+  .duration(280)
+  .reduceMotion(ReduceMotion.System);
+const startupWordmarkEntrance = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 8 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }], easing: STARTUP_EASE_OUT },
+})
+  .delay(90)
+  .duration(260)
+  .reduceMotion(ReduceMotion.System);
+
+function StartupSplash({ ready, onFinished }: { ready: boolean; onFinished: () => void }) {
+  const opacity = useSharedValue(1);
+  const [minimumReached, setMinimumReached] = useState(false);
+  const exitStarted = useRef(false);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinimumReached(true), STARTUP_MINIMUM_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !minimumReached || exitStarted.current) return;
+    exitStarted.current = true;
+    opacity.set(
+      withDelay(
+        80,
+        withTiming(
+          0,
+          { duration: 220, easing: STARTUP_EASE_OUT, reduceMotion: ReduceMotion.System },
+          (finished) => {
+            if (finished) scheduleOnRN(onFinished);
+          },
+        ),
+        ReduceMotion.System,
+      ),
+    );
+  }, [minimumReached, onFinished, opacity, ready]);
+
+  return (
+    <Animated.View style={[styles.startupSplash, animatedStyle]}>
+      <Animated.View entering={startupLogoEntrance} style={styles.startupLogoWrap}>
+        <Image
+          accessibilityLabel="SwoleMates logo"
+          contentFit="cover"
+          source={require('../../assets/brand/swolemates-icon-master.png')}
+          style={styles.startupLogo}
+        />
+      </Animated.View>
+      <Animated.View entering={startupWordmarkEntrance} style={styles.startupWordmark}>
+        <Text style={styles.startupTitle}>SwoleMates</Text>
+        <View style={styles.startupRule} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+function HomeBarbellIcon({ color }: { color: string }) {
+  return (
+    <Svg width={24} height={22} viewBox="0 0 32 28" accessibilityLabel="Home">
+      <Path
+        d="M4 11.5 16 2.5l12 9M23.5 7V3.5H27V10"
+        fill="none"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Line x1={8} y1={19} x2={24} y2={19} stroke={color} strokeWidth={2.5} strokeLinecap="round" />
+      <Rect x={5.5} y={14.5} width={3} height={9} rx={1.2} fill={color} />
+      <Rect x={2.5} y={16.25} width={2.5} height={5.5} rx={1} fill={color} />
+      <Rect x={23.5} y={14.5} width={3} height={9} rx={1.2} fill={color} />
+      <Rect x={27} y={16.25} width={2.5} height={5.5} rx={1} fill={color} />
+    </Svg>
+  );
+}
 
 function repairHeicProfile(profile: UserProfile) {
   if (!profile.photos.some((photo) => isHeicMedia(photo))) return Promise.resolve(profile);
@@ -77,6 +171,7 @@ export default function App() {
   const theme = useAppTheme();
   const [currentScreen, setCurrentScreen] = useState('launch');
   const [checkingSession, setCheckingSession] = useState(true);
+  const [showStartup, setShowStartup] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('Discover');
   const [stack, setStack] = useState<Route[]>([]);
   const { logWorkout } = useAppData();
@@ -86,6 +181,7 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [chatAlerts, setChatAlerts] = useState(0);
+  const finishStartup = useCallback(() => setShowStartup(false), []);
 
   useEffect(() => {
     if (currentScreen !== 'main-app') return;
@@ -290,15 +386,8 @@ export default function App() {
     },
   };
 
-  if (checkingSession) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingTitle}>SwoleMates</Text>
-          <Text style={styles.loadingText}>Checking your login…</Text>
-        </View>
-      </SafeAreaView>
-    );
+  if (checkingSession || showStartup) {
+    return <StartupSplash ready={!checkingSession} onFinished={finishStartup} />;
   }
 
   // ==========================================
@@ -313,11 +402,11 @@ export default function App() {
         <View style={styles.overlay}>
           <SafeAreaView style={styles.launchContainer}>
             <View style={styles.launchContent}>
-              <View style={styles.brandContainer}>
+              <View style={[styles.brandContainer, styles.launchBrandContainer]}>
                 <View style={styles.limeSquare} />
                 <Text style={styles.title}>SwoleMates</Text>
               </View>
-              <Text style={styles.subtitle}>Find your perfect gym partner</Text>
+              <Text style={[styles.subtitle, styles.launchSubtitle]}>Find your perfect gym partner</Text>
 
               <View style={styles.socialProofCard}>
                 <Text style={styles.avatarText}>👥🔥</Text>
@@ -434,7 +523,7 @@ export default function App() {
             </View>
           } />
         );
-      case 'Dashboard':
+      case 'Home':
         return (
           <DashboardScreen lifts={profileData} empty={
             <View style={styles.tabContentContainer}>
@@ -477,7 +566,7 @@ export default function App() {
           {([
             { name: 'Discover', icon: '✨' },
             { name: 'Chat', icon: '💬' },
-            { name: 'Dashboard', icon: '⚡' },
+            { name: 'Home', icon: '⌂' },
             { name: 'Social', icon: '👥' },
             { name: 'Profile', icon: '👤' },
           ] as const).map((tab) => {
@@ -490,7 +579,13 @@ export default function App() {
                 onPress={() => nav.setTab(tab.name)}
               >
                 <View style={styles.navIconWrap}>
-                  <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
+                  {tab.name === 'Home' ? (
+                    <View style={styles.homeNavIcon}>
+                      <HomeBarbellIcon color={isActive ? theme.colors.accent : theme.colors.muted} />
+                    </View>
+                  ) : (
+                    <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
+                  )}
                   {tab.name === 'Chat' && chatAlerts > 0 ? (
                     <View style={styles.chatBadge}>
                       <Text style={styles.chatBadgeText}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
@@ -521,10 +616,28 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  startupSplash: {
+    alignItems: 'center',
+    backgroundColor: '#0A0A0C',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  startupLogoWrap: {
+    borderRadius: 36,
+    height: 144,
+    overflow: 'hidden',
+    width: 144,
+  },
+  startupLogo: { height: '100%', width: '100%' },
+  startupWordmark: { alignItems: 'center', gap: 10, paddingTop: 16 },
+  startupTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  startupRule: { backgroundColor: '#CCFF00', borderRadius: 2, height: 3, width: 38 },
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
   overlay: { flex: 1, backgroundColor: 'rgba(5, 5, 5, 0.82)' },
-  launchContainer: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 24, paddingBottom: 48 },
-  launchContent: { width: '100%' },
+  launchContainer: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
+  launchContent: { maxWidth: 360, width: '100%' },
+  launchBrandContainer: { justifyContent: 'center' },
+  launchSubtitle: { textAlign: 'center' },
   brandContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   limeSquare: { width: 14, height: 26, backgroundColor: '#CCFF00', borderRadius: 3, marginRight: 10 },
   title: { fontSize: 34, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
@@ -549,9 +662,6 @@ const styles = StyleSheet.create({
   savedTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   savedBody: { color: '#8E8E93', fontSize: 15, lineHeight: 22 },
   container: { flex: 1, backgroundColor: '#0A0A0A' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  loadingTitle: { color: '#FFFFFF', fontSize: 30, fontWeight: '900' },
-  loadingText: { color: '#999999', fontSize: 14, fontWeight: '600' },
   authInnerContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
   authHeader: { marginBottom: 24, paddingHorizontal: 4 },
   authCard: { backgroundColor: '#121212', borderWidth: 1, borderColor: '#222222', borderRadius: 24, padding: 20 },
@@ -680,6 +790,7 @@ const styles = StyleSheet.create({
   },
   chatBadgeText: { color: '#000000', fontSize: 10, fontWeight: '800' },
   navIcon: { fontSize: 18, marginBottom: 2, opacity: 0.4 },
+  homeNavIcon: { height: 22, justifyContent: 'center', marginBottom: 2 },
   activeNavIcon: { opacity: 1 },
   navLabel: { fontSize: 10, color: '#666666', fontWeight: '600' },
   activeNavLabel: { color: '#CCFF00' },

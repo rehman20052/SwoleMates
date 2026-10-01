@@ -18,6 +18,7 @@ import { type UserProfile } from "@/lib/profile";
 import {
   completeWorkout as checkInWorkout,
   listCheckInWorkouts,
+  listVerifiedWorkoutLogs,
   meetupMissed,
   showUpPromptReady,
   type CheckInWorkout,
@@ -41,7 +42,6 @@ type DashboardProfile = Pick<
 >;
 type MacroField = "calories" | "protein" | "carbs" | "fats";
 
-const WEEKLY_WORKOUT_GOAL = 3;
 const weekdayLabels = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 const macroGoals: Record<MacroField, keyof NutritionTotals> = {
   calories: "calorieGoal",
@@ -114,20 +114,20 @@ function sortByDateDesc<T extends { date: string }>(a: T, b: T) {
   return b.date.localeCompare(a.date);
 }
 
-function countLogsForWeek(logs: SessionLog[], weekStart: Date) {
+function countWorkoutDaysForWeek(logs: SessionLog[], weekStart: Date) {
   const targetWeek = weekKey(weekStart);
-  return logs.filter((log) => weekKey(parseIsoDate(log.date)) === targetWeek).length;
+  return new Set(logs.filter((log) => weekKey(parseIsoDate(log.date)) === targetWeek).map((log) => log.date)).size;
 }
 
 function getWeeklyStreak(logs: SessionLog[], weeklyGoal: number) {
   let cursor = startOfWeek(new Date());
   let streak = 0;
 
-  if (countLogsForWeek(logs, cursor) < weeklyGoal) {
+  if (countWorkoutDaysForWeek(logs, cursor) < weeklyGoal) {
     cursor = addDays(cursor, -7);
   }
 
-  while (countLogsForWeek(logs, cursor) >= weeklyGoal) {
+  while (countWorkoutDaysForWeek(logs, cursor) >= weeklyGoal) {
     streak += 1;
     cursor = addDays(cursor, -7);
   }
@@ -142,6 +142,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showLogForm, setShowLogForm] = useState(false);
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [dashTab, setDashTab] = useState<"home" | "check-in">("home");
   const [reminders, setReminders] = useState<CheckInWorkout[]>([]);
@@ -155,12 +156,21 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [logNotes, setLogNotes] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [calendarLogOpen, setCalendarLogOpen] = useState(false);
+  const [calendarLogTitle, setCalendarLogTitle] = useState("");
+  const [calendarLogNotes, setCalendarLogNotes] = useState("");
+  const [deletingCalendarLogId, setDeletingCalendarLogId] = useState<string | null>(null);
+  const [goalDraft, setGoalDraft] = useState(3);
   const {
     deleteWorkoutLog,
+    foodEntries,
     logWorkout,
     logs,
     nutrition,
+    syncVerifiedWorkoutLogs,
+    updateWeeklyWorkoutGoal,
     updateWorkoutLog,
+    weeklyWorkoutGoal,
   } = useAppData();
 
   useEffect(() => {
@@ -184,6 +194,25 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     };
   }, [dashTab]);
 
+  useEffect(() => {
+    if (dashTab !== "home") return;
+    let active = true;
+    const refreshVerifiedLogs = async () => {
+      try {
+        const verifiedLogs = await listVerifiedWorkoutLogs();
+        if (active) syncVerifiedWorkoutLogs(verifiedLogs);
+      } catch {
+        // Keep the last saved calendar data when a background refresh fails.
+      }
+    };
+    void refreshVerifiedLogs();
+    const timer = setInterval(() => void refreshVerifiedLogs(), 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [dashTab]);
+
   const todayIso = daysFromToday(0);
   const currentWeekStart = useMemo(() => startOfWeek(new Date()), []);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index)), [currentWeekStart]);
@@ -200,12 +229,24 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const weekStartIso = toIsoDate(currentWeekStart);
   const weekEndIso = toIsoDate(addDays(currentWeekStart, 6));
   const weeklyLogs = logs.filter((log) => log.date >= weekStartIso && log.date <= weekEndIso);
-  const weeklyStreak = getWeeklyStreak(logs, WEEKLY_WORKOUT_GOAL);
-  const weeklyProgress = Math.min(weeklyLogs.length / WEEKLY_WORKOUT_GOAL, 1);
+  const weeklyWorkoutDays = new Set(weeklyLogs.map((log) => log.date)).size;
+  const weeklyStreak = getWeeklyStreak(logs, weeklyWorkoutGoal);
+  const weeklyProgress = Math.min(weeklyWorkoutDays / weeklyWorkoutGoal, 1);
   const sortedLogs = [...logs].sort(sortByDateDesc);
   const visibleLogs = showAllActivities ? sortedLogs : sortedLogs.slice(0, 2);
   const selectedDayLogs = [...(logsByDate.get(selectedCalendarDate) ?? [])].sort(sortByDateDesc);
-  const selectedDayNutrition = selectedCalendarDate === todayIso ? nutrition : null;
+  const selectedDayFood = foodEntries.filter((entry) => entry.date === selectedCalendarDate);
+  const selectedDayNutrition = selectedDayFood.length
+    ? selectedDayFood.reduce(
+        (total, entry) => ({
+          calories: total.calories + entry.calories,
+          protein: total.protein + entry.protein,
+          carbs: total.carbs + entry.carbs,
+          fats: total.fats + entry.fats,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      )
+    : null;
 
   const lifts = (
     [
@@ -229,6 +270,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       await checkInWorkout(item.plan);
       const items = await listCheckInWorkouts();
       setReminders(items.filter((row) => row.plan.status === "scheduled").slice(0, 2));
+      syncVerifiedWorkoutLogs(await listVerifiedWorkoutLogs());
     } catch (err) {
       setReminderError(err instanceof Error ? err.message : "Could not check in.");
     } finally {
@@ -279,6 +321,49 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setEditTitle("");
     setEditNotes("");
     showNotice("Activity deleted. Weekly goal updated.");
+  }
+
+  function openGoalEditor() {
+    setGoalDraft(weeklyWorkoutGoal);
+    setShowGoalEditor(true);
+  }
+
+  function saveWeeklyGoal() {
+    updateWeeklyWorkoutGoal(goalDraft);
+    setShowGoalEditor(false);
+    showNotice(`Weekly goal set to ${goalDraft} workout day${goalDraft === 1 ? "" : "s"}.`);
+  }
+
+  function openCalendarDay(iso: string) {
+    setSelectedCalendarDate(iso);
+    setCalendarMonth(startOfMonth(parseIsoDate(iso)));
+    setCalendarLogOpen(false);
+    setShowCalendar(true);
+  }
+
+  function closeCalendar() {
+    setDeletingCalendarLogId(null);
+    setCalendarLogOpen(false);
+    setShowCalendar(false);
+  }
+
+  function saveCalendarWorkout() {
+    const title = calendarLogTitle.trim();
+    if (!title) {
+      showNotice("Add a workout name first.");
+      return;
+    }
+    logWorkout(title, calendarLogNotes.trim() || undefined, selectedCalendarDate);
+    setCalendarLogTitle("");
+    setCalendarLogNotes("");
+    setCalendarLogOpen(false);
+    showNotice("Workout logged. Weekly goal updated.");
+  }
+
+  function deleteCalendarWorkout(log: SessionLog) {
+    deleteWorkoutLog(log.id);
+    setDeletingCalendarLogId(null);
+    showNotice("Workout deleted. Weekly goal updated.");
   }
 
   if (showSettings) return <SettingsScreen onClose={() => setShowSettings(false)} />;
@@ -343,20 +428,25 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
 
           <View style={{ gap: 8 }}>
             <View style={styles.sectionHeader}>
-              <AppText size={13} muted>
-                Weekly goal
-              </AppText>
-              <AppText size={13} weight="bold">
-                {weeklyLogs.length}/{WEEKLY_WORKOUT_GOAL} workouts
-              </AppText>
+              <View style={{ gap: 2 }}>
+                <AppText size={13} muted>
+                  Weekly goal
+                </AppText>
+                <AppText size={13} weight="bold">
+                  {weeklyWorkoutDays}/{weeklyWorkoutGoal} workout days
+                </AppText>
+              </View>
+              <SecondaryButton height={34} fontSize={12} style={styles.smallButton} onPress={openGoalEditor}>
+                Edit goal
+              </SecondaryButton>
             </View>
             <ProgressBar progress={weeklyProgress} />
             <AppText size={12} muted>
-              {weeklyLogs.length >= WEEKLY_WORKOUT_GOAL
+              {weeklyWorkoutDays >= weeklyWorkoutGoal
                 ? "Goal hit for this week."
-                : `${WEEKLY_WORKOUT_GOAL - weeklyLogs.length} more workout${
-                    WEEKLY_WORKOUT_GOAL - weeklyLogs.length === 1 ? "" : "s"
-                  } this week to build your streak.`}
+                : `${weeklyWorkoutGoal - weeklyWorkoutDays} more workout day${
+                    weeklyWorkoutGoal - weeklyWorkoutDays === 1 ? "" : "s"
+                  } this week to build your streak. A partner workout counts after both people check in.`}
             </AppText>
           </View>
 
@@ -366,8 +456,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
               const logged = loggedDates.has(iso);
               const today = iso === todayIso;
               return (
-                <View
+                <Pressable
                   key={iso}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${calendarDayTitle(iso)} activity`}
+                  onPress={() => openCalendarDay(iso)}
                   style={[
                     styles.weekDay,
                     {
@@ -382,7 +475,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                   <AppText size={14} weight="black" color={logged ? theme.colors.primaryText : theme.colors.text}>
                     {logged ? "✓" : day.getDate()}
                   </AppText>
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -571,9 +664,9 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         ) : null}
       </ScrollBody> : null}
 
-      <Modal animationType="slide" transparent visible={showCalendar} onRequestClose={() => setShowCalendar(false)}>
+      <Modal animationType="slide" transparent visible={showCalendar} onRequestClose={closeCalendar}>
         <View style={styles.modalOverlay}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close calendar" style={styles.modalBackdrop} onPress={() => setShowCalendar(false)} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Close calendar" style={styles.modalBackdrop} onPress={closeCalendar} />
           <View style={[styles.calendarSheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.calendarSheetContent}>
               <View style={styles.sheetHeader}>
@@ -588,7 +681,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Close calendar"
-                  onPress={() => setShowCalendar(false)}
+                  onPress={closeCalendar}
                   style={[styles.closeButton, { backgroundColor: theme.colors.surfaceRaised }]}
                 >
                   <AppText size={24} weight="bold">
@@ -639,7 +732,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                     const isToday = iso === todayIso;
                     const hasWorkout = loggedDates.has(iso);
-                    const hasNutrition = iso === todayIso && !!nutrition;
+                    const hasNutrition = foodEntries.some((entry) => entry.date === iso);
                     const hasActivity = hasWorkout || hasNutrition;
                     const dayBackground = hasActivity
                       ? theme.colors.primary
@@ -653,7 +746,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                         key={iso}
                         accessibilityRole="button"
                         accessibilityLabel={`View ${calendarDayTitle(iso)} activity`}
-                        onPress={() => setSelectedCalendarDate(iso)}
+                        onPress={() => {
+                          setSelectedCalendarDate(iso);
+                          setCalendarLogOpen(false);
+                          setDeletingCalendarLogId(null);
+                        }}
                         style={[
                           styles.calendarDay,
                           {
@@ -686,17 +783,77 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
 
                 {selectedDayLogs.length || selectedDayNutrition ? (
                   <View style={{ gap: 10 }}>
-                    {selectedDayLogs.map((log) => (
-                      <View key={log.id} style={[styles.dayDetailRow, { backgroundColor: theme.colors.surfaceRaised }]}>
-                        <AppText size={18}>🏋️</AppText>
-                        <View style={{ flex: 1, gap: 3 }}>
-                          <AppText weight="bold">Worked out: {log.title}</AppText>
-                          <AppText size={12} muted numberOfLines={2}>
-                            {log.notes || (log.verified ? "Verified partner attendance" : "Self-logged workout")}
-                          </AppText>
+                    {selectedDayLogs.map((log) => {
+                      const confirmingDelete = deletingCalendarLogId === log.id;
+                      return (
+                        <View key={log.id} style={{ gap: 8 }}>
+                          <View style={[styles.dayDetailRow, { backgroundColor: theme.colors.surfaceRaised }]}>
+                            {log.partnerName ? (
+                              <PartnerFace name={log.partnerName} photo={log.partnerPhoto ?? null} size={42} />
+                            ) : (
+                              <AppText size={18}>🏋️</AppText>
+                            )}
+                            <View style={{ flex: 1, gap: 3 }}>
+                              <AppText weight="bold">Worked out: {log.title}</AppText>
+                              {log.partnerName ? (
+                                <AppText size={12} weight="bold" primary>
+                                  With {log.partnerName}
+                                </AppText>
+                              ) : null}
+                              <AppText size={12} muted numberOfLines={2}>
+                                {log.notes || (log.checkedIn ? "Checked in for this workout" : log.verified ? "Verified partner attendance" : "Self-logged workout")}
+                              </AppText>
+                            </View>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Delete ${log.title}`}
+                              hitSlop={8}
+                              onPress={() => setDeletingCalendarLogId(log.id)}
+                              style={[styles.calendarDeleteButton, { borderColor: theme.colors.danger }]}
+                            >
+                              <AppText size={12} weight="bold" color={theme.colors.danger}>
+                                Delete
+                              </AppText>
+                            </Pressable>
+                          </View>
+
+                          {confirmingDelete ? (
+                            <View
+                              accessibilityRole="alert"
+                              style={[styles.deleteConfirmation, { borderColor: theme.colors.danger }]}
+                            >
+                              <View style={{ flex: 1, gap: 2 }}>
+                                <AppText size={13} weight="bold">
+                                  Delete this workout?
+                                </AppText>
+                                <AppText size={11} muted>
+                                  Your weekly progress will be recalculated.
+                                </AppText>
+                              </View>
+                              <Pressable
+                                accessibilityRole="button"
+                                onPress={() => setDeletingCalendarLogId(null)}
+                                style={styles.confirmationButton}
+                              >
+                                <AppText size={12} weight="bold" muted>
+                                  Cancel
+                                </AppText>
+                              </Pressable>
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={`Confirm delete ${log.title}`}
+                                onPress={() => deleteCalendarWorkout(log)}
+                                style={[styles.confirmationButton, { backgroundColor: theme.colors.danger }]}
+                              >
+                                <AppText size={12} weight="bold" color="#FFFFFF">
+                                  Delete
+                                </AppText>
+                              </Pressable>
+                            </View>
+                          ) : null}
                         </View>
-                      </View>
-                    ))}
+                      );
+                    })}
 
                     {selectedDayNutrition ? (
                       <View style={[styles.dayDetailRow, { backgroundColor: theme.colors.surfaceRaised }]}>
@@ -715,6 +872,43 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     No workout or nutrition has been logged for this day yet.
                   </AppText>
                 )}
+
+                {selectedCalendarDate <= todayIso ? (
+                  calendarLogOpen ? (
+                    <View style={{ gap: 10 }}>
+                      <Input
+                        bordered
+                        placeholder="Workout name, e.g. Pull Day"
+                        value={calendarLogTitle}
+                        onChangeText={setCalendarLogTitle}
+                      />
+                      <Input
+                        bordered
+                        multiline
+                        placeholder="Exercises, sets, or notes"
+                        value={calendarLogNotes}
+                        onChangeText={setCalendarLogNotes}
+                      />
+                      <View style={styles.quickActions}>
+                        <SecondaryButton
+                          height={42}
+                          fontSize={13}
+                          style={styles.quickButton}
+                          onPress={() => setCalendarLogOpen(false)}
+                        >
+                          Cancel
+                        </SecondaryButton>
+                        <PrimaryButton height={42} fontSize={13} style={styles.quickButton} onPress={saveCalendarWorkout}>
+                          Save workout
+                        </PrimaryButton>
+                      </View>
+                    </View>
+                  ) : (
+                    <SecondaryButton height={42} fontSize={13} onPress={() => setCalendarLogOpen(true)}>
+                      Log workout for this day
+                    </SecondaryButton>
+                  )
+                ) : null}
               </Card>
 
               <Card padding={16} radius={22} gap={8} style={{ backgroundColor: theme.colors.primaryDeep }}>
@@ -722,14 +916,79 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                   Current week
                 </AppText>
                 <AppText size={18} weight="black">
-                  {weeklyLogs.length >= WEEKLY_WORKOUT_GOAL
+                  {weeklyWorkoutDays >= weeklyWorkoutGoal
                     ? "You're on fire. You've secured your streak for the week."
-                    : `${WEEKLY_WORKOUT_GOAL - weeklyLogs.length} more workout${
-                        WEEKLY_WORKOUT_GOAL - weeklyLogs.length === 1 ? "" : "s"
+                    : `${weeklyWorkoutGoal - weeklyWorkoutDays} more workout day${
+                        weeklyWorkoutGoal - weeklyWorkoutDays === 1 ? "" : "s"
                       } to secure this week.`}
                 </AppText>
               </Card>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="fade" transparent visible={showGoalEditor} onRequestClose={() => setShowGoalEditor(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close weekly goal editor"
+            style={styles.modalBackdrop}
+            onPress={() => setShowGoalEditor(false)}
+          />
+          <View style={[styles.goalSheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <SectionLabel>Weekly goal</SectionLabel>
+                <AppText size={24} weight="black">
+                  Choose your workout days
+                </AppText>
+                <AppText size={13} muted style={{ lineHeight: 19 }}>
+                  Each day with a workout log counts once. Partner workouts count after both people check in.
+                </AppText>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close weekly goal editor"
+                onPress={() => setShowGoalEditor(false)}
+                style={[styles.closeButton, { backgroundColor: theme.colors.surfaceRaised }]}
+              >
+                <AppText size={24} weight="bold">×</AppText>
+              </Pressable>
+            </View>
+
+            <View style={styles.goalOptions}>
+              {Array.from({ length: 7 }, (_, index) => index + 1).map((goal) => {
+                const selected = goal === goalDraft;
+                return (
+                  <Pressable
+                    key={goal}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`${goal} workout day${goal === 1 ? "" : "s"} per week`}
+                    onPress={() => setGoalDraft(goal)}
+                    style={[
+                      styles.goalOption,
+                      {
+                        backgroundColor: selected ? theme.colors.primary : theme.colors.surfaceRaised,
+                        borderColor: selected ? theme.colors.primary : theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <AppText size={22} weight="black" color={selected ? theme.colors.primaryText : theme.colors.text}>
+                      {goal}
+                    </AppText>
+                    <AppText size={10} weight="bold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+                      {goal === 1 ? "DAY" : "DAYS"}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <PrimaryButton height={48} onPress={saveWeeklyGoal}>
+              Save weekly goal
+            </PrimaryButton>
           </View>
         </View>
       </Modal>
@@ -786,6 +1045,7 @@ function PartnerFace({ name, photo, size }: { name: string; photo: string | null
 
 function CheckInPanel() {
   const theme = useAppTheme();
+  const { syncVerifiedWorkoutLogs } = useAppData();
   const [items, setItems] = useState<CheckInWorkout[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -823,6 +1083,7 @@ function CheckInPanel() {
       await checkInWorkout(item.plan);
       const workouts = await listCheckInWorkouts();
       setItems(workouts);
+      syncVerifiedWorkoutLogs(await listVerifiedWorkoutLogs());
       setStatus("ready");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not check in.");
@@ -834,7 +1095,7 @@ function CheckInPanel() {
   return (
     <ScrollBody contentContainerStyle={styles.body}>
       <AppText muted style={{ lineHeight: 20 }}>
-        Check in when a workout starts. It counts when both of you do.
+        Check in when a workout starts. It appears on both Home calendars and counts toward the weekly goal after both people check in.
       </AppText>
       {status === "loading" ? <AppText muted>Loading workouts...</AppText> : null}
       {status === "error" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
@@ -1041,6 +1302,30 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
   },
+  goalSheet: {
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderWidth: 1,
+    gap: 18,
+    maxWidth: 430,
+    padding: 20,
+    paddingBottom: 28,
+    width: "100%",
+  },
+  goalOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  goalOption: {
+    alignItems: "center",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 2,
+    justifyContent: "center",
+    minHeight: 66,
+    width: "22%",
+  },
   calendarSheetContent: {
     gap: 14,
     padding: 18,
@@ -1102,5 +1387,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     padding: 12,
+  },
+  calendarDeleteButton: {
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  deleteConfirmation: {
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    padding: 10,
+  },
+  confirmationButton: {
+    alignItems: "center",
+    borderRadius: 9,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 10,
   },
 });

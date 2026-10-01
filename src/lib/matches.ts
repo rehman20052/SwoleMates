@@ -385,7 +385,7 @@ async function currentUserId() {
 export async function sendMatchRequest(toUserId: string) {
   const me = await currentUserId();
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
-  if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Dashboard settings before matching again.");
+  if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Home settings before matching again.");
 
   // The database this project is using still names the argument to_user_id.
   // A newer script renames it to target_user so it does not clash with the column.

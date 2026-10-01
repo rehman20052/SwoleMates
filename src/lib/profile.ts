@@ -443,7 +443,7 @@ async function uploadProfileMedia(userId: string, photo: string, kind: ProfileMe
 
   const rendered = Boolean(existing && isHeicMedia(existing));
   const loaded = rendered
-    ? await loadRenderedJpeg(renderJpegUrl(publicPhotoUrl(existing)))
+    ? await loadRenderedJpeg(renderJpegUrl(publicPhotoUrl(existing!)))
     : await loadMedia(photo);
   const heic = !rendered && kind === "image" && looksLikeHeic(loaded.bytes, mimeType || loaded.mime, photo);
   if (heic) {

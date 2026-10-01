@@ -8,13 +8,17 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { View } from "react-native";
 
 import { PhoneFrame } from "@/components/phone-frame";
 import { VideoCompressorHost } from "@/components/video-compressor-host";
 import { AppDataProvider } from "@/state/app-data";
 import { ThemeProvider, useAppTheme } from "@/theme";
+
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   return (
@@ -34,6 +38,10 @@ function RootShell() {
     Inter_800ExtraBold,
     Inter_900Black,
   });
+
+  useEffect(() => {
+    if (fontsLoaded) void SplashScreen.hideAsync();
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
