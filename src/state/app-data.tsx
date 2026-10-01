@@ -1,4 +1,5 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
 import {
@@ -59,7 +60,16 @@ export type SessionLog = {
   title: string;
   notes?: string;
   verified: boolean;
+  checkedIn?: boolean;
+  plannedWorkoutId?: string;
+  partnerName?: string;
+  partnerPhoto?: string | null;
 };
+
+export type WorkoutLogDetails = Pick<
+  SessionLog,
+  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto"
+>;
 
 export type NutritionTotals = {
   calories: number;
@@ -108,6 +118,7 @@ type AppData = {
   completedWorkoutIds: string[];
   logs: SessionLog[];
   streak: number;
+  weeklyWorkoutGoal: number;
   nutrition: NutritionTotals | null;
   foodEntries: FoodLogEntry[];
   savedMeals: SavedMeal[];
@@ -132,13 +143,17 @@ type AppDataContextValue = AppData & {
   deleteFoodEntry: (entryId: string) => void;
   saveMeal: (meal: Omit<SavedMeal, "id">) => void;
   updateNutritionProfile: (profile: NutritionProfile) => void;
-  logWorkout: (title?: string, notes?: string) => void;
+  updateWeeklyWorkoutGoal: (goal: number) => void;
+  logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>) => void;
+  syncVerifiedWorkoutLogs: (logs: SessionLog[]) => void;
   updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => void;
   deleteWorkoutLog: (logId: string) => void;
   resetDeck: () => void;
 };
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
+const weeklyWorkoutGoalKey = "swolemates.weekly-workout-goal";
+const dashboardStateKey = "swolemates.dashboard-state";
 
 function toIsoDate(date: Date) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -184,22 +199,15 @@ const defaultPreferences: Preferences = {
 };
 
 const defaultNutrition: NutritionTotals = {
-  calories: 2450,
-  protein: 185,
-  carbs: 220,
-  fats: 65,
+  calories: 0,
+  protein: 0,
+  carbs: 0,
+  fats: 0,
   calorieGoal: 2500,
   proteinGoal: 190,
   carbGoal: 260,
   fatGoal: 75,
 };
-
-const seedFoodEntries: FoodLogEntry[] = [
-  { id: "food-1", date: daysFromToday(0), meal: "Breakfast", name: "Egg white & turkey wrap", calories: 520, protein: 48, carbs: 43, fats: 16 },
-  { id: "food-2", date: daysFromToday(0), meal: "Lunch", name: "Chicken rice bowl", calories: 780, protein: 62, carbs: 82, fats: 21 },
-  { id: "food-3", date: daysFromToday(0), meal: "Snack", name: "Greek yogurt protein parfait", calories: 350, protein: 35, carbs: 39, fats: 8 },
-  { id: "food-4", date: daysFromToday(0), meal: "Dinner", name: "Salmon with sweet potato", calories: 800, protein: 40, carbs: 56, fats: 20 },
-];
 
 const seedSavedMeals: SavedMeal[] = [
   { id: "saved-1", meal: "Breakfast", name: "Protein shake", calories: 210, protein: 32, carbs: 12, fats: 4 },
@@ -264,14 +272,11 @@ function seedData(): AppData {
       },
     ],
     completedWorkoutIds: [],
-    logs: [
-      { id: "l1", date: daysFromToday(-1), title: "Chest & Triceps with Marcus", verified: true },
-      { id: "l2", date: daysFromToday(-4), title: "Active Recovery Yoga with Serena", verified: true },
-      { id: "l3", date: daysFromToday(-6), title: "Back & Biceps with Marcus", verified: true },
-    ],
-    streak: 14,
+    logs: [],
+    streak: 0,
+    weeklyWorkoutGoal: 3,
     nutrition: defaultNutrition,
-    foodEntries: seedFoodEntries,
+    foodEntries: [],
     savedMeals: seedSavedMeals,
     nutritionProfile: null,
   };
@@ -289,9 +294,50 @@ const focusTitles: Record<WorkoutFocus, string> = {
 export function AppDataProvider({ children }: PropsWithChildren) {
   const [data, setData] = useState<AppData>(seedData);
   const [discoverPrefsLoaded, setDiscoverPrefsLoaded] = useState(false);
+  const [dashboardHydrated, setDashboardHydrated] = useState(false);
   const filtersTouched = useRef(false);
   const filterSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFilters = useRef<DiscoverFilters | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([AsyncStorage.getItem(weeklyWorkoutGoalKey), AsyncStorage.getItem(dashboardStateKey)])
+      .then(([savedGoal, savedDashboard]) => {
+        if (!active) return;
+        const parsedGoal = Number(savedGoal);
+        let saved: Partial<Pick<AppData, "logs" | "foodEntries" | "nutrition">> = {};
+        try {
+          saved = savedDashboard ? JSON.parse(savedDashboard) : {};
+        } catch {
+          saved = {};
+        }
+        setData((current) => ({
+          ...current,
+          logs: Array.isArray(saved.logs) ? saved.logs : current.logs,
+          foodEntries: Array.isArray(saved.foodEntries) ? saved.foodEntries : current.foodEntries,
+          nutrition: saved.nutrition && typeof saved.nutrition === "object" ? saved.nutrition : current.nutrition,
+          weeklyWorkoutGoal:
+            Number.isInteger(parsedGoal) && parsedGoal >= 1 && parsedGoal <= 7
+              ? parsedGoal
+              : current.weeklyWorkoutGoal,
+        }));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setDashboardHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!dashboardHydrated) return;
+    void AsyncStorage.setItem(
+      dashboardStateKey,
+      JSON.stringify({ logs: data.logs, foodEntries: data.foodEntries, nutrition: data.nutrition }),
+    );
+  }, [dashboardHydrated, data.foodEntries, data.logs, data.nutrition]);
 
   useEffect(() => {
     let active = true;
@@ -554,15 +600,36 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       updateNutritionProfile(profile) {
         update((current) => ({ ...current, nutritionProfile: profile }));
       },
-      logWorkout(title = "Solo workout", notes) {
+      updateWeeklyWorkoutGoal(goal) {
+        const normalized = Math.max(1, Math.min(7, Math.round(goal)));
+        update((current) => ({ ...current, weeklyWorkoutGoal: normalized }));
+        void AsyncStorage.setItem(weeklyWorkoutGoalKey, `${normalized}`);
+      },
+      logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}) {
         update((current) => ({
           ...current,
-          logs: [
-            { id: `log-${Date.now()}`, date: daysFromToday(0), title, notes, verified: false },
-            ...current.logs,
-          ],
-          streak: current.streak + 1,
+          logs: current.logs.some(
+            (log) => details.plannedWorkoutId && log.plannedWorkoutId === details.plannedWorkoutId && log.date === date,
+          )
+            ? current.logs
+            : [
+                {
+                  id: `log-${Date.now()}`,
+                  date,
+                  title,
+                  notes,
+                  verified: details.verified ?? false,
+                  ...details,
+                },
+                ...current.logs,
+              ],
         }));
+      },
+      syncVerifiedWorkoutLogs(logs) {
+        update((current) => {
+          const nonCheckInLogs = current.logs.filter((log) => !log.checkedIn || !log.plannedWorkoutId);
+          return { ...current, logs: [...logs, ...nonCheckInLogs] };
+        });
       },
       updateWorkoutLog(logId, updates) {
         update((current) => ({

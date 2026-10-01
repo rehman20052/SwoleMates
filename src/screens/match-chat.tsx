@@ -573,7 +573,7 @@ export function MatchChat({ userId }: { userId: string }) {
               <View style={styles.safetyCopy}>
                 <AppText size={16} weight="extrabold">Block {person.name}?</AppText>
                 <AppText size={13} muted style={{ lineHeight: 18 }}>
-                  They disappear from Discover, chat, and matching. You can unblock them from the settings gear on Dashboard.
+                  They disappear from Discover, chat, and matching. You can unblock them from the settings gear on Home.
                 </AppText>
                 <View style={styles.safetyButtons}>
                   <Pressable accessibilityRole="button" onPress={closeSafety} disabled={safetyBusy} style={[styles.safetyButton, { backgroundColor: theme.colors.surfaceRaised }]}>

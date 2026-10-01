@@ -8,7 +8,10 @@
     "scheme": "swolemates",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -23,6 +26,19 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0C",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0A0A0C",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
       "expo-image",
       "expo-font",
       [

@@ -248,6 +248,18 @@ export type CheckInWorkout = {
   partnerCheckedIn: boolean;
 };
 
+export type VerifiedWorkoutLog = {
+  id: string;
+  date: string;
+  title: string;
+  notes: string;
+  verified: true;
+  checkedIn: true;
+  plannedWorkoutId: string;
+  partnerName: string;
+  partnerPhoto: string | null;
+};
+
 export async function listCheckInWorkouts() {
   const today = new Date();
   const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -279,6 +291,45 @@ export async function listCheckInWorkouts() {
         partnerPhoto: partner?.photo ?? null,
         checkedIn: plan.attendedBy.includes(me),
         partnerCheckedIn: plan.attendedBy.some((id) => id !== me),
+      };
+    });
+}
+
+export async function listVerifiedWorkoutLogs(): Promise<VerifiedWorkoutLog[]> {
+  const connections = (await listConnections()).filter((person) => person.status === "accepted");
+  if (connections.length === 0) return [];
+
+  const me = await currentUserId();
+  const today = localIsoDate(new Date());
+  const listed = await supabase
+    .from("planned_workout")
+    .select("planned_workout_id, match_id, created_by, title, focus, workout_date, start_time, location, status, notes")
+    .in("match_id", connections.map((person) => person.requestId))
+    .in("status", ["scheduled", "completed"])
+    .lte("workout_date", today)
+    .order("workout_date", { ascending: false })
+    .limit(365);
+  if (listed.error) throw planError(listed.error, "Could not load verified workout check-ins.");
+
+  const partners = new Map(
+    connections.map((person) => [person.requestId, { name: person.name.trim() || "your partner", photo: person.photo }]),
+  );
+  const plans = await settleShownUp(await withAttendance(((listed.data ?? []) as PlanRow[]).map(fromRow)));
+
+  return plans
+    .filter((plan) => plan.attendedBy.includes(me) && plan.attendedBy.some((id) => id !== me))
+    .map((plan) => {
+      const partner = partners.get(plan.matchId);
+      return {
+        id: `verified-check-in-${plan.id}`,
+        date: plan.date,
+        title: plan.title,
+        notes: `Checked in together at ${plan.location}.`,
+        verified: true as const,
+        checkedIn: true as const,
+        plannedWorkoutId: plan.id,
+        partnerName: partner?.name || "your partner",
+        partnerPhoto: partner?.photo ?? null,
       };
     });
 }
