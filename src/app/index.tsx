@@ -402,21 +402,19 @@ export default function App() {
         <View style={styles.overlay}>
           <SafeAreaView style={styles.launchContainer}>
             <View style={styles.launchContent}>
-              <View style={styles.launchPrimaryContent}>
-                <View style={[styles.brandContainer, styles.launchBrandContainer]}>
-                  <View style={styles.limeSquare} />
-                  <Text style={styles.title}>SwoleMates</Text>
-                </View>
-                <Text style={[styles.subtitle, styles.launchSubtitle]}>Find your perfect gym partner</Text>
+              <View style={[styles.brandContainer, styles.launchBrandContainer]}>
+                <View style={styles.limeSquare} />
+                <Text style={styles.title}>SwoleMates</Text>
+              </View>
+              <Text style={[styles.subtitle, styles.launchSubtitle]}>Find your perfect gym partner</Text>
 
-                <View style={styles.socialProofCard}>
-                  <Text style={styles.avatarText}>👥🔥</Text>
-                  <Text style={styles.socialProofText}>Join local lifters and match today!</Text>
-                </View>
+              <View style={styles.socialProofCard}>
+                <Text style={styles.avatarText}>👥🔥</Text>
+                <Text style={styles.socialProofText}>Join local lifters and match today!</Text>
               </View>
 
               <TouchableOpacity
-                style={[styles.limeButton, styles.launchButton]}
+                style={styles.limeButton}
                 onPress={() => setCurrentScreen('auth')}
               >
                 <Text style={styles.limeButtonText}>Get Started →</Text>
@@ -636,12 +634,10 @@ const styles = StyleSheet.create({
   startupRule: { backgroundColor: '#CCFF00', borderRadius: 2, height: 3, width: 38 },
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
   overlay: { flex: 1, backgroundColor: 'rgba(5, 5, 5, 0.82)' },
-  launchContainer: { alignItems: 'center', flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
-  launchContent: { flex: 1, maxWidth: 360, width: '100%' },
-  launchPrimaryContent: { flex: 1, justifyContent: 'center', paddingTop: 64 },
+  launchContainer: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
+  launchContent: { maxWidth: 360, transform: [{ translateX: 8 }], width: '100%' },
   launchBrandContainer: { justifyContent: 'center' },
   launchSubtitle: { textAlign: 'center' },
-  launchButton: { marginBottom: 8 },
   brandContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   limeSquare: { width: 14, height: 26, backgroundColor: '#CCFF00', borderRadius: 3, marginRight: 10 },
   title: { fontSize: 34, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
