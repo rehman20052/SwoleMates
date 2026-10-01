@@ -24,6 +24,7 @@ import {
   type CheckInWorkout,
   type PlannedWorkout,
 } from "@/lib/workouts";
+import { queueSocialDraft } from "@/lib/social";
 import { useNavigation } from "@/navigation";
 import { SettingsScreen } from "@/screens/settings";
 import {
@@ -626,6 +627,18 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                       {log.notes || (log.verified ? "Verified partner session" : "Self-logged workout")}
                     </AppText>
                   </View>
+                  <SecondaryButton
+                    height={32}
+                    fontSize={12}
+                    style={styles.editButton}
+                    onPress={() => {
+                      const lines = [log.title, formatShortDate(log.date), log.notes].filter(Boolean);
+                      queueSocialDraft(lines.join("\n"));
+                      nav.setTab("Social");
+                    }}
+                  >
+                    Share
+                  </SecondaryButton>
                   <SecondaryButton height={32} fontSize={12} style={styles.editButton} onPress={() => beginEditLog(log)}>
                     Edit
                   </SecondaryButton>

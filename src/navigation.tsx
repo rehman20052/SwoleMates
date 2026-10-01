@@ -8,11 +8,12 @@ export type Route =
   | { name: "partner"; id: string }
   | { name: "chat"; id: string }
   | { name: "request-profile"; userId: string }
+  | { name: "social-profile"; userId: string }
   | { name: "schedule"; partnerId?: string }
   | { name: "scheduled"; workoutId: string }
   | { name: "nutrition" };
 
-export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "schedule", "scheduled"];
+export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "social-profile", "schedule", "scheduled"];
 
 type Navigation = {
   push: (route: Route) => void;
