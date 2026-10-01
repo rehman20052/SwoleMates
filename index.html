@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no"
+    />
     <meta name="theme-color" content="#0A0A0C" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -17,16 +20,29 @@
       html,
       body {
         height: 100%;
+        margin: 0;
+        background: #0a0a0c;
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
         overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: pan-x pan-y;
+        -webkit-text-size-adjust: 100%;
       }
       /* These styles make the root element full-height */
       #root {
         display: flex;
         height: 100%;
         flex: 1;
+        background: #0a0a0c;
+      }
+      @supports (height: 100dvh) {
+        html,
+        body,
+        #root {
+          height: 100dvh;
+        }
       }
     </style>
   <link rel="icon" href="/SwoleMates/favicon.ico"/></head>
@@ -45,6 +61,6 @@
         });
       }
     </script>
-  <script src="/SwoleMates/_expo/static/js/web/entry-bd922e3ac075c0be8b4eebdefe70abb7.js" defer></script>
+  <script src="/SwoleMates/_expo/static/js/web/entry-ad9888e23c3aa5fb47f0970948ec033d.js" defer></script>
 </body>
 </html>
