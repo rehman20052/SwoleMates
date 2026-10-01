@@ -40,7 +40,7 @@ import { PartnerProfileScreen } from '@/screens/partner-profile';
 import { ProfileScreen } from '@/screens/profile';
 import { RequestProfileScreen } from '@/screens/request-profile';
 import { ScheduleWorkoutScreen } from '@/screens/schedule-workout';
-import { SocialScreen } from '@/screens/social';
+import { SocialProfileScreen, SocialScreen } from '@/screens/social';
 import { WorkoutScheduledScreen } from '@/screens/workout-scheduled';
 import { useAppData } from '@/state/app-data';
 import { useAppTheme } from '@/theme';
@@ -495,6 +495,8 @@ export default function App() {
         return <ChatScreen id={route.id} />;
       case 'request-profile':
         return <RequestProfileScreen userId={route.userId} />;
+      case 'social-profile':
+        return <SocialProfileScreen userId={route.userId} me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />;
       case 'schedule':
         return <ScheduleWorkoutScreen partnerId={route.partnerId} />;
       case 'scheduled':

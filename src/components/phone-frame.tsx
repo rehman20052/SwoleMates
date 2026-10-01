@@ -6,6 +6,13 @@ import { useAppTheme } from "@/theme";
 // Matches the iPhone frames in the Figma file.
 const PHONE = { width: 402, height: 874 };
 
+// The box the app actually occupies: the desktop phone frame, or the real screen on a phone.
+export function appFrameSize(window: { width: number; height: number }) {
+  const framed = Platform.OS === "web" && window.width > PHONE.width + 48;
+  if (!framed) return { width: window.width, height: window.height };
+  return { width: PHONE.width, height: Math.min(PHONE.height, window.height - 32) };
+}
+
 // On desktop web, render the app inside a phone-sized frame so layouts match
 // what you see in Expo Go. Phones (and native) render full screen as usual.
 export function PhoneFrame({ children }: PropsWithChildren) {

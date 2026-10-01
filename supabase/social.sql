@@ -77,6 +77,41 @@ as $$
     );
 $$;
 
+-- One setting per person. Private (false) is matches-only. Public is any signed-in user.
+alter table public.user_account add column if not exists social_public boolean not null default false;
+
+-- Private accounts are matches-only. A public account is visible to any signed-in
+-- user, unless someone blocked the other.
+create or replace function public.can_see_author(author uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select author = (select auth.uid())
+    or (
+      not exists (
+        select 1
+        from public.block
+        where (block.user_id = (select auth.uid()) and block.blocked_id = author)
+           or (block.user_id = author and block.blocked_id = (select auth.uid()))
+      )
+      and (
+        exists (
+          select 1
+          from public.match_requests request
+          where request.status = 'accepted'
+            and (
+              (request.from_user_id = (select auth.uid()) and request.to_user_id = author)
+              or (request.from_user_id = author and request.to_user_id = (select auth.uid()))
+            )
+        )
+        or coalesce((select account.social_public from public.user_account account where account.id = author), false)
+      )
+    );
+$$;
+
 create or replace function public.can_see_post(target_post uuid)
 returns boolean
 language sql
@@ -88,8 +123,18 @@ as $$
     select 1
     from public.post
     where post.id = target_post
-      and public.shares_posts_with(post.author_id)
+      and public.can_see_author(post.author_id)
   );
+$$;
+
+create or replace function public.social_is_public(person uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select account.social_public from public.user_account account where account.id = person), false);
 $$;
 
 drop policy if exists "friends read posts" on public.post;
@@ -99,7 +144,7 @@ drop policy if exists "authors delete their posts" on public.post;
 create policy "friends read posts"
 on public.post for select
 to authenticated
-using (public.shares_posts_with(author_id));
+using (public.can_see_author(author_id));
 
 create policy "users write their own posts"
 on public.post for insert
@@ -110,6 +155,13 @@ create policy "authors delete their posts"
 on public.post for delete
 to authenticated
 using (author_id = (select auth.uid()));
+
+drop policy if exists "authors edit their posts" on public.post;
+create policy "authors edit their posts"
+on public.post for update
+to authenticated
+using (author_id = (select auth.uid()))
+with check (author_id = (select auth.uid()));
 
 drop policy if exists "friends read post likes" on public.post_like;
 drop policy if exists "users like posts they can see" on public.post_like;
@@ -245,21 +297,51 @@ as $$
   from public.user_account account
   where account.id = any (people)
     and (
-      public.shares_posts_with(account.id)
+      public.can_see_author(account.id)
       or exists (
         select 1
         from public.post_comment commented
         join public.post on post.id = commented.post_id
         where commented.author_id = account.id
-          and public.shares_posts_with(post.author_id)
+          and public.can_see_author(post.author_id)
       )
     );
 $$;
 
 revoke all on function public.shares_posts_with(uuid) from public, anon;
 grant execute on function public.shares_posts_with(uuid) to authenticated;
+revoke all on function public.can_see_author(uuid) from public, anon;
+grant execute on function public.can_see_author(uuid) to authenticated;
 revoke all on function public.can_see_post(uuid) from public, anon;
 grant execute on function public.can_see_post(uuid) to authenticated;
+revoke all on function public.social_is_public(uuid) from public, anon;
+grant execute on function public.social_is_public(uuid) to authenticated;
+
+-- The match card for someone who made their account public. Coordinates and
+-- birthdate stay out. A private account, or a block in either direction, returns nothing.
+create or replace function public.public_match_profile(person uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select card.profile
+    - 'latitude' - 'longitude' - 'gymLatitude' - 'gymLongitude' - 'zipCode' - 'birthDate'
+  from public.discover_profiles card
+  where card.id = person
+    and person is distinct from (select auth.uid())
+    and coalesce((select account.social_public from public.user_account account where account.id = person), false)
+    and not exists (
+      select 1
+      from public.block
+      where (block.user_id = (select auth.uid()) and block.blocked_id = person)
+         or (block.user_id = person and block.blocked_id = (select auth.uid()))
+    );
+$$;
+
+revoke all on function public.public_match_profile(uuid) from public, anon;
+grant execute on function public.public_match_profile(uuid) to authenticated;
 revoke all on function public.social_people(uuid[]) from public, anon;
 grant execute on function public.social_people(uuid[]) to authenticated;
 
@@ -288,7 +370,7 @@ to authenticated
 using (
   -- case keeps the uuid cast away from files in other buckets.
   case
-    when bucket_id = 'post-media' then public.shares_posts_with(((storage.foldername(name))[1])::uuid)
+    when bucket_id = 'post-media' then public.can_see_author(((storage.foldername(name))[1])::uuid)
     else false
   end
 );
@@ -327,5 +409,29 @@ begin
     end if;
   end loop;
 end $$;
+
+alter table public.post add column if not exists edited_at timestamptz;
+
+-- Only the text of a post can change, and changing it marks it edited.
+create or replace function public.guard_post_edit()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.author_id <> old.author_id
+    or new.media_path is distinct from old.media_path
+    or new.media_type is distinct from old.media_type
+    or new.created_at <> old.created_at then
+    raise exception 'Only the post text can be edited.';
+  end if;
+  new.edited_at := case when new.body is distinct from old.body then now() else old.edited_at end;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_post_edit on public.post;
+create trigger guard_post_edit
+before update on public.post
+for each row execute function public.guard_post_edit();
 
 notify pgrst, 'reload schema';

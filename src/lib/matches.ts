@@ -68,6 +68,33 @@ export function matchProfile(userId: string) {
   return matchProfiles.get(userId) ?? null;
 }
 
+// Match card for someone who is not a friend, when they made their account public.
+export async function loadPublicMatchProfile(userId: string) {
+  const cached = matchProfiles.get(userId);
+  if (cached) return cached;
+  const { data, error } = await supabase.rpc("public_match_profile", { person: userId });
+  if (error || data == null) return null;
+  const normalized = normalizeProfile(data);
+  if (!normalized) return null;
+  const shown = normalized.photos.flatMap((photo, index) => {
+    const url = photoUrl(photo);
+    return url ? [{ url, kind: normalized.photoMedia[index] ?? "image" }] : [];
+  });
+  const profile: UserProfile = {
+    ...normalized,
+    photos: shown.map((item) => item.url),
+    photoMedia: shown.map((item) => item.kind),
+    birthDate: "",
+    zipCode: "",
+    latitude: null,
+    longitude: null,
+    gymLatitude: null,
+    gymLongitude: null,
+  };
+  matchProfiles.set(userId, profile);
+  return profile;
+}
+
 export function matchConnection(userId: string) {
   return matchPeople.get(userId) ?? null;
 }

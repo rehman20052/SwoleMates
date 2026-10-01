@@ -36,7 +36,7 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 | `saved_meal` | Nutrition | Reusable meals | Your own rows | Not yet |
 | `group_events` | Gym events | Classes and events at gyms | Anyone signed in can read; the host manages theirs | Not yet |
 | `event_rsvp` | Gym events | RSVPs and waitlist | Your own rows | Not yet |
-| `post` | Social | Posts, with an optional photo or clip | You and your matches can read; you write and delete your own | Waiting for Noor to run `supabase/social.sql` |
+| `post` | Social | Posts, with an optional photo or clip | You, your matches, and anyone if your account is public; you write, edit, and delete your own | Yes, after `supabase/social.sql` |
 | `post_like` | Social | Who liked each post | Anyone who can see the post; you add and remove your own | Waiting for Noor |
 | `post_comment` | Social | Comments and one level of replies | Anyone who can see the post; you edit your own; you or the post's author can delete | Waiting for Noor |
 | `comment_like` | Social | Who liked each comment | Anyone who can see the comment; you add and remove your own | Waiting for Noor |
@@ -69,6 +69,7 @@ erDiagram
     bigint deadlift_lbs
     varchar custom_lift_name
     bigint custom_lift_lbs
+    boolean social_public "default false, private to matches"
     timestamptz updated_at
   }
   gym {
@@ -314,7 +315,7 @@ erDiagram
 
 ## Social
 
-*Social tab.* A feed of posts from you and the people you're matched with (an accepted `match_requests` row). Nobody else can see your posts, and a block in either direction hides them. Likes and comments can be seen by anyone who can see the post, so a match of the author can see comments from the author's other matches. `social_people()` supplies those commenters' names and main photos. Replies point at a top-level comment through `parent_id`, one level deep. Photos and clips are in the private `post-media` storage bucket under `<author id>/`, read through signed links that expire after an hour. Script: `supabase/social.sql`, waiting for Noor to run it.
+*Social tab.* A feed of posts from you, the people you're matched with, and accounts that chose to be public. A private account (`user_account.social_public` false, the default) is matches-only. A public account can be seen by any signed-in user, and their match card can be opened from a post with `public_match_profile()` so someone who is not a match can send a request. The function returns the Discover card only, with coordinates and birthdate removed, and only when that account is public and neither person blocked the other. A block in either direction hides the posts. The author can edit the post text; `edited_at` is set when the text changes. Likes and comments can be seen by anyone who can see the post, so a match of the author can see comments from the author's other matches. `social_people()` supplies those commenters' names and main photos. Replies point at a top-level comment through `parent_id`, one level deep. Photos and clips are in the private `post-media` storage bucket under `<author id>/`, read through signed links that expire after an hour. Script: `supabase/social.sql`, waiting for Noor to run it.
 
 ```mermaid
 erDiagram
@@ -328,6 +329,7 @@ erDiagram
     text media_path "post-media bucket, author_id/file"
     text media_type "image or video, set with media_path"
     timestamptz created_at
+    timestamptz edited_at "set when the text changes"
   }
   post_like {
     uuid post_id PK, FK
@@ -403,6 +405,7 @@ erDiagram
 - `shares_posts_with(author)`: True for you, and for your matches when neither of you blocked the other. The Social read rules use it.
 - `can_see_post(target_post)`: True when you can see that post.
 - `social_people(people)`: Names and main photos for people in your feed: your matches, and anyone who commented on a post you can see.
+- `public_match_profile(person)`: The Discover card for a public account you are not matched with. Private accounts and blocked people return nothing. Coordinates and birthdate are left out.
 
 ## Not built yet
 

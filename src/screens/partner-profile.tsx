@@ -5,6 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { icons } from "@/assets";
 import { AppText, Card, Icon, IconButton, PhotoScrim, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";
 import { firstName, getPartner, Partner } from "@/data/partners";
+import { isAccountId } from "@/lib/discover";
 import { useNavigation } from "@/navigation";
 import { useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
@@ -89,6 +90,7 @@ export function PartnerDetails({
   onRemoved?: () => void;
 }) {
   const theme = useAppTheme();
+  const nav = useNavigation();
   const { block, review } = useAppData();
 
   function handleBlock() {
@@ -208,6 +210,9 @@ export function PartnerDetails({
         <Card padding={16} radius={18} gap={12}>
           <SectionLabel>Actions</SectionLabel>
           <View style={[styles.row, { gap: 8 }]}>
+            {isAccountId(partner.id) ? (
+              <ActionButton label="Posts" onPress={() => nav.push({ name: "social-profile", userId: partner.id })} />
+            ) : null}
             <ActionButton label="Block" onPress={handleBlock} background={theme.colors.danger} />
             <ActionButton label="Report" onPress={handleReport} />
             <ActionButton label="Hide Profile" onPress={handleHide} />
