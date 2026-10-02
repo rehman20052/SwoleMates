@@ -63,7 +63,8 @@
           min-height: 100%;
         }
       }
-      @media (display-mode: standalone) and (orientation: landscape) {
+      @media (display-mode: standalone) and (orientation: landscape),
+      html.phone-app.phone-landscape {
         #portrait-lock {
           display: flex !important;
         }
@@ -85,6 +86,9 @@
       Turn your phone upright
     </div>
     <script>
+      function isPhoneApp() {
+        return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+      }
       function lockPortrait() {
         var orientation = screen.orientation || screen.mozOrientation || screen.msOrientation;
         if (orientation && typeof orientation.lock === "function") {
@@ -92,6 +96,11 @@
         } else if (typeof screen.lockOrientation === "function") {
           screen.lockOrientation("portrait");
         }
+        var lock = document.getElementById("portrait-lock");
+        var landscape = window.innerWidth > window.innerHeight;
+        document.documentElement.classList.toggle("phone-app", isPhoneApp());
+        document.documentElement.classList.toggle("phone-landscape", landscape);
+        if (lock) lock.style.display = isPhoneApp() && landscape ? "flex" : "none";
       }
       function fitPhoneScreen() {
         var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
@@ -129,10 +138,10 @@
       setTimeout(fitPhoneScreen, 1000);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=2", document.baseURI));
         });
       }
     </script>
-  <script src="/SwoleMates/_expo/static/js/web/entry-b15a891abe2363f6a647e583f62eda24.js" defer></script>
+  <script src="/SwoleMates/_expo/static/js/web/entry-e708d327076840fa4e5b67fdbd22741e.js" defer></script>
 </body>
 </html>
