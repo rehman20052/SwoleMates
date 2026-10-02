@@ -11,7 +11,7 @@ import {
   AppState,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   Keyframe,
@@ -170,6 +170,7 @@ const emptyProfile = (): UserProfile => ({
 
 export default function App() {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const [currentScreen, setCurrentScreen] = useState('launch');
   const [checkingSession, setCheckingSession] = useState(true);
   const [showStartup, setShowStartup] = useState(true);
@@ -575,10 +576,14 @@ export default function App() {
     }
   };
 
+  const hideTabBar = !!topRoute && fullScreenRoutes.includes(topRoute.name);
+
   return (
     <NavigationContext.Provider value={nav}>
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.mainAppContainer}>
+    {/* The tab bar carries the home-indicator space itself, so this view stops at the
+        screen edge instead of leaving a band of background under the tabs. */}
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.mainAppContainer, hideTabBar && { paddingBottom: insets.bottom }]}>
         <View style={styles.tabStage}>
           {activeTab === 'Social' ? (
             <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />
@@ -592,8 +597,20 @@ export default function App() {
           ) : null}
         </View>
 
-        {!(topRoute && fullScreenRoutes.includes(topRoute.name)) && (
-        <View style={[styles.bottomNav, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+        {!hideTabBar && (
+        <View
+          style={[
+            styles.bottomNav,
+            {
+              backgroundColor: theme.colors.background,
+              borderTopColor: theme.colors.border,
+              paddingBottom:
+                Platform.OS === 'web'
+                  ? ('max(4px, calc(env(safe-area-inset-bottom, 0px) - 30px))' as unknown as number)
+                  : Math.max(4, insets.bottom - 30),
+            },
+          ]}
+        >
           {([
             { name: 'Discover', icon: '✨' },
             { name: 'Chat', icon: '💬' },
@@ -811,7 +828,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F0F0F',
     borderTopWidth: 1,
     borderTopColor: '#222222',
-    paddingVertical: 10,
+    paddingTop: 8,
     paddingHorizontal: 10,
     justifyContent: 'space-around',
   },

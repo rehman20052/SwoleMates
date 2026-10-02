@@ -13,6 +13,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { View } from "react-native";
 
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
 import { PhoneFrame } from "@/components/phone-frame";
 import { VideoCompressorHost } from "@/components/video-compressor-host";
 import { AppDataProvider } from "@/state/app-data";
@@ -48,17 +50,19 @@ function RootShell() {
   }
 
   return (
-    <AppDataProvider>
-      <PhoneFrame>
-        <Stack
-          screenOptions={{
-            contentStyle: { backgroundColor: theme.colors.background },
-            headerShown: false,
-          }}
-        />
-      </PhoneFrame>
-      <VideoCompressorHost />
-      <StatusBar style={theme.isDark ? "light" : "dark"} />
-    </AppDataProvider>
+    <SafeAreaProvider>
+      <AppDataProvider>
+        <PhoneFrame>
+          <Stack
+            screenOptions={{
+              contentStyle: { backgroundColor: theme.colors.background },
+              headerShown: false,
+            }}
+          />
+        </PhoneFrame>
+        <VideoCompressorHost />
+        <StatusBar style={theme.isDark ? "light" : "dark"} />
+      </AppDataProvider>
+    </SafeAreaProvider>
   );
 }

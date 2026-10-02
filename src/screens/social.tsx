@@ -1,8 +1,9 @@
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { appFrameSize } from "@/components/phone-frame";
@@ -78,6 +79,34 @@ function useSocial() {
   const social = useContext(SocialContext);
   if (!social) throw new Error("useSocial must be used inside SocialScreen.");
   return social;
+}
+
+function dismissNativeFullscreen() {
+  if (typeof document === "undefined") return;
+  const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else if (doc.webkitFullscreenElement) void doc.webkitExitFullscreen?.();
+  document.querySelectorAll("video").forEach((node) => {
+    const clip = node as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitExitFullScreen?: () => void };
+    if (clip.webkitDisplayingFullscreen) clip.webkitExitFullScreen?.();
+  });
+}
+
+let feedAudioReady = false;
+const feedAudioWaiters = new Set<() => void>();
+
+function armFeedAudio() {
+  if (typeof window === "undefined" || (armFeedAudio as { armed?: boolean }).armed) return;
+  (armFeedAudio as { armed?: boolean }).armed = true;
+  const unlock = () => {
+    if (feedAudioReady) return;
+    feedAudioReady = true;
+    feedAudioWaiters.forEach((listener) => listener());
+    window.removeEventListener("pointerdown", unlock);
+    window.removeEventListener("touchstart", unlock);
+  };
+  window.addEventListener("pointerdown", unlock);
+  window.addEventListener("touchstart", unlock, { passive: true });
 }
 
 function errorMessage(err: unknown, fallback: string) {
@@ -893,10 +922,23 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
     };
   }, []);
 
+  // A ring at the back of a long row is easy to miss, so friends with a new post
+  // lead the row, newest first. Everyone else keeps the order the feed gave us.
+  const ordered = useMemo(() => {
+    const fresh: string[] = [];
+    const rest: string[] = [];
+    for (const id of feed.friendIds) {
+      if (friendHasFreshPost(latest[id], seen[id])) fresh.push(id);
+      else rest.push(id);
+    }
+    fresh.sort((left, right) => Date.parse(latest[right]) - Date.parse(latest[left]));
+    return [...fresh, ...rest];
+  }, [feed.friendIds, latest, seen]);
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow}>
       <FriendCircle name={me.name || "You"} photo={me.photo} label="You" onPress={() => onOpen("me")} />
-      {feed.friendIds.map((id) => {
+      {ordered.map((id) => {
         const person = feed.people[id];
         if (!person) return null;
         return (
@@ -1120,9 +1162,23 @@ function PostVideo({ postId, uri }: { postId: string; uri: string }) {
   const source = useRef(uri);
   const player = useVideoPlayer(source.current, (clip) => {
     clip.loop = true;
-    clip.muted = true;
+    clip.muted = !feedAudioReady;
   });
   const play = activeVideoId === postId;
+  const [soundOn, setSoundOn] = useState(feedAudioReady);
+
+  useEffect(() => {
+    armFeedAudio();
+    if (feedAudioReady) {
+      setSoundOn(true);
+      return;
+    }
+    const waiter = () => setSoundOn(true);
+    feedAudioWaiters.add(waiter);
+    return () => {
+      feedAudioWaiters.delete(waiter);
+    };
+  }, []);
 
   useEffect(() => {
     return registerVideo(postId, (done) => {
@@ -1136,26 +1192,39 @@ function PostVideo({ postId, uri }: { postId: string; uri: string }) {
   }, [postId, registerVideo]);
 
   useEffect(() => {
+    player.muted = !soundOn;
     if (play) player.play();
     else player.pause();
-  }, [play, player]);
+  }, [play, player, soundOn]);
 
   return (
     <View ref={ref} collapsable={false}>
-      <VideoView player={player} style={styles.postMedia} contentFit="cover" nativeControls={false} />
+      {/* playsInline keeps the clip in the feed. Without it the iPhone home-screen app
+          throws the video fullscreen the moment it starts playing on scroll. */}
+      <VideoView
+        player={player}
+        style={styles.postMedia}
+        contentFit="cover"
+        nativeControls={false}
+        playsInline
+        allowsPictureInPicture={false}
+        fullscreenOptions={{ enable: false }}
+        onFullscreenEnter={dismissNativeFullscreen}
+      />
     </View>
   );
 }
 
 function MediaLightbox({ media, onClose }: { media: PostMedia | null; onClose: () => void }) {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const frame = appFrameSize(window);
-  // Stay inside the phone screen. A camera photo is thousands of pixels wide, and
-  // letting it use that size zooms into a corner on both desktop and a real phone.
+  const topPad = Math.max(insets.top, 12);
+  const bottomPad = Math.max(insets.bottom, 12);
   const fitted = {
-    width: Math.max(frame.width - 32, 1),
-    height: Math.max(frame.height - 88, 1),
+    width: Math.max(frame.width - 24, 1),
+    height: Math.max(frame.height - topPad - bottomPad - 72, 1),
   };
   useEffect(() => {
     if (!media || typeof document === "undefined") return;
@@ -1167,33 +1236,33 @@ function MediaLightbox({ media, onClose }: { media: PostMedia | null; onClose: (
   }, [media, onClose]);
   return (
     <Modal visible={!!media} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.lightbox}>
-        <View style={[styles.lightboxFrame, { width: frame.width, height: frame.height }]}>
-          <View style={styles.lightboxBar}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              onPress={onClose}
-              style={[styles.lightboxClose, { backgroundColor: theme.colors.primary }]}
-            >
-              <AppText weight="extrabold" color={theme.colors.primaryText}>
-                Close
-              </AppText>
-            </Pressable>
-          </View>
+      <View style={[styles.lightbox, { paddingTop: topPad, paddingBottom: bottomPad }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={styles.lightboxDismiss} />
+        <View style={styles.lightboxBody} pointerEvents="box-none">
           <View style={[styles.lightboxStage, fitted]}>
             {media?.type === "image" ? (
-              <Image source={{ uri: media.uri }} style={[StyleSheet.absoluteFill, fitted]} contentFit="contain" />
+              <Image source={{ uri: media.uri }} style={styles.lightboxMedia} contentFit="contain" />
             ) : null}
-            {media?.type === "video" ? <LightboxVideo uri={media.uri} style={fitted} /> : null}
+            {media?.type === "video" ? <LightboxVideo uri={media.uri} /> : null}
           </View>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={onClose}
+          style={[styles.lightboxClose, { backgroundColor: theme.colors.primary }]}
+        >
+          <AppText weight="extrabold" color={theme.colors.primaryText}>
+            Close
+          </AppText>
+        </Pressable>
       </View>
     </Modal>
   );
 }
 
-function LightboxVideo({ uri, style }: { uri: string; style: { top: number; left: number; right: number; bottom: number } | { width: number; height: number } }) {
+function LightboxVideo({ uri }: { uri: string }) {
+  const [playing, setPlaying] = useState(true);
   const player = useVideoPlayer(uri, (clip) => {
     clip.loop = true;
     clip.muted = false;
@@ -1204,7 +1273,29 @@ function LightboxVideo({ uri, style }: { uri: string; style: { top: number; left
       player.pause();
     };
   }, [player]);
-  return <VideoView player={player} style={style} contentFit="contain" nativeControls fullscreenOptions={{ enable: false }} />;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={playing ? "Pause clip" : "Play clip"}
+      onPress={() => {
+        if (playing) player.pause();
+        else player.play();
+        setPlaying(!playing);
+      }}
+      style={styles.lightboxMedia}
+    >
+      <VideoView
+        player={player}
+        style={styles.lightboxMedia}
+        contentFit="contain"
+        nativeControls={false}
+        playsInline
+        allowsPictureInPicture={false}
+        fullscreenOptions={{ enable: false }}
+        onFullscreenEnter={dismissNativeFullscreen}
+      />
+    </Pressable>
+  );
 }
 
 function PostCard({ post }: { post: Post }) {
@@ -2013,28 +2104,41 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   lightbox: {
-    alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.92)",
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  lightboxDismiss: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  lightboxBody: {
+    alignItems: "center",
     flex: 1,
     justifyContent: "center",
   },
-  lightboxFrame: {
-    maxHeight: "100%",
-    maxWidth: "100%",
-    padding: 16,
+  lightboxStage: {
+    alignSelf: "center",
+    overflow: "hidden",
+    zIndex: 1,
   },
-  lightboxBar: {
-    alignItems: "flex-end",
-    paddingBottom: 12,
-    zIndex: 2,
+  lightboxMedia: {
+    height: "100%",
+    width: "100%",
   },
   lightboxClose: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  lightboxStage: {
-    overflow: "hidden",
+    alignItems: "center",
+    alignSelf: "center",
+    borderRadius: 14,
+    marginTop: 12,
+    minHeight: 48,
+    minWidth: 160,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    zIndex: 2,
   },
   confirm: {
     alignItems: "center",
