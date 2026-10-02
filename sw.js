@@ -1,4 +1,4 @@
-// v3: drop cached shells so the phone shortcut picks up the video scrubber.
+// v4: drop cached shells so the phone shortcut picks up Home Train | Fuel.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
