@@ -26,12 +26,12 @@ import {
 } from "@/lib/workouts";
 import { queueSocialDraft } from "@/lib/social";
 import { useNavigation } from "@/navigation";
+import { NutritionTrackerScreen } from "@/screens/nutrition-tracker";
+import { RecipesScreen } from "@/screens/recipes";
 import { SettingsScreen } from "@/screens/settings";
 import {
   daysFromToday,
   formatShortDate,
-  relativeDay,
-  type NutritionTotals,
   type SessionLog,
   useAppData,
 } from "@/state/app-data";
@@ -41,15 +41,8 @@ type DashboardProfile = Pick<
   UserProfile,
   "fullName" | "primaryGym" | "squat" | "bench" | "deadlift" | "customLiftName" | "customLift"
 >;
-type MacroField = "calories" | "protein" | "carbs" | "fats";
 
 const weekdayLabels = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
-const macroGoals: Record<MacroField, keyof NutritionTotals> = {
-  calories: "calorieGoal",
-  protein: "proteinGoal",
-  carbs: "carbGoal",
-  fats: "fatGoal",
-};
 
 function parseWeight(value: string) {
   const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
@@ -136,6 +129,43 @@ function getWeeklyStreak(logs: SessionLog[], weeklyGoal: number) {
   return streak;
 }
 
+type HomeMode = "train" | "fuel";
+
+let savedHomeMode: HomeMode = "train";
+let savedShowRecipes = false;
+
+function SegmentSwitch<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { id: T; label: string }[];
+}) {
+  const theme = useAppTheme();
+  return (
+    <View style={[styles.segment, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      {options.map((option) => {
+        const selected = value === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.id)}
+            style={[styles.segmentOption, selected && { backgroundColor: theme.colors.primary }]}
+          >
+            <AppText size={13} weight="extrabold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+              {option.label}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: ReactNode; lifts: DashboardProfile }) {
   const theme = useAppTheme();
   const nav = useNavigation();
@@ -145,11 +175,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showCalendar, setShowCalendar] = useState(false);
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [dashTab, setDashTab] = useState<"home" | "check-in">("home");
-  const [reminders, setReminders] = useState<CheckInWorkout[]>([]);
-  const [reminderNow, setReminderNow] = useState(() => new Date());
-  const [reminderBusy, setReminderBusy] = useState<string | null>(null);
-  const [reminderError, setReminderError] = useState<string | null>(null);
+  const [homeMode, setHomeMode] = useState<HomeMode>(savedHomeMode);
+  const [showRecipes, setShowRecipes] = useState(savedShowRecipes);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
@@ -167,7 +194,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     foodEntries,
     logWorkout,
     logs,
-    nutrition,
     syncVerifiedWorkoutLogs,
     updateWeeklyWorkoutGoal,
     updateWorkoutLog,
@@ -175,28 +201,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   } = useAppData();
 
   useEffect(() => {
-    const timer = setInterval(() => setReminderNow(new Date()), 15000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (dashTab !== "home") return;
-    let active = true;
-    listCheckInWorkouts()
-      .then((items) => {
-        if (!active) return;
-        setReminders(items.filter((item) => item.plan.status === "scheduled").slice(0, 2));
-      })
-      .catch(() => {
-        if (active) setReminders([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [dashTab]);
-
-  useEffect(() => {
-    if (dashTab !== "home") return;
     let active = true;
     const refreshVerifiedLogs = async () => {
       try {
@@ -212,7 +216,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       active = false;
       clearInterval(timer);
     };
-  }, [dashTab]);
+  }, []);
 
   const todayIso = daysFromToday(0);
   const currentWeekStart = useMemo(() => startOfWeek(new Date()), []);
@@ -261,22 +265,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   function showNotice(message: string) {
     setNotice(message);
     setTimeout(() => setNotice(null), 2400);
-  }
-
-  async function checkInReminder(item: CheckInWorkout) {
-    if (reminderBusy) return;
-    setReminderBusy(item.plan.id);
-    setReminderError(null);
-    try {
-      await checkInWorkout(item.plan);
-      const items = await listCheckInWorkouts();
-      setReminders(items.filter((row) => row.plan.status === "scheduled").slice(0, 2));
-      syncVerifiedWorkoutLogs(await listVerifiedWorkoutLogs());
-    } catch (err) {
-      setReminderError(err instanceof Error ? err.message : "Could not check in.");
-    } finally {
-      setReminderBusy(null);
-    }
   }
 
   function handleSaveLog() {
@@ -382,14 +370,63 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         }
       />
 
-      <View style={styles.dashTabs}>
-        <DashTab label="Home" selected={dashTab === "home"} onPress={() => setDashTab("home")} />
-        <DashTab label="Check in" selected={dashTab === "check-in"} onPress={() => setDashTab("check-in")} />
+      <View style={styles.modeSwitch}>
+        <SegmentSwitch
+          value={homeMode}
+          onChange={(next) => {
+            savedHomeMode = next;
+            setHomeMode(next);
+          }}
+          options={[
+            { id: "train", label: "Train" },
+            { id: "fuel", label: "Fuel" },
+          ]}
+        />
       </View>
 
-      {dashTab === "check-in" ? <CheckInPanel /> : null}
-
-      {dashTab === "home" ? <ScrollBody contentContainerStyle={styles.body}>
+      {homeMode === "fuel" ? (
+        <View style={{ flex: 1 }}>
+          {showRecipes ? (
+            <RecipesScreen
+              embedded
+              onBack={() => {
+                savedShowRecipes = false;
+                setShowRecipes(false);
+              }}
+            />
+          ) : (
+            <NutritionTrackerScreen
+              embedded
+              header={
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open recipes"
+                  onPress={() => {
+                    savedShowRecipes = true;
+                    setShowRecipes(true);
+                  }}
+                >
+                  <Card padding={14} radius={18} gap={4} style={{ backgroundColor: theme.colors.primaryDeep }}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <SectionLabel>Recipes</SectionLabel>
+                        <AppText weight="bold">Build meals that match your macros</AppText>
+                        <AppText size={12} muted>
+                          Open the recipe maker
+                        </AppText>
+                      </View>
+                      <AppText size={18} primary>
+                        ›
+                      </AppText>
+                    </View>
+                  </Card>
+                </Pressable>
+              }
+            />
+          )}
+        </View>
+      ) : (
+        <ScrollBody contentContainerStyle={styles.body}>
         <View style={styles.hero}>
           <AppText size={13} weight="bold" primary upper>
             SwoleMates
@@ -401,6 +438,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             {profile.primaryGym ? `Home gym: ${profile.primaryGym}` : "Plan, train, and track your lifts."}
           </AppText>
         </View>
+
+        <CheckInPanel />
 
         {notice ? (
           <View style={[styles.notice, { backgroundColor: theme.colors.primaryTint, borderColor: theme.colors.primary }]}>
@@ -481,38 +520,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             })}
           </View>
         </Card>
-
-        {reminders.length > 0 ? (
-          <Card padding={18} radius={22} gap={16}>
-            {reminders.map((item, index) => (
-              <View key={item.plan.id} style={[styles.reminder, index > 0 && styles.reminderNext, index > 0 && { borderTopColor: theme.colors.border }]}>
-                <View style={styles.partnerRow}>
-                  <PartnerFace name={item.partnerName} photo={item.partnerPhoto} size={48} />
-                  <View style={styles.partnerCopy}>
-                    <SectionLabel>{relativeDay(item.plan.date)}</SectionLabel>
-                    <AppText size={18} weight="extrabold">
-                      {item.partnerName}
-                    </AppText>
-                    <AppText size={13} muted style={{ lineHeight: 20 }}>
-                      {item.plan.focus} • {item.plan.time}
-                    </AppText>
-                  </View>
-                </View>
-                {item.checkedIn ? (
-                  <AppText size={13} muted>
-                    Checked in. Waiting on {item.partnerName}.
-                  </AppText>
-                ) : null}
-                {showUpPromptReady(item.plan, reminderNow) && !item.checkedIn && !meetupMissed(item.plan, reminderNow) ? (
-                  <PrimaryButton height={44} disabled={reminderBusy === item.plan.id} onPress={() => void checkInReminder(item)}>
-                    {reminderBusy === item.plan.id ? "Checking in..." : "Check in"}
-                  </PrimaryButton>
-                ) : null}
-              </View>
-            ))}
-          </Card>
-        ) : null}
-        {reminderError ? <AppText size={13} color={theme.colors.danger}>{reminderError}</AppText> : null}
 
         <View style={styles.quickActions}>
           <SecondaryButton height={46} fontSize={13} style={styles.quickButton} onPress={() => nav.setTab("Discover")}>
@@ -651,31 +658,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             </AppText>
           )}
         </Card>
-
-        {nutrition ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Open nutrition tracker" onPress={() => nav.push({ name: "nutrition" })}>
-            <Card padding={16} radius={20} gap={12}>
-              <View style={styles.sectionHeader}>
-                <SectionLabel>Nutrition</SectionLabel>
-                <AppText size={12} weight="bold" primary>Open tracker ›</AppText>
-              </View>
-              <View style={styles.nutritionHeadline}>
-                <AppText size={24} weight="black">{nutrition.calories.toLocaleString()}</AppText>
-                <AppText size={13} muted> / {nutrition.calorieGoal.toLocaleString()} calories</AppText>
-              </View>
-              <ProgressBar progress={Math.min(nutrition.calories / Math.max(nutrition.calorieGoal, 1), 1)} />
-              <View style={styles.macroGrid}>
-                {(["protein", "carbs", "fats"] as const).map((field) => (
-                  <View key={field} style={styles.macroItem}>
-                    <AppText size={11} weight="bold" muted upper>{field === "fats" ? "Fat" : field}</AppText>
-                    <AppText size={15} weight="extrabold">{nutrition[field]}g <AppText size={12} muted>/ {nutrition[macroGoals[field]]}g</AppText></AppText>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          </Pressable>
-        ) : null}
-      </ScrollBody> : null}
+      </ScrollBody>
+      )}
 
       <Modal animationType="slide" transparent visible={showCalendar} onRequestClose={closeCalendar}>
         <View style={styles.modalOverlay}>
@@ -1013,28 +997,6 @@ function checkInOpensLabel(plan: PlannedWorkout) {
   return plan.time;
 }
 
-function DashTab({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  const theme = useAppTheme();
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[
-        styles.dashTab,
-        {
-          backgroundColor: selected ? theme.colors.primary : theme.colors.surface,
-          borderColor: selected ? theme.colors.primary : theme.colors.border,
-        },
-      ]}
-    >
-      <AppText size={13} weight="extrabold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
-
 function PartnerFace({ name, photo, size }: { name: string; photo: string | null; size: number }) {
   const theme = useAppTheme();
   if (photo) return <Avatar source={{ uri: photo }} size={size} />;
@@ -1106,10 +1068,13 @@ function CheckInPanel() {
   }
 
   return (
-    <ScrollBody contentContainerStyle={styles.body}>
-      <AppText muted style={{ lineHeight: 20 }}>
-        Check in when a workout starts. It appears on both Home calendars and counts toward the weekly goal after both people check in.
-      </AppText>
+    <View style={{ gap: 14 }}>
+      <View style={{ gap: 4 }}>
+        <SectionLabel>Check in</SectionLabel>
+        <AppText size={13} muted style={{ lineHeight: 20 }}>
+          Check in when a workout starts. It counts toward the weekly goal after both people check in.
+        </AppText>
+      </View>
       {status === "loading" ? <AppText muted>Loading workouts...</AppText> : null}
       {status === "error" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
       {status === "ready" && items.length === 0 ? (
@@ -1165,24 +1130,27 @@ function CheckInPanel() {
         );
       })}
       {status === "ready" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
-    </ScrollBody>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  dashTabs: {
-    flexDirection: "row",
-    gap: 8,
+  modeSwitch: {
     paddingBottom: 8,
     paddingHorizontal: 16,
   },
-  dashTab: {
-    alignItems: "center",
+  segment: {
+    alignSelf: "stretch",
     borderRadius: 14,
     borderWidth: 1,
+    flexDirection: "row",
+    padding: 3,
+  },
+  segmentOption: {
+    alignItems: "center",
+    borderRadius: 11,
     flex: 1,
-    justifyContent: "center",
-    minHeight: 40,
+    paddingVertical: 8,
   },
   body: {
     gap: 14,
@@ -1210,9 +1178,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  reminder: {
-    gap: 6,
-  },
   partnerRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -1221,10 +1186,6 @@ const styles = StyleSheet.create({
   partnerCopy: {
     flex: 1,
     gap: 3,
-  },
-  reminderNext: {
-    borderTopWidth: 1,
-    paddingTop: 16,
   },
   pill: {
     borderRadius: 999,
@@ -1282,16 +1243,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
-  macroGrid: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  macroItem: {
-    gap: 6,
-    flex: 1,
-  },
-  nutritionHeadline: { alignItems: "baseline", flexDirection: "row", gap: 2 },
   modalOverlay: {
     alignItems: "center",
     flex: 1,

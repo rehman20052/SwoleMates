@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
@@ -63,7 +63,7 @@ function suggestedGoals(values: CalculatorValues): NutritionTotals | null {
   return { calories: 0, protein: 0, carbs: 0, fats: 0, calorieGoal, proteinGoal, carbGoal, fatGoal };
 }
 
-export function NutritionTrackerScreen() {
+export function NutritionTrackerScreen({ embedded = false, header }: { embedded?: boolean; header?: ReactNode }) {
   const theme = useAppTheme();
   const nav = useNavigation();
   const { addFoodEntry, deleteFoodEntry, foodEntries, nutrition, nutritionProfile, saveMeal, savedMeals, updateNutrition, updateNutritionProfile } = useAppData();
@@ -190,15 +190,14 @@ export function NutritionTrackerScreen() {
     setCalculatedGoals(null);
   }
 
-  return (
-    <Screen>
-      <TitleBar title="Nutrition tracker" onBack={nav.back} />
+  const journal = (
       <ScrollBody contentContainerStyle={styles.body}>
         <View style={styles.hero}>
           <SectionLabel>Today</SectionLabel>
           <AppText size={29} weight="black">Fuel your training.</AppText>
           <AppText muted>Log your meals to keep your daily macros in view.</AppText>
         </View>
+        {header}
 
         <Card padding={18} radius={24} gap={14} style={{ backgroundColor: theme.colors.primaryDeep }}>
           <View style={styles.summaryHeader}>
@@ -286,7 +285,10 @@ export function NutritionTrackerScreen() {
 
         <SecondaryButton onPress={() => setShowAddFood(true)}>Add another meal</SecondaryButton>
       </ScrollBody>
+  );
 
+  const sheets = (
+    <>
       <Modal animationType="slide" transparent visible={showAddFood} onRequestClose={() => setShowAddFood(false)}>
         <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowAddFood(false)}>
@@ -348,6 +350,23 @@ export function NutritionTrackerScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <View style={{ flex: 1 }}>
+        {journal}
+        {sheets}
+      </View>
+    );
+  }
+
+  return (
+    <Screen>
+      <TitleBar title="Nutrition tracker" onBack={nav.back} />
+      {journal}
+      {sheets}
     </Screen>
   );
 }
