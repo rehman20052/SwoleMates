@@ -1,4 +1,4 @@
-// v4: drop cached shells so the phone shortcut picks up Home Train | Fuel.
+// v5: drop cached shells so the phone shortcut picks up the macro plan.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
