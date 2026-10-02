@@ -11,6 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SwoleMates" />
+    <meta name="screen-orientation" content="portrait" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <title>SwoleMates</title>
@@ -62,6 +63,11 @@
           min-height: 100%;
         }
       }
+      @media (display-mode: standalone) and (orientation: landscape) {
+        #portrait-lock {
+          display: flex !important;
+        }
+      }
     </style>
   <link rel="icon" href="/SwoleMates/favicon.ico"/></head>
 
@@ -72,7 +78,21 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
+    <div
+      id="portrait-lock"
+      style="display:none;position:fixed;inset:0;z-index:99999;align-items:center;justify-content:center;background:#0A0A0C;color:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:18px;font-weight:700;text-align:center;padding:24px;"
+    >
+      Turn your phone upright
+    </div>
     <script>
+      function lockPortrait() {
+        var orientation = screen.orientation || screen.mozOrientation || screen.msOrientation;
+        if (orientation && typeof orientation.lock === "function") {
+          orientation.lock("portrait").catch(function () {});
+        } else if (typeof screen.lockOrientation === "function") {
+          screen.lockOrientation("portrait");
+        }
+      }
       function fitPhoneScreen() {
         var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
         if (!standalone) return;
@@ -93,9 +113,16 @@
         pin(document.getElementById("root"));
       }
       fitPhoneScreen();
+      lockPortrait();
       window.addEventListener("resize", fitPhoneScreen);
-      window.addEventListener("orientationchange", fitPhoneScreen);
-      window.addEventListener("pageshow", fitPhoneScreen);
+      window.addEventListener("orientationchange", function () {
+        lockPortrait();
+        fitPhoneScreen();
+      });
+      window.addEventListener("pageshow", function () {
+        lockPortrait();
+        fitPhoneScreen();
+      });
       if (window.visualViewport) window.visualViewport.addEventListener("resize", fitPhoneScreen);
       requestAnimationFrame(fitPhoneScreen);
       setTimeout(fitPhoneScreen, 300);
