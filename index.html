@@ -44,8 +44,8 @@
           height: 100dvh;
         }
       }
-      /* Stretch the installed iPhone app through the home-indicator band.
-         100dvh stops short and leaves a gap under the tabs. */
+      /* Fill the real iPhone screen. Do not add the home-indicator height on top
+         of innerHeight, or the tabs slide under that black strip. */
       @media (display-mode: standalone) {
         html,
         body,
@@ -55,9 +55,7 @@
           right: 0;
           left: 0;
           width: 100%;
-          height: 100lvh;
-          min-height: 100lvh;
-          min-height: -webkit-fill-available;
+          height: 100%;
         }
         #root > div {
           height: 100%;
@@ -78,12 +76,7 @@
       function fitPhoneScreen() {
         var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
         if (!standalone) return;
-        var probe = document.createElement("div");
-        probe.style.cssText = "position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px)";
-        document.body.appendChild(probe);
-        var home = parseInt(window.getComputedStyle(probe).paddingBottom, 10) || 0;
-        document.body.removeChild(probe);
-        var height = Math.round(Math.max(window.innerHeight + home, window.innerHeight)) + "px";
+        var height = Math.round(window.innerHeight) + "px";
         function pin(node) {
           if (!node) return;
           node.style.setProperty("position", "fixed", "important");
@@ -113,6 +106,6 @@
         });
       }
     </script>
-  <script src="/SwoleMates/_expo/static/js/web/entry-3f8f7741f265aa62f62c5c039431e175.js" defer></script>
+  <script src="/SwoleMates/_expo/static/js/web/entry-959eca6a397351e7ec2827610d21b5e5.js" defer></script>
 </body>
 </html>
