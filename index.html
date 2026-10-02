@@ -44,15 +44,16 @@
           height: 100dvh;
         }
       }
-      /* The iPhone home-screen app reports 100dvh as the Safari height, which leaves
-         a black gap under the tabs. Fill the real screen instead. */
+      /* Pin the installed iPhone app to the real screen. 100dvh is Safari's
+         shorter page and leaves a black gap under the tabs. */
       @media (display-mode: standalone) {
         html,
         body,
         #root {
+          position: fixed;
+          inset: 0;
+          width: 100%;
           height: 100%;
-          height: 100lvh;
-          height: -webkit-fill-available;
         }
       }
     </style>
@@ -69,24 +70,35 @@
       function fitPhoneScreen() {
         var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
         if (!standalone) return;
-        var height = window.innerHeight + "px";
-        document.documentElement.style.height = height;
-        document.body.style.height = height;
-        var root = document.getElementById("root");
-        if (root) root.style.height = height;
+        var height = Math.round(window.innerHeight) + "px";
+        function pin(node) {
+          if (!node) return;
+          node.style.setProperty("position", "fixed", "important");
+          node.style.setProperty("top", "0", "important");
+          node.style.setProperty("right", "0", "important");
+          node.style.setProperty("bottom", "0", "important");
+          node.style.setProperty("left", "0", "important");
+          node.style.setProperty("width", "100%", "important");
+          node.style.setProperty("height", height, "important");
+        }
+        pin(document.documentElement);
+        pin(document.body);
+        pin(document.getElementById("root"));
       }
       fitPhoneScreen();
       window.addEventListener("resize", fitPhoneScreen);
       window.addEventListener("orientationchange", fitPhoneScreen);
       window.addEventListener("pageshow", fitPhoneScreen);
+      if (window.visualViewport) window.visualViewport.addEventListener("resize", fitPhoneScreen);
       requestAnimationFrame(fitPhoneScreen);
       setTimeout(fitPhoneScreen, 300);
+      setTimeout(fitPhoneScreen, 1000);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register(new URL("sw.js", document.baseURI));
         });
       }
     </script>
-  <script src="/SwoleMates/_expo/static/js/web/entry-95e8190f7123823f0e07586ed15de8a9.js" defer></script>
+  <script src="/SwoleMates/_expo/static/js/web/entry-19951c563853dd92bb763a8b1552a179.js" defer></script>
 </body>
 </html>
