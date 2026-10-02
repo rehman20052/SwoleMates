@@ -138,7 +138,7 @@
       setTimeout(fitPhoneScreen, 1000);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=2", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=3", document.baseURI));
         });
       }
     </script>

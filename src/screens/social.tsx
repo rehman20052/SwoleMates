@@ -1,8 +1,8 @@
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -90,6 +90,25 @@ function dismissNativeFullscreen() {
     const clip = node as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitExitFullScreen?: () => void };
     if (clip.webkitDisplayingFullscreen) clip.webkitExitFullScreen?.();
   });
+}
+
+function clipClock(seconds: number) {
+  const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${rest.toString().padStart(2, "0")}`;
+}
+
+function seekMountedClip(player: VideoPlayer, seconds: number) {
+  const mounted = (player as VideoPlayer & { _mountedVideos?: Set<HTMLVideoElement> })._mountedVideos;
+  if (mounted && mounted.size > 0) {
+    mounted.forEach((video) => {
+      if (typeof video.fastSeek === "function") video.fastSeek(seconds);
+      else video.currentTime = seconds;
+    });
+    return;
+  }
+  player.currentTime = seconds;
 }
 
 let feedAudioReady = false;
@@ -1149,14 +1168,166 @@ function Composer() {
 
 function FeedMedia({ media, postId }: { media: PostMedia; postId: string }) {
   const { openMedia } = useSocial();
+  if (media.type === "video") {
+    return <PostVideo postId={postId} uri={media.uri} onOpen={() => openMedia(media)} />;
+  }
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={() => openMedia(media)}>
-      {media.type === "video" ? <PostVideo postId={postId} uri={media.uri} /> : <Image source={{ uri: media.uri }} style={styles.postMedia} contentFit="cover" />}
+      <Image source={{ uri: media.uri }} style={styles.postMedia} contentFit="cover" />
     </Pressable>
   );
 }
 
-function PostVideo({ postId, uri }: { postId: string; uri: string }) {
+function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlaying: boolean }) {
+  const theme = useAppTheme();
+  const barRef = useRef<View>(null);
+  const playerRef = useRef(player);
+  const draggingRef = useRef(false);
+  const keepPlayingRef = useRef(keepPlaying);
+  const durationRef = useRef(0);
+  const frameRef = useRef({ x: 0, width: 1 });
+  const pendingTime = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  playerRef.current = player;
+  keepPlayingRef.current = keepPlaying;
+
+  const flushSeek = useCallback((seconds: number) => {
+    pendingTime.current = null;
+    if (rafRef.current != null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    seekMountedClip(playerRef.current, seconds);
+  }, []);
+
+  const queueSeek = useCallback((seconds: number) => {
+    pendingTime.current = seconds;
+    if (rafRef.current != null) return;
+    const apply = () => {
+      rafRef.current = null;
+      const time = pendingTime.current;
+      if (time == null) return;
+      pendingTime.current = null;
+      seekMountedClip(playerRef.current, time);
+    };
+    if (typeof requestAnimationFrame === "function") rafRef.current = requestAnimationFrame(apply);
+    else apply();
+  }, []);
+
+  const seekToPageX = useCallback(
+    (pageX: number, immediate = false) => {
+      const length = durationRef.current || playerRef.current.duration;
+      const { x, width } = frameRef.current;
+      if (!(length > 0) || width <= 0) return;
+      const ratio = Math.min(1, Math.max(0, (pageX - x) / width));
+      setProgress(ratio);
+      const seconds = ratio * length;
+      if (immediate) flushSeek(seconds);
+      else queueSeek(seconds);
+    },
+    [flushSeek, queueSeek],
+  );
+
+  const measureBar = useCallback(() => {
+    barRef.current?.measureInWindow((x, _y, width) => {
+      if (width > 0) frameRef.current = { x, width };
+    });
+  }, []);
+
+  const finishDrag = useCallback(() => {
+    draggingRef.current = false;
+    setDragging(false);
+    const clip = playerRef.current;
+    const queued = pendingTime.current;
+    if (queued != null) flushSeek(queued);
+    clip.seekTolerance = { toleranceBefore: 0, toleranceAfter: 0 };
+    clip.scrubbingModeOptions = { scrubbingModeEnabled: false };
+    if (keepPlayingRef.current) clip.play();
+  }, [flushSeek]);
+
+  useEffect(() => {
+    player.timeUpdateEventInterval = 0.1;
+    const time = player.addListener("timeUpdate", (event) => {
+      const length = player.duration || durationRef.current;
+      if (length > 0) {
+        durationRef.current = length;
+        setDuration(length);
+      }
+      if (draggingRef.current || !(length > 0)) return;
+      setProgress(Math.min(1, Math.max(0, event.currentTime / length)));
+    });
+    const loaded = player.addListener("sourceLoad", (event) => {
+      const length = event.duration || player.duration;
+      if (!(length > 0)) return;
+      durationRef.current = length;
+      setDuration(length);
+    });
+    return () => {
+      time.remove();
+      loaded.remove();
+      if (rafRef.current != null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(rafRef.current);
+    };
+  }, [player]);
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: (event) => {
+          draggingRef.current = true;
+          setDragging(true);
+          const clip = playerRef.current;
+          clip.scrubbingModeOptions = { scrubbingModeEnabled: true };
+          clip.seekTolerance = { toleranceBefore: 0.35, toleranceAfter: 0.35 };
+          clip.pause();
+          const pageX = event.nativeEvent.pageX;
+          seekToPageX(pageX);
+          barRef.current?.measureInWindow((x, _y, width) => {
+            if (width > 0) frameRef.current = { x, width };
+            seekToPageX(pageX);
+          });
+        },
+        onPanResponderMove: (event) => {
+          seekToPageX(event.nativeEvent.pageX);
+        },
+        onPanResponderRelease: finishDrag,
+        onPanResponderTerminate: finishDrag,
+      }),
+    [finishDrag, seekToPageX],
+  );
+
+  const current = progress * (duration || 0);
+
+  return (
+    <View pointerEvents="box-none" style={styles.scrubber}>
+      {dragging ? (
+        <AppText pointerEvents="none" size={12} weight="bold" style={styles.scrubberTime}>
+          {clipClock(current)} / {clipClock(duration)}
+        </AppText>
+      ) : null}
+      <View
+        ref={barRef}
+        accessibilityLabel="Video progress"
+        onLayout={measureBar}
+        style={styles.scrubberHit}
+        {...pan.panHandlers}
+      >
+        <View style={styles.scrubberTrack}>
+          <View style={[styles.scrubberFill, { width: `${progress * 100}%`, backgroundColor: theme.colors.primary }]} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpen: () => void }) {
   const ref = useRef<View>(null);
   const { activeVideoId, registerVideo } = useSocial();
   const source = useRef(uri);
@@ -1198,7 +1369,7 @@ function PostVideo({ postId, uri }: { postId: string; uri: string }) {
   }, [play, player, soundOn]);
 
   return (
-    <View ref={ref} collapsable={false}>
+    <View ref={ref} collapsable={false} style={styles.videoWrap}>
       {/* playsInline keeps the clip in the feed. Without it the iPhone home-screen app
           throws the video fullscreen the moment it starts playing on scroll. */}
       <VideoView
@@ -1211,6 +1382,8 @@ function PostVideo({ postId, uri }: { postId: string; uri: string }) {
         fullscreenOptions={{ enable: false }}
         onFullscreenEnter={dismissNativeFullscreen}
       />
+      <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen} style={StyleSheet.absoluteFillObject} />
+      <VideoScrubber player={player} keepPlaying={play} />
     </View>
   );
 }
@@ -1274,16 +1447,7 @@ function LightboxVideo({ uri }: { uri: string }) {
     };
   }, [player]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={playing ? "Pause clip" : "Play clip"}
-      onPress={() => {
-        if (playing) player.pause();
-        else player.play();
-        setPlaying(!playing);
-      }}
-      style={styles.lightboxMedia}
-    >
+    <View style={styles.lightboxMedia}>
       <VideoView
         player={player}
         style={styles.lightboxMedia}
@@ -1294,7 +1458,18 @@ function LightboxVideo({ uri }: { uri: string }) {
         fullscreenOptions={{ enable: false }}
         onFullscreenEnter={dismissNativeFullscreen}
       />
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={playing ? "Pause clip" : "Play clip"}
+        onPress={() => {
+          if (playing) player.pause();
+          else player.play();
+          setPlaying(!playing);
+        }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <VideoScrubber player={player} keepPlaying={playing} />
+    </View>
   );
 }
 
@@ -2102,6 +2277,42 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 14,
     width: "100%",
+  },
+  videoWrap: {
+    borderRadius: 14,
+    overflow: "hidden",
+    width: "100%",
+  },
+  scrubber: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    zIndex: 3,
+  },
+  scrubberTime: {
+    bottom: 10,
+    color: "#FFFFFF",
+    left: 8,
+    position: "absolute",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  scrubberHit: {
+    justifyContent: "flex-end",
+    minHeight: 36,
+    touchAction: "none",
+    userSelect: "none",
+  },
+  scrubberTrack: {
+    backgroundColor: "rgba(255, 255, 255, 0.38)",
+    height: 3,
+    overflow: "visible",
+    width: "100%",
+  },
+  scrubberFill: {
+    height: 3,
   },
   lightbox: {
     backgroundColor: "rgba(0, 0, 0, 0.92)",
