@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { readMediaBytes } from "@/lib/media-bytes";
 import { listConnections } from "@/lib/matches";
 import { blockedUserIds } from "@/lib/safety";
@@ -46,12 +48,27 @@ export type Post = {
 
 export type SocialPerson = { id: string; name: string; photo: string | null };
 
+export type SocialNotice = {
+  id: string;
+  at: string;
+  actorId: string;
+  actorName: string;
+  actorPhoto?: string | null;
+  postId: string;
+  commentId?: string;
+  kind: "post" | "post_like" | "post_comment" | "reply" | "comment_like";
+  action: string;
+};
+
 export type Feed = {
   posts: Post[];
   // Friends are the people you're matched with.
   friendIds: string[];
   // Public accounts in this feed that you are not matched with.
   publicIds: string[];
+  // Public accounts you follow, keyed by their id, valued by when you followed them.
+  // A follow is not a match. Only their posts from this time onward lead the Public tab.
+  followedAt: Record<string, string>;
   people: Record<string, SocialPerson>;
 };
 
@@ -164,6 +181,10 @@ async function lookupPeople(ids: string[]) {
   return people;
 }
 
+export async function loadSocialPeople(ids: string[]) {
+  return lookupPeople(ids);
+}
+
 // Blocked people's comments are hidden, along with the replies under them.
 function toComments(rows: CommentRow[], me: string, blocked: Set<string>): Comment[] {
   const visible = rows.filter((row) => !blocked.has(row.author_id));
@@ -246,20 +267,48 @@ export type FeedPage = Feed & { hasMore: boolean };
 
 // `before` is the oldest post already on screen. The database only returns
 // posts this person is allowed to see.
+export async function listFollows() {
+  const { data, error } = await supabase.from("follow").select("following_id, created_at");
+  if (error) throw socialError(error, "Could not load who you follow.");
+  const followedAt: Record<string, string> = {};
+  for (const row of (data ?? []) as { following_id?: string; created_at?: string }[]) {
+    if (row.following_id && row.created_at) followedAt[row.following_id] = row.created_at;
+  }
+  return followedAt;
+}
+
+export async function followAccount(userId: string) {
+  const me = await currentUserId();
+  if (me === userId) throw new Error("You can't follow yourself.");
+  if ((await blockedUserIds()).has(userId)) throw new Error("Unblock this person before following them.");
+  const { data, error } = await supabase.from("follow").insert({ follower_id: me, following_id: userId }).select("created_at").single();
+  if (error) {
+    if (`${error.message ?? ""}`.includes("row-level security")) throw new Error("You can only follow a public account.");
+    throw socialError(error, "Could not follow that account.");
+  }
+  return data.created_at as string;
+}
+
+export async function unfollowAccount(userId: string) {
+  const me = await currentUserId();
+  const { error } = await supabase.from("follow").delete().eq("follower_id", me).eq("following_id", userId);
+  if (error) throw socialError(error, "Could not unfollow that account.");
+}
+
 export async function fetchFeed(before?: string): Promise<FeedPage> {
   const me = await currentUserId();
-  const [connections, blocked] = await Promise.all([listConnections().catch(() => []), blockedUserIds()]);
+  const [connections, blocked, followedAt] = await Promise.all([listConnections().catch(() => []), blockedUserIds(), listFollows()]);
   const friends = connections.filter((person) => person.status === "accepted" && !blocked.has(person.userId));
   const friendIds = friends.map((friend) => friend.userId);
   const page = await loadPostPage(me, before);
   const people = await withPeople(page.posts, friends);
   const publicIds = await publicAuthorIds(page.posts.map((post) => post.authorId).filter((id) => id !== "me" && !friendIds.includes(id)));
-  return { posts: page.posts, hasMore: page.hasMore, friendIds, publicIds, people };
+  return { posts: page.posts, hasMore: page.hasMore, friendIds, publicIds, followedAt, people };
 }
 
 export async function fetchAuthorPosts(authorId: string, before?: string) {
   const me = await currentUserId();
-  const [connections, blocked] = await Promise.all([listConnections().catch(() => []), blockedUserIds()]);
+  const [connections, blocked, followedAt] = await Promise.all([listConnections().catch(() => []), blockedUserIds(), listFollows()]);
   const friends = connections.filter((person) => person.status === "accepted" && !blocked.has(person.userId));
   const friendIds = friends.map((friend) => friend.userId);
   const page = await loadPostPage(me, before, authorId === "me" ? me : authorId);
@@ -268,7 +317,166 @@ export async function fetchAuthorPosts(authorId: string, before?: string) {
     for (const [id, person] of await lookupPeople([authorId])) people[id] = person;
   }
   const publicIds = await publicAuthorIds(page.posts.map((post) => post.authorId).filter((id) => id !== "me" && !friendIds.includes(id)));
-  return { ...page, people, friendIds, publicIds };
+  return { ...page, people, friendIds, publicIds, followedAt };
+}
+
+const NOTICE_LIMIT = 20;
+const NOTICE_DAYS = 7;
+const NOTICE_PARENTS = 80;
+
+function noticeCutoff() {
+  return new Date(Date.now() - NOTICE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function noticeAction(kind: SocialNotice["kind"]) {
+  if (kind === "post") return "posted";
+  if (kind === "post_like") return "liked your post";
+  if (kind === "reply") return "replied to your comment";
+  if (kind === "comment_like") return "liked your comment";
+  if (kind === "post_comment") return "commented on your post";
+  return "commented on a post you commented on";
+}
+
+export async function loadSocialNotices(): Promise<{ notices: SocialNotice[]; seenAt: string | null }> {
+  const me = await currentUserId();
+  const [connections, blocked, seen] = await Promise.all([
+    listConnections().catch(() => []),
+    blockedUserIds(),
+    supabase.from("user_account").select("social_notified_at").eq("id", me).maybeSingle(),
+  ]);
+  const friendIds = connections.filter((person) => person.status === "accepted" && !blocked.has(person.userId)).map((person) => person.userId);
+  const seenAt = (seen.data as { social_notified_at?: string | null } | null)?.social_notified_at ?? null;
+  const cutoff = noticeCutoff();
+
+  const [myPosts, myComments, friendPosts] = await Promise.all([
+    supabase.from("post").select("id").eq("author_id", me).order("created_at", { ascending: false }).limit(NOTICE_PARENTS),
+    supabase.from("post_comment").select("id, post_id").eq("author_id", me).order("created_at", { ascending: false }).limit(NOTICE_PARENTS),
+    friendIds.length
+      ? supabase.from("post").select("id, author_id, created_at").in("author_id", friendIds).neq("author_id", me).gte("created_at", cutoff).order("created_at", { ascending: false }).limit(NOTICE_LIMIT)
+      : Promise.resolve({ data: [] as { id: string; author_id: string; created_at: string }[] }),
+  ]);
+
+  const myPostIds = new Set(((myPosts.data ?? []) as { id: string }[]).map((row) => row.id));
+  const myCommentRows = (myComments.data ?? []) as { id: string; post_id: string }[];
+  const myCommentIds = new Set(myCommentRows.map((row) => row.id));
+  const engagedPostIds = [...new Set(myCommentRows.map((row) => row.post_id).filter((id) => !myPostIds.has(id)))];
+  const likePostIds = [...myPostIds];
+
+  const [postLikes, commentsOnMine, commentsOnEngaged, commentLikes] = await Promise.all([
+    likePostIds.length
+      ? supabase.from("post_like").select("post_id, user_id, created_at").in("post_id", likePostIds).neq("user_id", me).gte("created_at", cutoff).order("created_at", { ascending: false }).limit(NOTICE_LIMIT)
+      : Promise.resolve({ data: [] as { post_id: string; user_id: string; created_at: string }[] }),
+    likePostIds.length
+      ? supabase.from("post_comment").select("id, post_id, author_id, parent_id, created_at").in("post_id", likePostIds).neq("author_id", me).gte("created_at", cutoff).order("created_at", { ascending: false }).limit(NOTICE_LIMIT)
+      : Promise.resolve({ data: [] as { id: string; post_id: string; author_id: string; parent_id: string | null; created_at: string }[] }),
+    engagedPostIds.length
+      ? supabase.from("post_comment").select("id, post_id, author_id, parent_id, created_at").in("post_id", engagedPostIds).neq("author_id", me).gte("created_at", cutoff).order("created_at", { ascending: false }).limit(NOTICE_LIMIT)
+      : Promise.resolve({ data: [] as { id: string; post_id: string; author_id: string; parent_id: string | null; created_at: string }[] }),
+    myCommentIds.size
+      ? supabase.from("comment_like").select("comment_id, user_id, created_at").in("comment_id", [...myCommentIds]).neq("user_id", me).gte("created_at", cutoff).order("created_at", { ascending: false }).limit(NOTICE_LIMIT)
+      : Promise.resolve({ data: [] as { comment_id: string; user_id: string; created_at: string }[] }),
+  ]);
+
+  const commentPost = new Map<string, string>();
+  for (const row of myCommentRows) commentPost.set(row.id, row.post_id);
+
+  const drafts: SocialNotice[] = [];
+  for (const row of (friendPosts.data ?? []) as { id: string; author_id: string; created_at: string }[]) {
+    if (!row.id || !row.author_id || blocked.has(row.author_id)) continue;
+    drafts.push({ id: `post:${row.id}`, at: row.created_at, actorId: row.author_id, actorName: "", postId: row.id, kind: "post", action: noticeAction("post") });
+  }
+  for (const row of (postLikes.data ?? []) as { post_id: string; user_id: string; created_at: string }[]) {
+    if (!row.post_id || !row.user_id || blocked.has(row.user_id)) continue;
+    drafts.push({ id: `post-like:${row.post_id}:${row.user_id}`, at: row.created_at, actorId: row.user_id, actorName: "", postId: row.post_id, kind: "post_like", action: noticeAction("post_like") });
+  }
+  const seenComments = new Set<string>();
+  for (const row of [...((commentsOnMine.data ?? []) as { id: string; post_id: string; author_id: string; parent_id: string | null; created_at: string }[]), ...((commentsOnEngaged.data ?? []) as { id: string; post_id: string; author_id: string; parent_id: string | null; created_at: string }[])]) {
+    if (!row.id || !row.author_id || !row.post_id || blocked.has(row.author_id) || seenComments.has(row.id)) continue;
+    seenComments.add(row.id);
+    const reply = !!row.parent_id && myCommentIds.has(row.parent_id);
+    const onMine = myPostIds.has(row.post_id);
+    drafts.push({
+      id: `comment:${row.id}`,
+      at: row.created_at,
+      actorId: row.author_id,
+      actorName: "",
+      postId: row.post_id,
+      commentId: row.id,
+      kind: reply ? "reply" : "post_comment",
+      action: reply ? noticeAction("reply") : onMine ? noticeAction("post_comment") : "commented on a post you commented on",
+    });
+  }
+  for (const row of (commentLikes.data ?? []) as { comment_id: string; user_id: string; created_at: string }[]) {
+    const postId = commentPost.get(row.comment_id);
+    if (!postId || !row.user_id || blocked.has(row.user_id)) continue;
+    drafts.push({
+      id: `comment-like:${row.comment_id}:${row.user_id}`,
+      at: row.created_at,
+      actorId: row.user_id,
+      actorName: "",
+      postId,
+      commentId: row.comment_id,
+      kind: "comment_like",
+      action: noticeAction("comment_like"),
+    });
+  }
+
+  const cutoffMs = Date.now() - NOTICE_DAYS * 24 * 60 * 60 * 1000;
+  const recent = drafts.filter((notice) => Date.parse(notice.at) >= cutoffMs);
+  recent.sort((left, right) => right.at.localeCompare(left.at));
+  const trimmed = recent.slice(0, NOTICE_LIMIT);
+  const people = await lookupPeople(trimmed.map((notice) => notice.actorId));
+  return {
+    seenAt,
+    notices: trimmed.map((notice) => {
+      const person = people.get(notice.actorId);
+      return { ...notice, actorName: person?.name || "Someone", actorPhoto: person?.photo ?? null };
+    }),
+  };
+}
+
+export async function markSocialNoticesSeen() {
+  const me = await currentUserId();
+  const seenAt = new Date().toISOString();
+  const { error } = await supabase.from("user_account").update({ social_notified_at: seenAt }).eq("id", me);
+  if (error) throw socialError(error, "Could not update notifications.");
+  emitSocialNotices();
+  return seenAt;
+}
+
+export async function socialAlertCount() {
+  const { notices, seenAt } = await loadSocialNotices();
+  if (!seenAt) return notices.length;
+  return notices.filter((notice) => notice.at > seenAt).length;
+}
+
+const socialNoticeListeners = new Set<() => void>();
+let socialNoticeListenerId = 0;
+
+export function subscribeSocialNotices(onChange: () => void) {
+  socialNoticeListeners.add(onChange);
+  const stopFeed = subscribeFeed(onChange, `social-tab-notices-${++socialNoticeListenerId}`);
+  return () => {
+    socialNoticeListeners.delete(onChange);
+    stopFeed();
+  };
+}
+
+function emitSocialNotices() {
+  for (const listener of socialNoticeListeners) listener();
+}
+
+export async function fetchPost(postId: string) {
+  const me = await currentUserId();
+  const { data, error } = await supabase.from("post").select(POST_COLUMNS).eq("id", postId).maybeSingle();
+  if (error) throw socialError(error, "Could not open that post.");
+  if (!data) return null;
+  const posts = await toPosts([data as PostRow], me);
+  const post = posts[0];
+  if (!post) return null;
+  const connections = await listConnections().catch(() => []);
+  const friends = connections.filter((person) => person.status === "accepted");
+  return { post, people: await withPeople([post], friends) };
 }
 
 export async function fetchComments(postId: string) {
@@ -282,17 +490,36 @@ export async function fetchComments(postId: string) {
   return toComments((data ?? []) as CommentRow[], me, blocked);
 }
 
+let postsPublic: boolean | null = null;
+const postsPublicListeners = new Set<(value: boolean) => void>();
+
+function publishPostsPublic(value: boolean) {
+  postsPublic = value;
+  postsPublicListeners.forEach((listener) => listener(value));
+}
+
+export function subscribePostsPublic(listener: (value: boolean) => void) {
+  postsPublicListeners.add(listener);
+  if (postsPublic !== null) listener(postsPublic);
+  return () => {
+    postsPublicListeners.delete(listener);
+  };
+}
+
 export async function loadSocialPublic() {
   const me = await currentUserId();
   const { data, error } = await supabase.from("user_account").select("social_public").eq("id", me).maybeSingle();
   if (error) throw socialError(error, "Could not load who can see your posts.");
-  return Boolean((data as { social_public?: boolean } | null)?.social_public);
+  const value = Boolean((data as { social_public?: boolean } | null)?.social_public);
+  publishPostsPublic(value);
+  return value;
 }
 
 export async function setSocialPublic(isPublic: boolean) {
   const me = await currentUserId();
   const { error } = await supabase.from("user_account").update({ social_public: isPublic }).eq("id", me);
   if (error) throw socialError(error, "Could not update who can see your posts.");
+  publishPostsPublic(isPublic);
 }
 
 export async function authorIsPublic(userId: string) {
@@ -325,7 +552,7 @@ const SLOW_POLL_MS = 30_000;
 
 // Reloads the feed when someone posts, likes, or comments.
 // A slow poll runs only while the live channel is down.
-export function subscribeFeed(onChange: () => void) {
+export function subscribeFeed(onChange: () => void, channelName = "social-feed") {
   let pending: ReturnType<typeof setTimeout> | null = null;
   let poll: ReturnType<typeof setInterval> | null = null;
   const pull = () => {
@@ -344,7 +571,7 @@ export function subscribeFeed(onChange: () => void) {
     if (poll) return;
     poll = setInterval(pull, SLOW_POLL_MS);
   };
-  const channel = supabase.channel("social-feed");
+  const channel = supabase.channel(channelName);
   for (const table of liveTables) {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, pull);
   }
@@ -472,6 +699,73 @@ export async function setCommentLike(commentId: string, liked: boolean) {
     ? await supabase.from("comment_like").insert({ comment_id: commentId, user_id: me })
     : await supabase.from("comment_like").delete().eq("comment_id", commentId).eq("user_id", me);
   if (error && error.code !== "23505") throw socialError(error, "Could not update that like.");
+}
+
+const RING_MS = 24 * 60 * 60 * 1000;
+const ringListeners = new Set<() => void>();
+
+function ringKey(userId: string) {
+  return `social-rings:${userId}`;
+}
+
+export function subscribeFriendRings(onChange: () => void) {
+  ringListeners.add(onChange);
+  return () => {
+    ringListeners.delete(onChange);
+  };
+}
+
+export async function recentFriendActivity(friendIds: string[]) {
+  const ids = [...new Set(friendIds)].filter((id) => id && id !== "me");
+  if (!ids.length) return {} as Record<string, string>;
+  const since = new Date(Date.now() - RING_MS).toISOString();
+  const { data, error } = await supabase
+    .from("post")
+    .select("author_id, created_at")
+    .in("author_id", ids)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error || !data) return {} as Record<string, string>;
+  const latest: Record<string, string> = {};
+  for (const row of data as { author_id: string; created_at: string }[]) {
+    if (!latest[row.author_id]) latest[row.author_id] = row.created_at;
+  }
+  return latest;
+}
+
+export async function readFriendRings() {
+  const me = await currentUserId().catch(() => null);
+  if (!me) return {} as Record<string, string>;
+  try {
+    const saved = JSON.parse((await AsyncStorage.getItem(ringKey(me))) ?? "{}") as unknown;
+    if (!saved || typeof saved !== "object") return {} as Record<string, string>;
+    const rings: Record<string, string> = {};
+    for (const [id, at] of Object.entries(saved)) {
+      if (typeof at === "string") rings[id] = at;
+    }
+    return rings;
+  } catch {
+    return {} as Record<string, string>;
+  }
+}
+
+export async function markFriendPostsSeen(friendId: string) {
+  const me = await currentUserId().catch(() => null);
+  if (!me || !friendId || friendId === "me") return;
+  const current = await readFriendRings();
+  current[friendId] = new Date().toISOString();
+  await AsyncStorage.setItem(ringKey(me), JSON.stringify(current));
+  ringListeners.forEach((listener) => listener());
+}
+
+export function friendHasFreshPost(latest: string | undefined, seenAt: string | undefined, now = Date.now()) {
+  if (!latest) return false;
+  const posted = Date.parse(latest);
+  if (!Number.isFinite(posted) || now - posted > RING_MS) return false;
+  if (!seenAt) return true;
+  const seen = Date.parse(seenAt);
+  return !Number.isFinite(seen) || posted > seen;
 }
 
 // "Just now", "5m", "3h", "2d", then "Sep 12".

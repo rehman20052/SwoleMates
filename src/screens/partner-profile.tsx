@@ -3,7 +3,7 @@ import { PropsWithChildren, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
-import { AppText, Card, Icon, IconButton, PhotoScrim, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";
+import { AppText, BackButton, Card, Icon, IconButton, PhotoScrim, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";
 import { firstName, getPartner, Partner } from "@/data/partners";
 import { isAccountId } from "@/lib/discover";
 import { useNavigation } from "@/navigation";
@@ -67,7 +67,7 @@ function PartnerProfile({ partner }: { partner: Partner }) {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
+        <BackButton onPress={nav.back} />
         <AppText size={18} weight="extrabold">
           {partner.name}
         </AppText>

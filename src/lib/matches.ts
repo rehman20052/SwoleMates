@@ -281,6 +281,14 @@ type MessageStamp = { match_id?: string; sender_id?: string; created_at?: string
 
 const workoutPlanMarker = "workout-plan:";
 
+function requestExpired(status: string | null | undefined, date: string | null | undefined, start: string | null | undefined, now = new Date()) {
+  if (status !== "proposed" || !date || !start) return false;
+  const match = start.match(/^(\d{2}):(\d{2})/);
+  if (!match) return false;
+  const when = new Date(`${date}T${match[1]}:${match[2]}:00`);
+  return !Number.isNaN(when.getTime()) && now.getTime() >= when.getTime() - 30 * 60 * 1000;
+}
+
 function workoutPlanIdFromBody(body: string) {
   const line = body
     .split("\n")
@@ -293,8 +301,18 @@ async function answeredWorkoutIds(me: string, matchIds: string[]) {
   const ids = [...new Set(matchIds)];
   const answered = new Set<string>();
   if (ids.length === 0) return answered;
-  const { data } = await supabase.from("planned_workout").select("planned_workout_id, created_by, notes").in("match_id", ids);
-  for (const row of (data ?? []) as { planned_workout_id?: string; created_by?: string; notes?: string | null }[]) {
+  const { data } = await supabase
+    .from("planned_workout")
+    .select("planned_workout_id, created_by, notes, status, workout_date, start_time")
+    .in("match_id", ids);
+  for (const row of (data ?? []) as {
+    planned_workout_id?: string;
+    created_by?: string;
+    notes?: string | null;
+    status?: string | null;
+    workout_date?: string | null;
+    start_time?: string | null;
+  }[]) {
     if (!row.planned_workout_id || !row.created_by) continue;
     let notes: { acceptedBy?: unknown; cancelledBy?: unknown } = {};
     try {
@@ -305,7 +323,8 @@ async function answeredWorkoutIds(me: string, matchIds: string[]) {
     const acceptedBy = Array.isArray(notes.acceptedBy) ? notes.acceptedBy.filter((id): id is string => typeof id === "string") : [];
     const declinedByMe = notes.cancelledBy === me;
     const acceptedTheirs = row.created_by !== me && acceptedBy.includes(me);
-    if (declinedByMe || acceptedTheirs) answered.add(row.planned_workout_id);
+    const expired = requestExpired(row.status, row.workout_date, row.start_time);
+    if (declinedByMe || acceptedTheirs || expired) answered.add(row.planned_workout_id);
   }
   return answered;
 }
@@ -414,11 +433,12 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
   if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Home settings before matching again.");
 
-  // The database this project is using still names the argument to_user_id.
-  // A newer script renames it to target_user so it does not clash with the column.
-  let { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
-  if (error && `${error.message} ${error.hint ?? ""}`.includes("to_user_id")) {
-    const retry = await supabase.rpc("send_match_request", { to_user_id: toUserId });
+  // This database names the argument to_user_id. A newer script renames it to
+  // target_user so it does not clash with the column. Calling the missing name
+  // never returns, so try the live name first.
+  let { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
+  if (error && `${error.message} ${error.hint ?? ""}`.includes("target_user")) {
+    const retry = await supabase.rpc("send_match_request", { target_user: toUserId });
     error = retry.error;
   }
   if (error) await sendMatchRequestDirect(me, toUserId);

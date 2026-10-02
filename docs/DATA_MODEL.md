@@ -40,6 +40,7 @@ Interactive version with zoomable diagrams: https://claude.ai/artifact/GAoLFw9mZ
 | `post_like` | Social | Who liked each post | Anyone who can see the post; you add and remove your own | Waiting for Noor |
 | `post_comment` | Social | Comments and one level of replies | Anyone who can see the post; you edit your own; you or the post's author can delete | Waiting for Noor |
 | `comment_like` | Social | Who liked each comment | Anyone who can see the comment; you add and remove your own | Waiting for Noor |
+| `follow` | Social | Public accounts you follow, and when you followed them | Your own rows. Following is not a match | Yes, after `supabase/follow.sql` |
 | `discover_profiles` | Discover | Old public profile copy | Your own row; others through discover_people() | Yes, remove later |
 
 ## Accounts & profiles
@@ -70,6 +71,7 @@ erDiagram
     varchar custom_lift_name
     bigint custom_lift_lbs
     boolean social_public "default false, private to matches"
+    timestamptz social_notified_at "when the Social bell was last opened"
     timestamptz updated_at
   }
   gym {
@@ -315,7 +317,7 @@ erDiagram
 
 ## Social
 
-*Social tab.* A feed of posts from you, the people you're matched with, and accounts that chose to be public. A private account (`user_account.social_public` false, the default) is matches-only. A public account can be seen by any signed-in user, and their match card can be opened from a post with `public_match_profile()` so someone who is not a match can send a request. The function returns the Discover card only, with coordinates and birthdate removed, and only when that account is public and neither person blocked the other. A block in either direction hides the posts. The author can edit the post text; `edited_at` is set when the text changes. Likes and comments can be seen by anyone who can see the post, so a match of the author can see comments from the author's other matches. `social_people()` supplies those commenters' names and main photos. Replies point at a top-level comment through `parent_id`, one level deep. Photos and clips are in the private `post-media` storage bucket under `<author id>/`, read through signed links that expire after an hour. Script: `supabase/social.sql`, waiting for Noor to run it.
+*Social tab.* A feed of posts from you, the people you're matched with, and accounts that chose to be public. A private account (`user_account.social_public` false, the default) is matches-only. A public account can be seen by any signed-in user, and their match card can be opened from a post with `public_match_profile()` so someone who is not a match can send a request. The function returns the Discover card only, with coordinates and birthdate removed, and only when that account is public and neither person blocked the other. A block in either direction hides the posts. The author can edit the post text; `edited_at` is set when the text changes. Likes and comments can be seen by anyone who can see the post, so a match of the author can see comments from the author's other matches. `social_people()` supplies names and main photos for matches, commenters, and people who liked a post or comment you can see. `user_account.social_notified_at` is when the Social bell was last opened; newer likes, comments, replies, and friend posts count as unread. There is no separate notifications table. Replies point at a top-level comment through `parent_id`, one level deep. Photos and clips are in the private `post-media` storage bucket under `<author id>/`, read through signed links that expire after an hour. A follow is not a match and does not create a `match_requests` row. `follow` stores who you follow and the time you followed them. On Public, posts that person already had stay in their normal place among other public posts. Posts they create at or after that time show first, ahead of public posts from people you do not follow. Script: `supabase/social.sql` and `supabase/follow.sql`.
 
 ```mermaid
 erDiagram
@@ -350,6 +352,11 @@ erDiagram
     uuid user_id PK, FK
     timestamptz created_at
   }
+  follow {
+    uuid follower_id PK, FK "you"
+    uuid following_id PK, FK "a public account, not a match"
+    timestamptz created_at "posts at or after this time lead Public"
+  }
   user_account ||--o{ post : writes
   post ||--o{ post_like : receives
   user_account ||--o{ post_like : gives
@@ -358,6 +365,8 @@ erDiagram
   user_account ||--o{ post_comment : writes
   post_comment ||--o{ comment_like : receives
   user_account ||--o{ comment_like : gives
+  user_account ||--o{ follow : follows
+  user_account ||--o{ follow : "followed by"
 ```
 
 ## Old profile copies (remove later)
@@ -393,6 +402,7 @@ erDiagram
 - `workout_logs`: one log per person per planned workout (`workout_logs_one_per_plan`).
 - `food_log_entry` and `saved_meal`: meal is Breakfast, Lunch, Dinner or Snack.
 - `post`: needs text or a photo or clip (`post_has_content`). `post_comment`: only the text can be edited, and a reply must point at a top-level comment on the same post. Deleting a post removes its likes and comments, and deleting a comment removes its replies.
+- `follow`: you can't follow yourself. The database sets who followed and the time, so an older time cannot be chosen to float old posts. Unfollowing deletes the row. Following again starts a new time.
 - Link columns (`user_id`, `match_id`, `gym_id` and so on) have no default. Only a table's own ID column gets `gen_random_uuid()`, and `user_account.id` has none because it must equal the login ID.
 - Every table has row-level security on. A new table needs RLS and at least one policy before the app can use it.
 

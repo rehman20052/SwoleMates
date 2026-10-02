@@ -217,11 +217,26 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
   );
 });
 
+export function BackButton({ onPress }: { onPress: () => void }) {
+  const theme = useAppTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      hitSlop={10}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minWidth: 28, minHeight: 28, alignItems: "center", justifyContent: "center" })}
+    >
+      <Text style={{ color: theme.colors.text, fontSize: 28, lineHeight: 30 }}>←</Text>
+    </Pressable>
+  );
+}
+
 export function TitleBar({ title, right, onBack }: { title: string; right?: ReactNode; onBack?: () => void }) {
   return (
     <View style={styles.titleBar}>
       <View style={styles.titleLeft}>
-        {onBack ? <IconButton source={icons.arrowLeft} label="Back" onPress={onBack} /> : null}
+        {onBack ? <BackButton onPress={onBack} /> : null}
         <AppText size={20} weight="extrabold">
           {title}
         </AppText>

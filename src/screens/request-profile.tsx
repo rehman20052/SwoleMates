@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { icons } from "@/assets";
-import { AppText, IconButton, PrimaryButton, Screen, SecondaryButton } from "@/components/ui";
+import { AppText, BackButton, PrimaryButton, Screen, SecondaryButton } from "@/components/ui";
 import { isAccountId } from "@/lib/discover";
 import { cancelMatchRequest, loadPublicMatchProfile, matchConnection, matchProfile, respondToMatch, sendMatchRequest } from "@/lib/matches";
 import { authorIsPublic } from "@/lib/social";
@@ -20,7 +19,6 @@ export function RequestProfileScreen({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<UserProfile | null>(() => matchProfile(userId));
   const [profileReady, setProfileReady] = useState(() => matchProfile(userId) != null);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = person?.status === "pending";
   const incoming = pending && person?.direction === "incoming";
@@ -62,7 +60,7 @@ export function RequestProfileScreen({ userId }: { userId: string }) {
     };
   }, [accepted, userId]);
 
-  const canSend = !!profile && !sent && !incoming && !outgoing && !accepted;
+  const canSend = !!profile && !incoming && !outgoing && !accepted;
 
   async function sendRequest() {
     if (busy) return;
@@ -70,8 +68,7 @@ export function RequestProfileScreen({ userId }: { userId: string }) {
     setError(null);
     try {
       await sendMatchRequest(userId);
-      setSent(true);
-      setBusy(false);
+      nav.back();
     } catch (err) {
       setBusy(false);
       setError(err instanceof Error ? err.message : "Could not send that request.");
@@ -94,7 +91,7 @@ export function RequestProfileScreen({ userId }: { userId: string }) {
   return (
     <Screen>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
+        <BackButton onPress={nav.back} />
         <AppText size={16} weight="extrabold" style={{ flex: 1 }}>
           Profile
         </AppText>
@@ -154,15 +151,11 @@ export function RequestProfileScreen({ userId }: { userId: string }) {
             </AppText>
           ) : null}
           <PrimaryButton height={48} fontSize={14} disabled={busy} onPress={() => void sendRequest()}>
-            Send request
+            {busy ? "Sending..." : "Send request"}
           </PrimaryButton>
-        </View>
-      ) : null}
-      {sent ? (
-        <View style={[styles.actions, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
-          <AppText weight="bold" primary>
-            Request sent
-          </AppText>
+          <SecondaryButton height={48} fontSize={14} disabled={busy} onPress={nav.back}>
+            Exit profile
+          </SecondaryButton>
         </View>
       ) : null}
     </Screen>

@@ -1,0 +1,18 @@
+---
+description: Fit every layout change to the iPhone, including the home-screen app.
+alwaysApply: true
+---
+
+# Phone layout
+
+The phone is the product. Desktop web only shows the same app inside the phone frame in `src/components/phone-frame.tsx`. A real phone, Expo Go, and the iPhone home-screen shortcut (GitHub Pages) are full screen.
+
+When a change touches layout, navigation, sheets, or motion:
+
+- Keep it inside the phone width. Do not add a desktop layout.
+- Leave the status bar and home indicator clear. The tab bar sits on the bottom edge, just above the home indicator, with no empty band under it.
+- The installed iPhone app must not use a short `100dvh` height. `public/index.html` already stretches that app to `window.innerHeight` via `fitPhoneScreen`. Do not replace that with `100vh` or `100dvh`.
+- Sheets, menus, and the notification card stay inside the phone and use the same safe areas. A control that is on screen in one tab stays in the same place when switching tabs.
+- Motion should move with the phone, not jump. Opening a screen, a sheet, or the notification list should not shift the tab bar or leave a gap.
+
+Check a narrow phone width before finishing a layout change. The home-screen shortcut only updates after GitHub Pages is published.
