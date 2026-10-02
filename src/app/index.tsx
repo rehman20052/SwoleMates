@@ -606,8 +606,8 @@ export default function App() {
               borderTopColor: theme.colors.border,
               paddingBottom:
                 Platform.OS === 'web'
-                  ? ('max(4px, calc(env(safe-area-inset-bottom, 0px) - 30px))' as unknown as number)
-                  : Math.max(4, insets.bottom - 30),
+                  ? ('max(4px, calc(env(safe-area-inset-bottom, 0px) - 38px))' as unknown as number)
+                  : Math.max(4, insets.bottom - 38),
             },
           ]}
         >
@@ -641,13 +641,13 @@ export default function App() {
                     <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
                   )}
                   {tab.name === 'Chat' && chatAlerts > 0 ? (
-                    <View style={styles.chatBadge}>
-                      <Text style={styles.chatBadgeText}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
+                    <View style={[styles.chatBadge, { backgroundColor: theme.colors.primary }]}>
+                      <Text style={[styles.chatBadgeText, { color: theme.colors.primaryText }]}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
                     </View>
                   ) : null}
                   {tab.name === 'Social' && socialAlerts > 0 ? (
-                    <View style={styles.chatBadge}>
-                      <Text style={styles.chatBadgeText}>{socialAlerts > 9 ? '9+' : socialAlerts}</Text>
+                    <View style={[styles.chatBadge, { backgroundColor: theme.colors.primary }]}>
+                      <Text style={[styles.chatBadgeText, { color: theme.colors.primaryText }]}>{socialAlerts > 9 ? '9+' : socialAlerts}</Text>
                     </View>
                   ) : null}
                 </View>

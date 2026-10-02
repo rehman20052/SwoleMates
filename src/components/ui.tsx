@@ -920,7 +920,9 @@ export function Toggle({ value, onChange, accessibilityLabel }: { value: boolean
       style={{ height: 24, width: 44 }}
     >
       {value ? (
-        <Image source={icons.toggleOn} style={{ height: 24, width: 44 }} />
+        <View style={[styles.toggleOn, { backgroundColor: theme.colors.primary }]}>
+          <View style={[styles.toggleKnob, { backgroundColor: theme.colors.primaryText, alignSelf: "flex-end" }]} />
+        </View>
       ) : (
         <View style={[styles.toggleOff, { backgroundColor: theme.colors.border }]}>
           <View style={[styles.toggleKnob, { backgroundColor: theme.colors.muted }]} />
@@ -1074,6 +1076,13 @@ const styles = StyleSheet.create({
   rangeThumb: {
     position: "absolute",
     top: 5,
+  },
+  toggleOn: {
+    borderRadius: 12,
+    height: 24,
+    justifyContent: "center",
+    paddingHorizontal: 2,
+    width: 44,
   },
   toggleOff: {
     borderRadius: 12,
