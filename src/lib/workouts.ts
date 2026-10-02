@@ -23,10 +23,15 @@ function localIsoDate(date: Date) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+const ACCEPT_LEAD_MS = 30 * 60 * 1000;
+
 export function upcomingTimeSlots(date: string, now = new Date()) {
-  if (date !== localIsoDate(now)) return workoutTimeSlots;
-  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  return workoutTimeSlots.filter((slot) => toSqlTime(slot) > nowTime);
+  const earliest = new Date(now.getTime() + ACCEPT_LEAD_MS);
+  const earliestDay = localIsoDate(earliest);
+  if (date < localIsoDate(now) || date < earliestDay) return [];
+  if (date > earliestDay) return workoutTimeSlots;
+  const cutoff = `${String(earliest.getHours()).padStart(2, "0")}:${String(earliest.getMinutes()).padStart(2, "0")}:${String(earliest.getSeconds()).padStart(2, "0")}`;
+  return workoutTimeSlots.filter((slot) => toSqlTime(slot) >= cutoff);
 }
 
 export type PlannedWorkout = {
@@ -88,10 +93,21 @@ export function toSqlTime(label: string) {
 
 const settledMeetups = new Set<string>();
 
-export function workoutStartsAt(plan: PlannedWorkout) {
+export function workoutStartsAt(plan: { date: string; time: string }) {
   if (!plan.date || !plan.time) return null;
   const start = new Date(`${plan.date}T${toSqlTime(plan.time)}`);
   return Number.isNaN(start.getTime()) ? null : start;
+}
+
+export function acceptWindowClosed(
+  input: { status: string | null; date: string | null; startTime: string | null },
+  now = new Date(),
+) {
+  if (input.status !== "proposed" || !input.date || !input.startTime) return false;
+  const label = /AM|PM/i.test(input.startTime) ? input.startTime : displayTime(input.startTime);
+  const start = workoutStartsAt({ date: input.date, time: label });
+  if (!start) return false;
+  return now.getTime() >= start.getTime() - ACCEPT_LEAD_MS;
 }
 
 export function showUpPromptReady(plan: PlannedWorkout, now = new Date()) {
@@ -119,7 +135,9 @@ export function openScheduledWorkout(plans: PlannedWorkout[]) {
 }
 
 function stillPlanned(plan: PlannedWorkout) {
-  if (plan.status === "proposed") return true;
+  if (plan.status === "proposed") {
+    return !acceptWindowClosed({ status: plan.status, date: plan.date, startTime: plan.time });
+  }
   return plan.status === "scheduled" && !scheduledWorkoutFinished(plan);
 }
 
@@ -218,14 +236,22 @@ export async function answeredIncomingWorkoutIds(matchIds: string[]) {
   if (!me || ids.length === 0) return new Set<string>();
   const { data, error } = await supabase
     .from("planned_workout")
-    .select("planned_workout_id, created_by, notes")
+    .select("planned_workout_id, created_by, notes, status, workout_date, start_time")
     .in("match_id", ids);
   if (error || !data) return new Set<string>();
   const answered = new Set<string>();
-  for (const row of data as { planned_workout_id: string; created_by: string; notes: string | null }[]) {
+  for (const row of data as {
+    planned_workout_id: string;
+    created_by: string;
+    notes: string | null;
+    status: string | null;
+    workout_date: string | null;
+    start_time: string | null;
+  }[]) {
     const declinedByMe = cancelledById(row.notes) === me;
     const acceptedTheirs = row.created_by !== me && acceptedIds(row.notes, row.created_by).includes(me);
-    if (declinedByMe || acceptedTheirs) answered.add(row.planned_workout_id);
+    const expired = acceptWindowClosed({ status: row.status, date: row.workout_date, startTime: row.start_time });
+    if (declinedByMe || acceptedTheirs || expired) answered.add(row.planned_workout_id);
   }
   return answered;
 }
@@ -358,6 +384,9 @@ export async function proposeWorkout(input: {
   const me = await currentUserId();
   const focus = focusName(input.focus);
   if (!focus) throw new Error("Enter the workout you want to do.");
+  if (acceptWindowClosed({ status: "proposed", date: input.date, startTime: input.timeLabel })) {
+    throw new Error("Pick a time at least 30 minutes from now.");
+  }
   const existing = await listMatchWorkouts(input.matchId);
   if (occupiedTimeLabels(existing, input.date).includes(input.timeLabel)) {
     throw new Error("You already have a workout with them at that time.");
@@ -462,6 +491,9 @@ export async function cancelWorkoutRequest(plan: PlannedWorkout) {
 
 export async function respondToWorkout(plan: PlannedWorkout, accept: boolean) {
   const me = await currentUserId();
+  if (accept && acceptWindowClosed({ status: plan.status, date: plan.date, startTime: plan.time })) {
+    throw new Error("This request expired. They need to send a new one.");
+  }
   if (!accept) {
     const notes = JSON.stringify({ acceptedBy: plan.acceptedBy, cancelledBy: me });
     const { error } = await supabase

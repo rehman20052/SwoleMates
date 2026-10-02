@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText, PrimaryButton, SecondaryButton } from "@/components/ui";
-import { cancelWorkoutRequest, respondToWorkout, type PlannedWorkout } from "@/lib/workouts";
+import { acceptWindowClosed, cancelWorkoutRequest, respondToWorkout, type PlannedWorkout } from "@/lib/workouts";
 import { formatDate } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
@@ -21,8 +21,16 @@ export function WorkoutPlanCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"accept" | "decline" | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const accepted = plan.acceptedBy.includes(me);
-  const waiting = plan.status === "proposed";
+  const expired = acceptWindowClosed({ status: plan.status, date: plan.date, startTime: plan.time }, now);
+  const waiting = plan.status === "proposed" && !expired;
+
+  useEffect(() => {
+    if (plan.status !== "proposed") return;
+    const timer = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, [plan.status]);
 
   async function cancel() {
     if (busy) return;
@@ -50,8 +58,9 @@ export function WorkoutPlanCard({
     }
   }
 
-  const statusLine =
-    plan.status === "completed"
+  const statusLine = expired
+    ? "Expired. Send a new request."
+    : plan.status === "completed"
       ? "Completed"
       : plan.status === "scheduled"
         ? "Scheduled. Check in from Home after it starts."
@@ -119,7 +128,7 @@ export function WorkoutPlanCard({
           </View>
         </View>
       ) : null}
-      {waiting && accepted ? (
+      {(waiting || expired) && accepted ? (
         <SecondaryButton height={40} fontSize={13} disabled={busy} onPress={() => void cancel()}>
           Cancel request
         </SecondaryButton>

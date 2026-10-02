@@ -121,7 +121,7 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
           </Card>
           {error ? <AppText size={13} color="#FF3B30">{error}</AppText> : null}
           {timeOptions.length === 0 ? (
-            <AppText muted>No open times that day. Pick another time or day.</AppText>
+            <AppText muted>No open times that day. Pick another day, or a time at least 30 minutes from now.</AppText>
           ) : null}
           {!matchId ? <AppText muted>This chat is not an accepted match yet.</AppText> : null}
           <PrimaryButton disabled={busy || !matchId || !timeOptions.includes(time)} onPress={() => void send()}>

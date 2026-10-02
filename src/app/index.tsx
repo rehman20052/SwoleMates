@@ -28,6 +28,7 @@ import { AuthForm } from '@/components/auth-form';
 import { publishDiscoverProfile } from '@/lib/discover';
 import { isHeicMedia } from '@/lib/heic-media';
 import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomingMessages } from '@/lib/matches';
+import { socialAlertCount, subscribeSocialNotices } from '@/lib/social';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { supabase } from '@/lib/supabase';
@@ -181,6 +182,7 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [chatAlerts, setChatAlerts] = useState(0);
+  const [socialAlerts, setSocialAlerts] = useState(0);
   const finishStartup = useCallback(() => setShowStartup(false), []);
 
   useEffect(() => {
@@ -209,6 +211,24 @@ export default function App() {
       if (Platform.OS === 'web' && typeof window !== 'undefined') window.removeEventListener('focus', onFocus);
     };
   }, [currentScreen, activeTab, stack.length]);
+
+  useEffect(() => {
+    if (currentScreen !== 'main-app') return;
+    let active = true;
+    const refresh = () => {
+      void socialAlertCount()
+        .then((count) => {
+          if (active) setSocialAlerts(count);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    const unsubscribe = subscribeSocialNotices(refresh);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [currentScreen]);
 
   const continueAfterAuth = (profile: UserProfile | null) => {
     setProfileData(profile ?? emptyProfile());
@@ -540,8 +560,6 @@ export default function App() {
             </View>
           } />
         );
-      case 'Social':
-        return <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />;
       case 'Profile':
         return (
           <ProfileScreen
@@ -561,7 +579,18 @@ export default function App() {
     <NavigationContext.Provider value={nav}>
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.mainAppContainer}>
-        {topRoute ? renderRoute(topRoute) : renderMainTabContent()}
+        <View style={styles.tabStage}>
+          {activeTab === 'Social' ? (
+            <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />
+          ) : !topRoute ? (
+            renderMainTabContent()
+          ) : null}
+          {topRoute ? (
+            <View style={[styles.routeCover, { backgroundColor: theme.colors.background }]}>
+              {renderRoute(topRoute)}
+            </View>
+          ) : null}
+        </View>
 
         {!(topRoute && fullScreenRoutes.includes(topRoute.name)) && (
         <View style={[styles.bottomNav, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
@@ -577,7 +606,13 @@ export default function App() {
               <TouchableOpacity
                 key={tab.name}
                 style={styles.navItem}
-                accessibilityLabel={tab.name === 'Chat' && chatAlerts > 0 ? `Chat, ${chatAlerts} new` : tab.name}
+                accessibilityLabel={
+                  tab.name === 'Chat' && chatAlerts > 0
+                    ? `Chat, ${chatAlerts} new`
+                    : tab.name === 'Social' && socialAlerts > 0
+                      ? `Social, ${socialAlerts} new`
+                      : tab.name
+                }
                 onPress={() => nav.setTab(tab.name)}
               >
                 <View style={styles.navIconWrap}>
@@ -591,6 +626,11 @@ export default function App() {
                   {tab.name === 'Chat' && chatAlerts > 0 ? (
                     <View style={styles.chatBadge}>
                       <Text style={styles.chatBadgeText}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
+                    </View>
+                  ) : null}
+                  {tab.name === 'Social' && socialAlerts > 0 ? (
+                    <View style={styles.chatBadge}>
+                      <Text style={styles.chatBadgeText}>{socialAlerts > 9 ? '9+' : socialAlerts}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -748,6 +788,8 @@ const styles = StyleSheet.create({
   modalItemText: { color: '#999999', fontSize: 15, fontWeight: '600' },
   modalItemTextSelected: { color: '#CCFF00', fontWeight: 'bold' },
   mainAppContainer: { flex: 1, justifyContent: 'space-between' },
+  tabStage: { flex: 1 },
+  routeCover: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
   tabContentContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   emptyCircle: {
     width: 80,

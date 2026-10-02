@@ -2,7 +2,8 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Dimensions, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Animated, Dimensions, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 import { appFrameSize } from "@/components/phone-frame";
 import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
@@ -24,15 +25,28 @@ import {
   fetchAuthorPosts,
   fetchComments,
   fetchFeed,
+  fetchPost,
+  followAccount,
+  friendHasFreshPost,
+  loadSocialNotices,
+  loadSocialPeople,
   loadSocialPublic,
+  subscribePostsPublic,
+  markFriendPostsSeen,
+  markSocialNoticesSeen,
   Post,
   POST_LIMIT,
   PostMedia,
+  recentFriendActivity,
+  readFriendRings,
   setCommentLike,
   setPostLike,
   setSocialPublic,
+  SocialNotice,
   subscribeFeed,
+  subscribeFriendRings,
   takeSocialDraft,
+  unfollowAccount,
   timeAgo,
 } from "@/lib/social";
 import { useNavigation } from "@/navigation";
@@ -40,6 +54,8 @@ import { useAppTheme } from "@/theme";
 
 type Me = { name: string; photo?: string };
 type VideoMeasure = (done: (box: { y: number; height: number } | null) => void) => void;
+
+type NoticeFocus = { postId: string; commentId?: string; likes?: boolean; token: number };
 
 type Social = {
   feed: Feed;
@@ -49,6 +65,11 @@ type Social = {
   activeVideoId: string | null;
   registerVideo: (id: string, measure: VideoMeasure) => () => void;
   openMedia: (media: PostMedia) => void;
+  focus: NoticeFocus | null;
+  revealNotice: (notice: SocialNotice) => Promise<void>;
+  toggleFollow: (authorId: string) => Promise<void>;
+  postsPublic: boolean | null;
+  openPostVisibility: () => void;
 };
 
 const SocialContext = createContext<Social | null>(null);
@@ -76,6 +97,7 @@ function mergeFeed(current: Feed | null, page: FeedPage, appended = false): Feed
       ...page,
       people: { ...current?.people, ...page.people },
       publicIds: [...new Set([...(current?.publicIds ?? []), ...page.publicIds])],
+      followedAt: page.followedAt ?? current?.followedAt ?? {},
       posts: [...page.posts.map((post) => keepThread(post, previous.get(post.id))), ...older],
     };
   }
@@ -85,6 +107,7 @@ function mergeFeed(current: Feed | null, page: FeedPage, appended = false): Feed
     ...current,
     people: { ...current.people, ...page.people },
     publicIds: [...new Set([...(current.publicIds ?? []), ...page.publicIds])],
+    followedAt: page.followedAt ?? current.followedAt ?? {},
     posts: [...current.posts, ...fresh],
   };
 }
@@ -94,7 +117,7 @@ function keepThread(post: Post, previous?: Post) {
   return { ...post, comments: previous.comments, commentsLoaded: true };
 }
 
-function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>) {
+function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channelName = "social-feed") {
   const [feed, setFeed] = useState<Feed | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -129,12 +152,12 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>) {
       void reload().catch((err) => {
         if (alive) setLoadError(errorMessage(err, "Could not load your feed."));
       });
-    });
+    }, channelName);
     return () => {
       alive = false;
       stop();
     };
-  }, [loadPage, reload]);
+  }, [channelName, loadPage, reload]);
 
   const syncVideos = useCallback(() => {
     if (lightbox) {
@@ -196,6 +219,43 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>) {
     setFeed((current) => current && { ...current, posts: current.posts.map((post) => (post.id === postId ? fn(post) : post)) });
   }, []);
 
+  const toggleFollow = useCallback(async (authorId: string) => {
+    const existing = feedRef.current?.followedAt?.[authorId];
+    setError(null);
+    try {
+      if (existing) {
+        await unfollowAccount(authorId);
+        setFeed((current) => {
+          if (!current) return current;
+          const followedAt = { ...current.followedAt };
+          delete followedAt[authorId];
+          return { ...current, followedAt };
+        });
+        return;
+      }
+      const followedAt = await followAccount(authorId);
+      setFeed((current) => (current ? { ...current, followedAt: { ...current.followedAt, [authorId]: followedAt } } : current));
+    } catch (err) {
+      setError(errorMessage(err, "Could not update that follow."));
+    }
+  }, []);
+
+  const ensurePost = useCallback(async (postId: string) => {
+    const current = feedRef.current;
+    if (current?.posts.some((post) => post.id === postId)) return true;
+    const loaded = await fetchPost(postId);
+    if (!loaded) return false;
+    setFeed((existing) => {
+      if (!existing) return { posts: [loaded.post], friendIds: [], publicIds: [], followedAt: {}, people: loaded.people };
+      if (existing.posts.some((post) => post.id === postId)) {
+        return { ...existing, people: { ...existing.people, ...loaded.people } };
+      }
+      const posts = [...existing.posts, loaded.post].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      return { ...existing, posts, people: { ...existing.people, ...loaded.people } };
+    });
+    return true;
+  }, []);
+
   async function refresh() {
     setRefreshing(true);
     try {
@@ -236,6 +296,8 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>) {
     reload,
     run,
     updatePost,
+    toggleFollow,
+    ensurePost,
     activeVideoId: lightbox ? null : activeVideoId,
     registerVideo,
     syncVideos,
@@ -249,7 +311,10 @@ export function SocialScreen({ me }: { me: Me }) {
   const board = useSocialBoard(loadPage);
   const nav = useNavigation();
 
-  return <SocialBoard me={me} board={board} composer onOpenFriend={(userId) => nav.push({ name: "social-profile", userId })} />;
+  return <SocialBoard me={me} board={board} composer onOpenFriend={(userId) => {
+    if (userId !== "me") void markFriendPostsSeen(userId);
+    nav.push({ name: "social-profile", userId });
+  }} onOpenPostsSettings={() => nav.push({ name: "social-profile", userId: "me" })} />;
 }
 
 export function SocialProfileScreen({ userId, me }: { userId: string; me: Me }) {
@@ -265,11 +330,12 @@ export function SocialProfileScreen({ userId, me }: { userId: string; me: Me }) 
         hasMore: page.hasMore,
         friendIds: page.friendIds,
         publicIds: page.publicIds,
+        followedAt: page.followedAt,
         people: page.people,
       })),
     [userId],
   );
-  const board = useSocialBoard(loadPage);
+  const board = useSocialBoard(loadPage, `social-posts-${userId}`);
 
   useEffect(() => {
     let alive = true;
@@ -347,6 +413,7 @@ function SocialBoard({
   title = "Social",
   onBack,
   onOpenFriend,
+  onOpenPostsSettings,
 }: {
   me: Me;
   board: ReturnType<typeof useSocialBoard>;
@@ -355,9 +422,77 @@ function SocialBoard({
   title?: string;
   onBack?: () => void;
   onOpenFriend?: (userId: string) => void;
+  onOpenPostsSettings?: () => void;
 }) {
   const theme = useAppTheme();
   const { feed, loadError, error, setError, setLoadError } = board;
+  const [focus, setFocus] = useState<NoticeFocus | null>(null);
+  const [audience, setAudience] = useState<"friends" | "public">("friends");
+  const scrollRef = useRef<ScrollView>(null);
+  const [postsPublic, setPostsPublic] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const stop = subscribePostsPublic((value) => {
+      if (alive) setPostsPublic(value);
+    });
+    void loadSocialPublic().catch(() => undefined);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, []);
+
+  const openPostVisibility = useCallback(() => {
+    if (onOpenPostsSettings) {
+      onOpenPostsSettings();
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [onOpenPostsSettings]);
+  const postOffsets = useRef<Record<string, number>>({});
+  const friendIdsRef = useRef<string[]>([]);
+  friendIdsRef.current = feed?.friendIds ?? [];
+
+  const posts = feed && composer ? postsForAudience(feed, audience) : (feed?.posts ?? []);
+  const fillAttempts = useRef(0);
+
+  useEffect(() => {
+    fillAttempts.current = 0;
+  }, [audience]);
+
+  useEffect(() => {
+    if (!composer || !feed || !board.hasMore || posts.length > 0 || fillAttempts.current >= 8) return;
+    fillAttempts.current += 1;
+    void board.loadMore();
+  }, [audience, composer, feed, board.hasMore, posts.length]);
+
+  const revealNotice = useCallback(async (notice: SocialNotice) => {
+    const loaded = await fetchPost(notice.postId).catch(() => null);
+    if (composer && loaded) {
+      const authorId = loaded.post.authorId;
+      setAudience(authorId === "me" || friendIdsRef.current.includes(authorId) ? "friends" : "public");
+    }
+    const opened = await board.ensurePost(notice.postId);
+    if (!opened) return;
+    if (notice.commentId) {
+      const comments = await fetchComments(notice.postId).catch(() => null);
+      if (comments) {
+        board.updatePost(notice.postId, (current) => ({
+          ...current,
+          comments,
+          commentsLoaded: true,
+          commentCount: comments.length,
+        }));
+      }
+    }
+    setFocus({ postId: notice.postId, commentId: notice.commentId, likes: notice.kind === "post_like", token: Date.now() });
+    setTimeout(() => {
+      const y = postOffsets.current[notice.postId];
+      if (y == null) return;
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    }, 120);
+  }, [board, composer]);
 
   if (!feed) {
     return (
@@ -387,18 +522,30 @@ function SocialBoard({
         activeVideoId: board.activeVideoId,
         registerVideo: board.registerVideo,
         openMedia: board.setLightbox,
+        focus,
+        revealNotice,
+        toggleFollow: board.toggleFollow,
+        postsPublic,
+        openPostVisibility,
       }}
     >
       <Screen>
-        <TitleBar title={title} onBack={onBack} />
+        <TitleBar title={title} onBack={onBack} right={composer ? <NotificationBell /> : undefined} />
         <ScrollBody
+          ref={scrollRef}
           refreshControl={<RefreshControl refreshing={board.refreshing} onRefresh={() => void board.refresh()} tintColor={theme.colors.primary} />}
           onScroll={board.syncVideos}
           scrollEventThrottle={64}
         >
           {onOpenFriend ? <FriendRow onOpen={onOpenFriend} /> : null}
+          {composer ? <AudienceSwitch value={audience} onChange={setAudience} /> : null}
+          {composer && audience === "public" ? (
+            <AppText size={13} muted style={styles.publicNote}>
+              Posts from public accounts.
+            </AppText>
+          ) : null}
           {header}
-          {composer ? <Composer /> : null}
+          {composer && audience === "friends" ? <Composer /> : null}
           {error ?? loadError ? (
             <View style={[styles.banner, { backgroundColor: theme.colors.surfaceRaised }]}>
               <AppText size={13} color={theme.colors.danger} style={{ flex: 1 }}>
@@ -411,14 +558,25 @@ function SocialBoard({
               </Pressable>
             </View>
           ) : null}
-          {feed.posts.length ? (
-            feed.posts.map((post) => <PostCard key={post.id} post={post} />)
+          {posts.length ? (
+            posts.map((post) => (
+              <View
+                key={post.id}
+                onLayout={(event) => {
+                  postOffsets.current[post.id] = event.nativeEvent.layout.y;
+                }}
+              >
+                <PostCard post={post} />
+              </View>
+            ))
           ) : (
             <AppText muted style={styles.emptyText}>
               {composer
-                ? feed.friendIds.length
-                  ? "No posts yet. Share a workout update to get things started."
-                  : "Match with people on Discover, or turn your posts public, to see a feed here."
+                ? audience === "public"
+                  ? "No public posts yet."
+                  : feed.friendIds.length
+                    ? "No posts from you or your matches yet."
+                    : "Match with people on Discover, or turn your posts public, to see a feed here."
                 : "No posts yet."}
             </AppText>
           )}
@@ -434,8 +592,307 @@ function SocialBoard({
   );
 }
 
+function unreadCount(notices: SocialNotice[], seenAt: string | null) {
+  if (!seenAt) return notices.length;
+  return notices.filter((notice) => notice.at > seenAt).length;
+}
+
+function SheetModal({ title, visible, onClose, children }: { title: string; visible: boolean; onClose: () => void; children: ReactNode }) {
+  const theme = useAppTheme();
+  const window = useWindowDimensions();
+  const frame = appFrameSize(window);
+  const listMax = Math.max(160, Math.round(frame.height * 0.42));
+  const framed = frame.width < window.width;
+  const cardWidth = Math.min(frame.width - 48, 340);
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.sheetBackdrop, { alignItems: "center", justifyContent: "center" }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Dismiss ${title.toLowerCase()}`} style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          pointerEvents="box-none"
+          style={{
+            zIndex: 1,
+            width: frame.width,
+            height: frame.height,
+            maxWidth: "100%",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            paddingBottom: 18,
+            borderRadius: framed ? 36 : 0,
+            overflow: "hidden",
+          }}
+        >
+          <View style={[styles.sheet, { width: cardWidth, backgroundColor: theme.colors.surface, borderColor: theme.colors.border, maxHeight: frame.height * 0.62 }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: theme.colors.border }]} />
+            <View style={styles.sheetHeader}>
+              <AppText size={17} weight="extrabold">{title}</AppText>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title.toLowerCase()}`} onPress={onClose} hitSlop={10}>
+                <AppText size={14} weight="bold" muted>Close</AppText>
+              </Pressable>
+            </View>
+            <QuietScroll maxHeight={listMax}>{children}</QuietScroll>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function QuietScroll({ maxHeight, children }: { maxHeight: number; children: ReactNode }) {
+  const scroller = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (!document.getElementById("quiet-scroll-style")) {
+      const style = document.createElement("style");
+      style.id = "quiet-scroll-style";
+      style.textContent = "[data-quiet-scroll]{scrollbar-width:none;-ms-overflow-style:none}[data-quiet-scroll]::-webkit-scrollbar{display:none;width:0;height:0}";
+      document.head.appendChild(style);
+    }
+    const node = scroller.current?.getScrollableNode?.() as HTMLElement | undefined;
+    if (node) node.setAttribute("data-quiet-scroll", "true");
+  }, []);
+
+  return (
+    <ScrollView
+      ref={scroller}
+      style={{ maxHeight }}
+      contentContainerStyle={styles.sheetList}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+function NoticeDrop({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: ReactNode }) {
+  const theme = useAppTheme();
+  const window = useWindowDimensions();
+  const frame = appFrameSize(window);
+  const framed = frame.width < window.width;
+  const cardWidth = Math.min(frame.width - 48, 340);
+  const drop = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    drop.setValue(0);
+    Animated.timing(drop, { toValue: 1, duration: 180, useNativeDriver: Platform.OS !== "web" }).start();
+  }, [drop, visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.sheetBackdrop, { alignItems: "center", justifyContent: "center" }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Dismiss notifications" style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          pointerEvents="box-none"
+          style={{
+            zIndex: 1,
+            width: frame.width,
+            height: frame.height,
+            maxWidth: "100%",
+            alignItems: "center",
+            paddingTop: 58,
+            borderRadius: framed ? 36 : 0,
+            overflow: "hidden",
+          }}
+        >
+          <Animated.View
+            style={{
+              width: cardWidth,
+              maxHeight: frame.height * 0.58,
+              opacity: drop,
+              transform: [{ translateY: drop.interpolate({ inputRange: [0, 1], outputRange: [-18, 0] }) }],
+            }}
+          >
+            <View style={[styles.dropCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <View style={styles.dropHeader}>
+                <AppText size={15} weight="extrabold">Notifications</AppText>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close notifications" onPress={onClose} hitSlop={10}>
+                  <AppText size={13} weight="bold" muted>Close</AppText>
+                </Pressable>
+              </View>
+              <QuietScroll maxHeight={Math.max(140, Math.round(frame.height * 0.46))}>{children}</QuietScroll>
+            </View>
+          </Animated.View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function NotificationBell() {
+  const theme = useAppTheme();
+  const { revealNotice } = useSocial();
+  const [open, setOpen] = useState(false);
+  const [notices, setNotices] = useState<SocialNotice[]>([]);
+  const [seenAt, setSeenAt] = useState<string | null>(null);
+  const count = unreadCount(notices, seenAt);
+
+  const refresh = useCallback(async () => {
+    const loaded = await loadSocialNotices().catch(() => null);
+    if (!loaded) return;
+    setNotices(loaded.notices);
+    setSeenAt(loaded.seenAt);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    return subscribeFeed(() => {
+      void refresh();
+    }, "social-notices");
+  }, [refresh]);
+
+  async function openBell() {
+    setOpen(true);
+    if (!count) return;
+    const next = await markSocialNoticesSeen().catch(() => null);
+    if (next) setSeenAt(next);
+  }
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={count ? `Notifications, ${count} new` : "Notifications"}
+        onPress={() => void openBell()}
+        hitSlop={8}
+        style={styles.bell}
+      >
+        <BellIcon color={theme.colors.primary} />
+        {count ? (
+          <View style={[styles.badge, { backgroundColor: theme.colors.primary, borderColor: theme.colors.background }]}>
+            <AppText size={11} weight="extrabold" color={theme.colors.primaryText}>
+              {count > 9 ? "9+" : count}
+            </AppText>
+          </View>
+        ) : null}
+      </Pressable>
+      <NoticeDrop visible={open} onClose={() => setOpen(false)}>
+        {notices.length ? (
+          notices.map((notice) => (
+            <Pressable
+              key={notice.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${notice.actorName} ${notice.action}`}
+              style={styles.noticeItem}
+              onPress={() => {
+                setOpen(false);
+                void revealNotice(notice);
+              }}
+            >
+              <PersonAvatar name={notice.actorName} photo={notice.actorPhoto} size={36} />
+              <View style={styles.personCopy}>
+                <AppText size={13} numberOfLines={2}>
+                  <AppText size={13} weight="extrabold">{notice.actorName}</AppText>
+                  <AppText size={13} color={theme.colors.muted}> {notice.action}</AppText>
+                </AppText>
+                <AppText size={11} muted>{timeAgo(notice.at)}</AppText>
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <AppText muted style={styles.sheetEmpty}>No notifications yet.</AppText>
+        )}
+      </NoticeDrop>
+    </>
+  );
+}
+
+function BellIcon({ color }: { color: string }) {
+  return (
+    <Svg width={30} height={30} viewBox="0 0 24 24">
+      <Path
+        fill={color}
+        d="M12 22a2.2 2.2 0 0 0 2.15-1.7h-4.3A2.2 2.2 0 0 0 12 22zm7-6.1V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v4.9L3.3 17.6v1.2h17.4v-1.2L19 15.9z"
+      />
+    </Svg>
+  );
+}
+
+function postedAfterFollow(post: Post, followedAt: string | undefined) {
+  if (!followedAt) return false;
+  const posted = Date.parse(post.createdAt);
+  const followed = Date.parse(followedAt);
+  return !Number.isNaN(posted) && !Number.isNaN(followed) && posted >= followed;
+}
+
+function postsForAudience(feed: Feed, audience: "friends" | "public") {
+  const visible = feed.posts.filter((post) => {
+    const friend = post.authorId === "me" || feed.friendIds.includes(post.authorId);
+    return audience === "friends" ? friend : !friend && feed.publicIds.includes(post.authorId);
+  });
+  if (audience !== "public") return visible;
+  const fresh: Post[] = [];
+  const rest: Post[] = [];
+  const followedAt = feed.followedAt ?? {};
+  for (const post of visible) {
+    if (postedAfterFollow(post, followedAt[post.authorId])) fresh.push(post);
+    else rest.push(post);
+  }
+  fresh.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  return [...fresh, ...rest];
+}
+
+function AudienceSwitch({ value, onChange }: { value: "friends" | "public"; onChange: (value: "friends" | "public") => void }) {
+  const theme = useAppTheme();
+  const options = [
+    { id: "friends" as const, label: "Friends" },
+    { id: "public" as const, label: "Public" },
+  ];
+  return (
+    <View style={[styles.audience, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      {options.map((option) => {
+        const selected = value === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.id)}
+            style={[styles.audienceOption, selected && { backgroundColor: theme.colors.primary }]}
+          >
+            <AppText size={13} weight="extrabold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+              {option.label}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   const { feed, me } = useSocial();
+  const [latest, setLatest] = useState<Record<string, string>>({});
+  const [seen, setSeen] = useState<Record<string, string>>({});
+  const friendKey = feed.friendIds.join(",");
+
+  useEffect(() => {
+    let alive = true;
+    void recentFriendActivity(feed.friendIds).then((activity) => {
+      if (alive) setLatest(activity);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [friendKey, feed.posts[0]?.createdAt, feed.friendIds]);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      void readFriendRings().then((rings) => {
+        if (alive) setSeen(rings);
+      });
+    };
+    refresh();
+    const stop = subscribeFriendRings(refresh);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, []);
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow}>
       <FriendCircle name={me.name || "You"} photo={me.photo} label="You" onPress={() => onOpen("me")} />
@@ -448,6 +905,7 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
             name={person.name}
             photo={person.photo}
             label={firstName(person.name)}
+            fresh={friendHasFreshPost(latest[id], seen[id])}
             onPress={() => onOpen(id)}
           />
         );
@@ -456,10 +914,30 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   );
 }
 
-function FriendCircle({ name, photo, label, onPress }: { name: string; photo?: string | null; label: string; onPress: () => void }) {
+function FriendCircle({
+  name,
+  photo,
+  label,
+  fresh,
+  onPress,
+}: {
+  name: string;
+  photo?: string | null;
+  label: string;
+  fresh?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${label} posts`} onPress={onPress} style={styles.friendCircle}>
-      <PersonAvatar name={name} photo={photo} size={64} />
+      <View
+        style={[
+          styles.friendRing,
+          { borderColor: fresh ? theme.colors.primary : "transparent" },
+        ]}
+      >
+        <PersonAvatar name={name} photo={photo} size={64} />
+      </View>
       <AppText size={11} weight="semibold" numberOfLines={1}>
         {label}
       </AppText>
@@ -732,14 +1210,29 @@ function LightboxVideo({ uri, style }: { uri: string; style: { top: number; left
 function PostCard({ post }: { post: Post }) {
   const theme = useAppTheme();
   const nav = useNavigation();
-  const { run, updatePost } = useSocial();
+  const { run, updatePost, toggleFollow, feed, focus, postsPublic, openPostVisibility } = useSocial();
   const [showComments, setShowComments] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(post.text);
   const [menu, setMenu] = useState<null | "menu" | "report" | "block">(null);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [confirmingUnfollow, setConfirmingUnfollow] = useState(false);
   const author = usePerson(post.authorId);
+  const following = Boolean(feed.followedAt?.[post.authorId]);
   const count = post.commentsLoaded ? post.comments.length : post.commentCount;
+
+  useEffect(() => {
+    if (focus?.postId !== post.id || !focus.commentId) return;
+    let alive = true;
+    setShowComments(true);
+    if (post.commentsLoaded) return () => { alive = false; };
+    void fetchComments(post.id).then((loaded) => {
+      if (!alive) return;
+      updatePost(post.id, (current) => ({ ...current, comments: loaded, commentsLoaded: true, commentCount: loaded.length }));
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [focus?.token, focus?.postId, focus?.commentId, post.id, post.commentsLoaded, updatePost]);
 
   function toggleLike() {
     const liked = !post.likedByMe;
@@ -773,37 +1266,108 @@ function PostCard({ post }: { post: Post }) {
   return (
     <Card padding={14} radius={18} gap={12}>
       <View style={styles.postHeader}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={!author.isFriend && !author.isPublic}
-          onPress={() => nav.push({ name: "request-profile", userId: post.authorId })}
-          style={[styles.postHeader, { flex: 1 }]}
-        >
-          <PersonAvatar name={author.name} photo={author.photo} size={40} />
+        <View style={[styles.postHeader, { flex: 1 }]}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!author.isFriend && !author.isPublic}
+            onPress={() => nav.push({ name: "request-profile", userId: post.authorId })}
+          >
+            <PersonAvatar name={author.name} photo={author.photo} size={48} />
+          </Pressable>
           <View style={{ flex: 1 }}>
-            <AppText weight="extrabold">{author.name}</AppText>
-            <AppText size={12} muted>
-              {timeAgo(post.createdAt)}
-              {post.edited ? " · Edited" : ""}
-            </AppText>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!author.isFriend && !author.isPublic}
+              onPress={() => nav.push({ name: "request-profile", userId: post.authorId })}
+            >
+              <AppText size={17} weight="extrabold" numberOfLines={1}>{author.name}</AppText>
+              <AppText size={14} muted>
+                {timeAgo(post.createdAt)}
+                {post.edited ? " · Edited" : ""}
+              </AppText>
+            </Pressable>
+            {author.isMe && postsPublic !== null ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={postsPublic ? "Public. Change who can see your posts." : "Friends only. Change who can see your posts."}
+                onPress={openPostVisibility}
+                hitSlop={8}
+                style={styles.visibilityLink}
+              >
+                <AppText size={14} weight="bold" primary>
+                  {postsPublic ? "Public" : "Friends only"}
+                </AppText>
+              </Pressable>
+            ) : null}
           </View>
-        </Pressable>
+        </View>
         {author.isMe && !confirmingDelete && !editing ? (
           <View style={styles.commentMeta}>
             <Pressable accessibilityRole="button" accessibilityLabel="Edit post" onPress={() => { setDraft(post.text); setEditing(true); }} hitSlop={8}>
-              <AppText size={13} weight="bold" muted>Edit</AppText>
+              <AppText size={15} weight="bold" muted>Edit</AppText>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Delete post" onPress={() => setConfirmingDelete(true)} hitSlop={8}>
-              <AppText size={13} weight="bold" muted>Delete</AppText>
+              <AppText size={15} weight="bold" muted>Delete</AppText>
             </Pressable>
           </View>
         ) : null}
+        {!author.isMe && !author.isFriend && author.isPublic ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={following ? "Following" : "Follow"}
+            accessibilityState={{ selected: following, disabled: followBusy }}
+            disabled={followBusy}
+            onPress={() => {
+              if (following) {
+                setConfirmingUnfollow(true);
+                return;
+              }
+              setFollowBusy(true);
+              void toggleFollow(post.authorId).finally(() => setFollowBusy(false));
+            }}
+            hitSlop={8}
+            style={[
+              styles.followButton,
+              { backgroundColor: following ? theme.colors.surfaceRaised : theme.colors.primary },
+            ]}
+          >
+            <AppText size={14} weight="extrabold" color={following ? theme.colors.text : theme.colors.primaryText}>
+              {following ? "Following" : "Follow"}
+            </AppText>
+          </Pressable>
+        ) : null}
         {!author.isMe && !menu ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Post actions" onPress={() => setMenu("menu")} hitSlop={8}>
-            <AppText size={13} weight="bold" muted>More</AppText>
+            <AppText size={15} weight="bold" muted>More</AppText>
           </Pressable>
         ) : null}
       </View>
+
+      {confirmingUnfollow && following ? (
+        <View style={[styles.confirm, styles.unfollowConfirm, { backgroundColor: theme.colors.surfaceRaised }]}>
+          <AppText size={13} weight="semibold">
+            Are you sure you want to unfollow <AppText size={13} weight="extrabold">{author.name}</AppText>?
+          </AppText>
+          <View style={styles.commentMeta}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Cancel unfollow" onPress={() => setConfirmingUnfollow(false)} hitSlop={8}>
+              <AppText size={13} weight="bold" muted>Cancel</AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Unfollow ${author.name}`}
+              disabled={followBusy}
+              onPress={() => {
+                setConfirmingUnfollow(false);
+                setFollowBusy(true);
+                void toggleFollow(post.authorId).finally(() => setFollowBusy(false));
+              }}
+              hitSlop={8}
+            >
+              <AppText size={13} weight="extrabold" color={theme.colors.danger}>Unfollow</AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {confirmingDelete ? (
         <View style={[styles.confirm, { backgroundColor: theme.colors.surfaceRaised }]}>
@@ -841,7 +1405,7 @@ function PostCard({ post }: { post: Post }) {
       ) : null}
       {post.media ? <FeedMedia media={post.media} postId={post.id} /> : null}
 
-      <LikedBy post={post} />
+      <LikedBy post={post} forceOpen={focus?.postId === post.id && focus.likes ? focus.token : 0} />
 
       {!author.isMe && !author.isFriend && author.isPublic ? (
         <Pressable
@@ -962,28 +1526,77 @@ function PostSafety({
   );
 }
 
-function LikedBy({ post }: { post: Post }) {
-  const { feed } = useSocial();
+function LikedBy({ post, forceOpen = 0 }: { post: Post; forceOpen?: number }) {
+  const { feed, me } = useSocial();
+  const [open, setOpen] = useState(false);
+  const [extraPeople, setExtraPeople] = useState<Record<string, { name: string; photo: string | null }>>({});
   const friends = post.likedBy.filter((id) => feed.friendIds.includes(id) && feed.people[id]).map((id) => firstName(feed.people[id].name));
-  const names = [...(post.likedByMe ? ["you"] : []), ...friends.slice(0, 2)];
-  if (!names.length) return null;
-  const others = post.likes - names.length;
-  const list = others > 0 ? `${names.join(", ")} and ${others} ${others === 1 ? "other" : "others"}` : joinNames(names);
-  return (
-    <AppText size={12} muted numberOfLines={2}>
-      Liked by <AppText size={12} weight="bold">{list}</AppText>
-    </AppText>
-  );
-}
+  const names = [...(post.likedByMe ? ["you"] : []), ...friends].slice(0, 2);
+  const hidden = post.likes - names.length;
 
-function joinNames(names: string[]) {
-  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
+  useEffect(() => {
+    if (!open) return;
+    const missing = post.likedBy.filter((id) => !feed.people[id] && !extraPeople[id]);
+    if (!missing.length) return;
+    let alive = true;
+    void loadSocialPeople(missing).then((people) => {
+      if (!alive) return;
+      const next: Record<string, { name: string; photo: string | null }> = {};
+      for (const [id, person] of people) next[id] = { name: person.name, photo: person.photo };
+      if (!Object.keys(next).length) return;
+      setExtraPeople((current) => ({ ...current, ...next }));
+    });
+    return () => { alive = false; };
+  }, [open, post.likedBy, feed.people, extraPeople]);
+
+  function personName(id: string) {
+    return feed.people[id]?.name || extraPeople[id]?.name || "SwoleMate";
+  }
+
+  function personPhoto(id: string) {
+    return feed.people[id]?.photo || extraPeople[id]?.photo || null;
+  }
+
+  const everyone = [
+    ...(post.likedByMe ? [{ id: "me", name: "You", photo: me.photo ?? null }] : []),
+    ...post.likedBy.map((id) => ({ id, name: personName(id), photo: personPhoto(id) })),
+  ];
+
+  if (!post.likes) return null;
+
+  return (
+    <>
+      <View style={styles.likedBy}>
+        <AppText size={12} muted>Liked by </AppText>
+        <AppText size={12} weight="bold">
+          {names.length ? names.join(", ") : `${post.likes} ${post.likes === 1 ? "person" : "people"}`}
+        </AppText>
+        {hidden > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Show everyone who liked this" onPress={() => setOpen(true)} hitSlop={6}>
+            <AppText size={12} weight="bold" primary> and more</AppText>
+          </Pressable>
+        ) : null}
+      </View>
+      <SheetModal title="Likes" visible={open} onClose={() => setOpen(false)}>
+        {everyone.map((person) => (
+          <View key={person.id} style={styles.personRow}>
+            <PersonAvatar name={person.name} photo={person.photo} size={44} />
+            <AppText weight="bold" style={styles.personCopy}>{person.name}</AppText>
+          </View>
+        ))}
+      </SheetModal>
+    </>
+  );
 }
 
 type ReplyTarget = { parentId: string; name: string };
 
 function Comments({ post }: { post: Post }) {
-  const { run, updatePost } = useSocial();
+  const { run, updatePost, focus } = useSocial();
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [sending, setSending] = useState(false);
@@ -1038,12 +1651,12 @@ function Comments({ post }: { post: Post }) {
     <View style={[styles.comments, { borderTopColor: theme.colors.border }]}>
       {threads.map((thread) => (
         <View key={thread.id} style={{ gap: 8 }}>
-          <CommentItem post={post} comment={thread} onReply={(name) => startReply(thread.id, name, false)} />
+          <CommentItem post={post} comment={thread} highlighted={focus?.commentId === thread.id} onReply={(name) => startReply(thread.id, name, false)} />
           {post.comments
             .filter((comment) => comment.parentId === thread.id)
             .map((reply) => (
               <View key={reply.id} style={styles.reply}>
-                <CommentItem post={post} comment={reply} onReply={(name) => startReply(thread.id, name, true)} />
+                <CommentItem post={post} comment={reply} highlighted={focus?.commentId === reply.id} onReply={(name) => startReply(thread.id, name, true)} />
               </View>
             ))}
         </View>
@@ -1083,7 +1696,7 @@ function Comments({ post }: { post: Post }) {
   );
 }
 
-function CommentItem({ post, comment, onReply }: { post: Post; comment: Comment; onReply: (name: string) => void }) {
+function CommentItem({ post, comment, onReply, highlighted = false }: { post: Post; comment: Comment; onReply: (name: string) => void; highlighted?: boolean }) {
   const theme = useAppTheme();
   const { run, updatePost } = useSocial();
   const [editing, setEditing] = useState(false);
@@ -1121,7 +1734,7 @@ function CommentItem({ post, comment, onReply }: { post: Post; comment: Comment;
     <View style={styles.comment}>
       <PersonAvatar name={commenter.name} photo={commenter.photo} size={isReply ? 24 : 28} />
       <View style={{ flex: 1, gap: 4 }}>
-        <View style={[styles.commentBubble, { backgroundColor: theme.colors.surfaceRaised }]}>
+        <View style={[styles.commentBubble, { backgroundColor: theme.colors.surfaceRaised, borderColor: highlighted ? theme.colors.primary : "transparent", borderWidth: 1 }]}>
           <AppText size={13} weight="extrabold">{commenter.name}</AppText>
           {editing ? (
             <View style={{ gap: 8, marginTop: 4 }}>
@@ -1213,6 +1826,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     textAlign: "center",
   },
+  publicNote: {
+    lineHeight: 18,
+    paddingTop: 12,
+    textAlign: "center",
+  },
   banner: {
     alignItems: "center",
     borderRadius: 10,
@@ -1221,6 +1839,94 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  bell: {
+    alignItems: "center",
+    height: 40,
+    justifyContent: "center",
+    position: "relative",
+    width: 40,
+  },
+  badge: {
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 2,
+    height: 20,
+    justifyContent: "center",
+    minWidth: 20,
+    paddingHorizontal: 4,
+    position: "absolute",
+    right: -4,
+    top: -2,
+  },
+  sheetBackdrop: {
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    flex: 1,
+  },
+  sheet: {
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: "hidden",
+    paddingBottom: 12,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    borderRadius: 3,
+    height: 4,
+    marginBottom: 8,
+    marginTop: 10,
+    width: 42,
+  },
+  sheetList: {
+    paddingBottom: 8,
+  },
+  sheetEmpty: {
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  personRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  personCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  dropCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    paddingBottom: 8,
+  },
+  dropHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  noticeItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  likedBy: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  sheetHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: 6,
+    paddingHorizontal: 18,
+  },
   friendRow: {
     gap: 14,
     paddingVertical: 4,
@@ -1228,7 +1934,26 @@ const styles = StyleSheet.create({
   friendCircle: {
     alignItems: "center",
     gap: 6,
-    width: 72,
+    width: 76,
+  },
+  friendRing: {
+    borderRadius: 40,
+    borderWidth: 2,
+    padding: 2,
+  },
+  audience: {
+    alignSelf: "stretch",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginTop: 8,
+    padding: 3,
+  },
+  audienceOption: {
+    alignItems: "center",
+    borderRadius: 11,
+    flex: 1,
+    paddingVertical: 8,
   },
   visibilityRow: {
     alignItems: "center",
@@ -1272,6 +1997,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  visibilityLink: {
+    alignSelf: "flex-start",
+    marginTop: 1,
+  },
+  followButton: {
+    borderRadius: 999,
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   postMedia: {
     aspectRatio: 1,
     borderRadius: 14,
@@ -1308,6 +2043,11 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  unfollowConfirm: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    gap: 10,
   },
   reasonRow: {
     flexDirection: "row",

@@ -80,6 +80,9 @@ $$;
 -- One setting per person. Private (false) is matches-only. Public is any signed-in user.
 alter table public.user_account add column if not exists social_public boolean not null default false;
 
+-- When the person last opened the Social bell. Events after this time are unread.
+alter table public.user_account add column if not exists social_notified_at timestamptz;
+
 -- Private accounts are matches-only. A public account is visible to any signed-in
 -- user, unless someone blocked the other.
 create or replace function public.can_see_author(author uuid)
@@ -274,8 +277,8 @@ on public.comment_like for delete
 to authenticated
 using (user_id = (select auth.uid()));
 
--- Name and main photo for people in your feed: your matches, plus anyone who
--- commented on a post you can see (they may be matched with the author but not you).
+-- Name and main photo for people in your feed: your matches, anyone who
+-- commented on or liked a post you can see, and anyone who liked your comment.
 create or replace function public.social_people(people uuid[])
 returns table (id uuid, full_name text, photo_path text)
 language sql
@@ -303,6 +306,21 @@ as $$
         from public.post_comment commented
         join public.post on post.id = commented.post_id
         where commented.author_id = account.id
+          and public.can_see_author(post.author_id)
+      )
+      or exists (
+        select 1
+        from public.post_like liked
+        join public.post on post.id = liked.post_id
+        where liked.user_id = account.id
+          and public.can_see_author(post.author_id)
+      )
+      or exists (
+        select 1
+        from public.comment_like liked
+        join public.post_comment comment on comment.id = liked.comment_id
+        join public.post on post.id = comment.post_id
+        where liked.user_id = account.id
           and public.can_see_author(post.author_id)
       )
     );
