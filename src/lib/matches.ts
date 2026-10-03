@@ -531,8 +531,15 @@ export async function unmatch(requestId: string) {
 }
 
 export async function cancelMatchRequest(requestId: string) {
-  const { error } = await supabase.from("match_requests").delete().eq("id", requestId);
-  if (error) throw setupError(error);
+  const me = await currentUserId();
+  const { data, error } = await supabase.from("match_requests").delete()
+    .eq("id", requestId).eq("from_user_id", me).eq("status", "pending").select("id");
+  if (error) {
+    if (error.code === "42501") throw new Error("Cancellation permission needs updating in Supabase. Run supabase/cancel-match-requests.sql.");
+    // Preserve the actual error; a foreign-key conflict is not a missing script.
+    throw new Error(error.message || "Could not cancel this request.");
+  }
+  if (!data?.length) throw new Error("This request is no longer pending, or cancellation permission needs updating. Refresh requests; if it is still pending, run supabase/cancel-match-requests.sql.");
   notifyChatAlerts();
 }
 
