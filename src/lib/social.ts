@@ -4,6 +4,7 @@ import { readMediaBytes } from "@/lib/media-bytes";
 import { listConnections } from "@/lib/matches";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
+import { markAccountRead, readAccountMarkers } from "@/lib/account-markers";
 
 const MEDIA_BUCKET = "post-media";
 const PHOTO_BUCKET = "profile-photos";
@@ -54,6 +55,7 @@ export type SocialNotice = {
   actorId: string;
   actorName: string;
   actorPhoto?: string | null;
+  media?: PostMedia;
   postId: string;
   commentId?: string;
   kind: "post" | "post_like" | "post_comment" | "reply" | "comment_like";
@@ -425,12 +427,24 @@ export async function loadSocialNotices(): Promise<{ notices: SocialNotice[]; se
   const recent = drafts.filter((notice) => Date.parse(notice.at) >= cutoffMs);
   recent.sort((left, right) => right.at.localeCompare(left.at));
   const trimmed = recent.slice(0, NOTICE_LIMIT);
-  const people = await lookupPeople(trimmed.map((notice) => notice.actorId));
+  const [people, attachments] = await Promise.all([
+    lookupPeople(trimmed.map((notice) => notice.actorId)),
+    trimmed.length
+      ? supabase.from("post").select("id, media_path, media_type").in("id", [...new Set(trimmed.map((notice) => notice.postId))])
+      : Promise.resolve({ data: [] }),
+  ]);
+  const mediaRows = (attachments.data ?? []) as { id: string; media_path: string | null; media_type: "image" | "video" | null }[];
+  const mediaUrls = await signedMediaUrls(mediaRows.flatMap((row) => row.media_path ? [row.media_path] : []));
+  const postMedia = new Map<string, PostMedia>();
+  for (const row of mediaRows) {
+    const uri = row.media_path ? mediaUrls.get(row.media_path) : undefined;
+    if (uri && row.media_type) postMedia.set(row.id, { uri, type: row.media_type });
+  }
   return {
     seenAt,
     notices: trimmed.map((notice) => {
       const person = people.get(notice.actorId);
-      return { ...notice, actorName: person?.name || "Someone", actorPhoto: person?.photo ?? null };
+      return { ...notice, actorName: person?.name || "Someone", actorPhoto: person?.photo ?? null, media: postMedia.get(notice.postId) };
     }),
   };
 }
@@ -744,7 +758,9 @@ export async function readFriendRings() {
     for (const [id, at] of Object.entries(saved)) {
       if (typeof at === "string") rings[id] = at;
     }
-    return rings;
+    try {
+      return await readAccountMarkers(me, "friend_reads", rings);
+    } catch { return rings; }
   } catch {
     return {} as Record<string, string>;
   }
@@ -754,7 +770,12 @@ export async function markFriendPostsSeen(friendId: string) {
   const me = await currentUserId().catch(() => null);
   if (!me || !friendId || friendId === "me") return;
   const current = await readFriendRings();
-  current[friendId] = new Date().toISOString();
+  const stamp = new Date().toISOString();
+  try {
+    const synced = await markAccountRead(me, "friend_reads", friendId, stamp, current);
+    Object.assign(current, synced);
+  } catch { /* Retain the device's read marker when temporarily offline. */ }
+  if (!current[friendId] || Date.parse(current[friendId]) < Date.parse(stamp)) current[friendId] = stamp;
   await AsyncStorage.setItem(ringKey(me), JSON.stringify(current));
   ringListeners.forEach((listener) => listener());
 }

@@ -403,7 +403,10 @@ export function MatchChat({ userId }: { userId: string }) {
           keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: Platform.OS !== "web" })}
+          onLayout={() => {
+            if (Platform.OS === "web") scrollRef.current?.scrollToEnd({ animated: false });
+          }}
         >
           {messages.length === 0 ? (
             <View style={styles.empty}>
@@ -468,7 +471,8 @@ export function MatchChat({ userId }: { userId: string }) {
             value={draft}
             onChangeText={setDraft}
             selection={caret}
-            onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            onFocus={() => scrollRef.current?.scrollToEnd({ animated: Platform.OS !== "web" })}
+            submitBehavior="submit"
             onSubmitEditing={() => void send()}
             placeholder={editing ? "Edit message" : "Message"}
             placeholderTextColor={theme.colors.muted}

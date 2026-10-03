@@ -1,4 +1,5 @@
-import { createContext, createElement, PropsWithChildren, useContext, useEffect, useState } from "react";
+import { createContext, createElement, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import { supabase } from "@/lib/supabase";
 
@@ -74,48 +75,80 @@ const lightTheme: AppTheme = {
 const ThemeContext = createContext<{
   theme: AppTheme;
   scheme: ColorScheme;
-  setScheme: (scheme: ColorScheme) => void;
+  setScheme: (scheme: ColorScheme) => Promise<boolean>;
+  schemeError: string | null;
+  savingScheme: boolean;
 }>({
   theme: darkTheme,
   scheme: "dark",
-  setScheme: () => {},
+  setScheme: async () => false,
+  schemeError: null,
+  savingScheme: false,
 });
 
 function readStoredScheme(): ColorScheme {
   if (typeof localStorage === "undefined") return "dark";
-  return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+  try { return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; } catch { return "dark"; }
 }
 
 function storeScheme(scheme: ColorScheme) {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(THEME_KEY, scheme);
+  try { localStorage.setItem(THEME_KEY, scheme); } catch { /* The account remains authoritative. */ }
 }
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const [scheme, setSchemeState] = useState<ColorScheme>(readStoredScheme);
+  const [schemeError, setSchemeError] = useState<string | null>(null);
+  const [savingScheme, setSavingScheme] = useState(false);
+  const saving = useRef(false);
+  const generation = useRef(0);
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      const saved = data.session?.user.user_metadata?.colorScheme;
-      if (!active || (saved !== "light" && saved !== "dark")) return;
-      setSchemeState(saved);
-      storeScheme(saved);
+    const refresh = async () => {
+      if (saving.current) return;
+      const version = ++generation.current;
+      const { data, error } = await supabase.auth.getUser();
+      if (!active || saving.current || version !== generation.current || error) return;
+      const saved = data.user?.user_metadata?.colorScheme;
+      if (saved !== "light" && saved !== "dark") return;
+      setSchemeState(saved); storeScheme(saved);
+    };
+    void refresh();
+    const { data: auth } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") { generation.current++; setSchemeState("dark"); setSchemeError(null); }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") setTimeout(() => void refresh(), 0);
     });
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void refresh(); });
+    const focus = () => void refresh();
+    if (typeof window !== "undefined") window.addEventListener("focus", focus);
     return () => {
       active = false;
+      generation.current++; auth.subscription.unsubscribe(); subscription.remove();
+      if (typeof window !== "undefined") window.removeEventListener("focus", focus);
     };
   }, []);
 
-  function setScheme(next: ColorScheme) {
-    setSchemeState(next);
-    storeScheme(next);
-    void supabase.auth.updateUser({ data: { colorScheme: next } });
+  async function setScheme(next: ColorScheme) {
+    if (saving.current) return false;
+    saving.current = true; setSavingScheme(true); setSchemeError(null);
+    const version = ++generation.current;
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session.session) {
+        const { error } = await supabase.auth.updateUser({ data: { colorScheme: next } });
+        if (error) throw error;
+      }
+      if (version !== generation.current) return false;
+      setSchemeState(next); storeScheme(next); return true;
+    } catch {
+      setSchemeError("Could not save your appearance setting. Check your connection and try again."); return false;
+    } finally { saving.current = false; setSavingScheme(false); }
   }
 
   return createElement(
     ThemeContext.Provider,
-    { value: { theme: scheme === "light" ? lightTheme : darkTheme, scheme, setScheme } },
+    { value: { theme: scheme === "light" ? lightTheme : darkTheme, scheme, setScheme, schemeError, savingScheme } },
     children,
   );
 }
@@ -125,6 +158,6 @@ export function useAppTheme() {
 }
 
 export function useColorScheme() {
-  const { scheme, setScheme } = useContext(ThemeContext);
-  return { scheme, setScheme };
+  const { scheme, setScheme, schemeError, savingScheme } = useContext(ThemeContext);
+  return { scheme, setScheme, schemeError, savingScheme };
 }

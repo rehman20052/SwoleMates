@@ -14,6 +14,7 @@ import {
   SectionLabel,
   TitleBar,
 } from "@/components/ui";
+import { LiftProgression } from "@/components/lift-progression";
 import { type UserProfile } from "@/lib/profile";
 import {
   completeWorkout as checkInWorkout,
@@ -192,6 +193,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const {
     deleteWorkoutLog,
     foodEntries,
+    foodJournalReady,
+    foodJournalError,
+    workoutStorageError,
+    accountSyncError,
+    retryAccountSync,
     logWorkout,
     logs,
     syncVerifiedWorkoutLogs,
@@ -201,6 +207,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   } = useAppData();
 
   useEffect(() => {
+    if (!foodJournalReady) return;
     let active = true;
     const refreshVerifiedLogs = async () => {
       try {
@@ -216,10 +223,10 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [foodJournalReady]);
 
   const todayIso = daysFromToday(0);
-  const currentWeekStart = useMemo(() => startOfWeek(new Date()), []);
+  const currentWeekStart = useMemo(() => startOfWeek(new Date()), [todayIso]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index)), [currentWeekStart]);
   const loggedDates = useMemo(() => new Set(logs.map((log) => log.date)), [logs]);
   const logsByDate = useMemo(() => {
@@ -253,21 +260,12 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       )
     : null;
 
-  const lifts = (
-    [
-      ["Squat", parseWeight(profile.squat)],
-      ["Bench", parseWeight(profile.bench)],
-      ["Deadlift", parseWeight(profile.deadlift)],
-      [profile.customLiftName.trim() || "Custom", parseWeight(profile.customLift)],
-    ] as const
-  ).filter(([, current], index) => current > 0 && (index < 3 || profile.customLiftName.trim()));
-
   function showNotice(message: string) {
     setNotice(message);
     setTimeout(() => setNotice(null), 2400);
   }
 
-  function handleSaveLog() {
+  async function handleSaveLog() {
     const title = logTitle.trim();
     const notes = logNotes.trim();
     if (!title) {
@@ -275,7 +273,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       return;
     }
 
-    logWorkout(title, notes || undefined);
+    if (!await logWorkout(title, notes || undefined)) return;
     setLogTitle("");
     setLogNotes("");
     setShowLogForm(false);
@@ -288,7 +286,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setEditNotes(log.notes ?? "");
   }
 
-  function handleSaveEditedLog() {
+  async function handleSaveEditedLog() {
     if (!editingLogId) return;
     const title = editTitle.trim();
     if (!title) {
@@ -296,16 +294,16 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       return;
     }
 
-    updateWorkoutLog(editingLogId, { title, notes: editNotes.trim() || undefined });
+    if (!await updateWorkoutLog(editingLogId, { title, notes: editNotes.trim() || undefined })) return;
     setEditingLogId(null);
     setEditTitle("");
     setEditNotes("");
     showNotice("Activity updated.");
   }
 
-  function handleDeleteEditedLog() {
+  async function handleDeleteEditedLog() {
     if (!editingLogId) return;
-    deleteWorkoutLog(editingLogId);
+    if (!await deleteWorkoutLog(editingLogId)) return;
     setEditingLogId(null);
     setEditTitle("");
     setEditNotes("");
@@ -317,8 +315,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setShowGoalEditor(true);
   }
 
-  function saveWeeklyGoal() {
-    updateWeeklyWorkoutGoal(goalDraft);
+  async function saveWeeklyGoal() {
+    if (!await updateWeeklyWorkoutGoal(goalDraft)) return;
     setShowGoalEditor(false);
     showNotice(`Weekly goal set to ${goalDraft} workout day${goalDraft === 1 ? "" : "s"}.`);
   }
@@ -336,21 +334,21 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setShowCalendar(false);
   }
 
-  function saveCalendarWorkout() {
+  async function saveCalendarWorkout() {
     const title = calendarLogTitle.trim();
     if (!title) {
       showNotice("Add a workout name first.");
       return;
     }
-    logWorkout(title, calendarLogNotes.trim() || undefined, selectedCalendarDate);
+    if (!await logWorkout(title, calendarLogNotes.trim() || undefined, selectedCalendarDate)) return;
     setCalendarLogTitle("");
     setCalendarLogNotes("");
     setCalendarLogOpen(false);
     showNotice("Workout logged. Weekly goal updated.");
   }
 
-  function deleteCalendarWorkout(log: SessionLog) {
-    deleteWorkoutLog(log.id);
+  async function deleteCalendarWorkout(log: SessionLog) {
+    if (!await deleteWorkoutLog(log.id)) return;
     setDeletingCalendarLogId(null);
     showNotice("Workout deleted. Weekly goal updated.");
   }
@@ -383,6 +381,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           ]}
         />
       </View>
+      {accountSyncError ? <View style={{ paddingHorizontal: 20, gap: 8 }}><AppText color={theme.colors.danger}>{accountSyncError}</AppText><SecondaryButton onPress={retryAccountSync}>Retry account sync</SecondaryButton></View> : null}
+      {workoutStorageError ? <AppText size={13} color={theme.colors.danger} style={{ paddingHorizontal: 20 }}>{workoutStorageError}</AppText> : null}
 
       {homeMode === "fuel" ? (
         <View style={{ flex: 1 }}>
@@ -494,6 +494,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             {weekDays.map((day, index) => {
               const iso = toIsoDate(day);
               const logged = loggedDates.has(iso);
+              const hasFood = foodEntries.some((entry) => entry.date === iso);
               const today = iso === todayIso;
               return (
                 <Pressable
@@ -515,6 +516,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                   <AppText size={14} weight="black" color={logged ? theme.colors.primaryText : theme.colors.text}>
                     {logged ? "✓" : day.getDate()}
                   </AppText>
+                  {hasFood ? <View accessibilityLabel="Nutrition logged" style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: logged ? theme.colors.primaryText : theme.colors.primary }} /> : null}
                 </Pressable>
               );
             })}
@@ -547,33 +549,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           </Card>
         ) : null}
 
-        <Card padding={16} radius={20} gap={14}>
-          <View style={styles.sectionHeader}>
-            <SectionLabel>Your Lifts</SectionLabel>
-            <SecondaryButton height={34} fontSize={12} style={styles.smallButton} onPress={() => nav.setTab("Profile")}>
-              Edit
-            </SecondaryButton>
-          </View>
-
-          {lifts.length ? (
-            <View style={styles.liftGrid}>
-              {lifts.slice(0, 4).map(([label, value]) => (
-                <View key={label} style={[styles.liftTile, { backgroundColor: theme.colors.surfaceRaised }]}>
-                  <AppText size={11} weight="bold" muted upper>
-                    {label}
-                  </AppText>
-                  <AppText size={18} weight="black">
-                    {value} lbs
-                  </AppText>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <AppText muted style={{ lineHeight: 20 }}>
-              Add your PRs in Profile so your home page can show your lifting numbers.
-            </AppText>
-          )}
-        </Card>
+        <LiftProgression />
 
         <Card padding={16} radius={20} gap={12}>
           <View style={styles.sectionHeader}>
@@ -767,6 +743,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
               </Card>
 
               <Card padding={16} radius={22} gap={12}>
+                {workoutStorageError ? <AppText size={13} color={theme.colors.danger}>{workoutStorageError}</AppText> : null}
+                {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
                 <View style={styles.sectionHeader}>
                   <SectionLabel>{calendarDayTitle(selectedCalendarDate)}</SectionLabel>
                   {selectedCalendarDate === todayIso ? (
@@ -869,6 +847,15 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     No workout or nutrition has been logged for this day yet.
                   </AppText>
                 )}
+
+                {selectedCalendarDate <= todayIso ? (
+                  <SecondaryButton height={42} fontSize={13} onPress={() => {
+                    closeCalendar();
+                    nav.push({ name: "nutrition", date: selectedCalendarDate });
+                  }}>
+                    {selectedDayFood.length ? "Review & edit food for this day" : "Add food for this day"}
+                  </SecondaryButton>
+                ) : null}
 
                 {selectedCalendarDate <= todayIso ? (
                   calendarLogOpen ? (

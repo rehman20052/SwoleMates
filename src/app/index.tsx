@@ -523,7 +523,7 @@ export default function App() {
       case 'scheduled':
         return <WorkoutScheduledScreen workoutId={route.workoutId} />;
       case 'nutrition':
-        return <NutritionTrackerScreen />;
+        return <NutritionTrackerScreen date={route.date} />;
     }
   };
 
@@ -604,10 +604,9 @@ export default function App() {
             {
               backgroundColor: theme.colors.background,
               borderTopColor: theme.colors.border,
-              paddingBottom:
-                Platform.OS === 'web'
-                  ? ('max(4px, calc(env(safe-area-inset-bottom, 0px) - 38px))' as unknown as number)
-                  : Math.max(4, insets.bottom - 38),
+              // Keep controls above the home indicator while painting the entire
+              // inset with the tab bar's background (on native and web).
+              paddingBottom: Math.max(4, insets.bottom),
             },
           ]}
         >

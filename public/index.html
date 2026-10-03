@@ -34,40 +34,23 @@
       /* These styles make the root element full-height */
       #root {
         display: flex;
-        height: 100%;
+        position: fixed;
+        top: var(--app-viewport-top, 0px);
+        left: 0;
+        width: 100%;
+        height: var(--app-viewport-height, 100%);
         flex: 1;
-        background: #0a0a0c;
+        background: inherit;
       }
       @supports (height: 100dvh) {
-        html,
-        body,
         #root {
-          height: 100dvh;
+          height: var(--app-viewport-height, 100dvh);
         }
       }
-      /* Fill the real iPhone screen. Do not add the home-indicator height on top
-         of innerHeight, or the tabs slide under that black strip. */
-      @media (display-mode: standalone) {
-        html,
-        body,
-        #root {
-          position: fixed;
-          top: 0;
-          right: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-        }
-        #root > div {
-          height: 100%;
-          min-height: 100%;
-        }
-      }
-      @media (display-mode: standalone) and (orientation: landscape),
-      html.phone-app.phone-landscape {
-        #portrait-lock {
-          display: flex !important;
-        }
+      /* The viewport owns the height; safe-area padding belongs to the UI.
+         Avoid pinning innerHeight, which overrides dynamic viewport sizing. */
+      html.phone-app.phone-landscape #portrait-lock {
+        display: flex !important;
       }
     </style>
   </head>
@@ -97,50 +80,26 @@
           screen.lockOrientation("portrait");
         }
         var lock = document.getElementById("portrait-lock");
-        var landscape = window.innerWidth > window.innerHeight;
+        // Keyboard height changes are not device rotations.
+        var landscape = orientation && orientation.type
+          ? orientation.type.indexOf("landscape") === 0
+          : typeof window.orientation === "number"
+            ? Math.abs(window.orientation) === 90
+            : screen.width > screen.height;
         document.documentElement.classList.toggle("phone-app", isPhoneApp());
         document.documentElement.classList.toggle("phone-landscape", landscape);
         if (lock) lock.style.display = isPhoneApp() && landscape ? "flex" : "none";
       }
-      function fitPhoneScreen() {
-        var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
-        if (!standalone) return;
-        var height = Math.round(window.innerHeight) + "px";
-        function pin(node) {
-          if (!node) return;
-          node.style.setProperty("position", "fixed", "important");
-          node.style.setProperty("top", "0", "important");
-          node.style.setProperty("right", "0", "important");
-          node.style.setProperty("bottom", "auto", "important");
-          node.style.setProperty("left", "0", "important");
-          node.style.setProperty("width", "100%", "important");
-          node.style.setProperty("height", height, "important");
-          node.style.setProperty("min-height", height, "important");
-        }
-        pin(document.documentElement);
-        pin(document.body);
-        pin(document.getElementById("root"));
-      }
-      fitPhoneScreen();
       lockPortrait();
-      window.addEventListener("resize", fitPhoneScreen);
-      window.addEventListener("orientationchange", function () {
-        lockPortrait();
-        fitPhoneScreen();
-      });
-      window.addEventListener("pageshow", function () {
-        lockPortrait();
-        fitPhoneScreen();
-      });
-      if (window.visualViewport) window.visualViewport.addEventListener("resize", fitPhoneScreen);
-      requestAnimationFrame(fitPhoneScreen);
-      setTimeout(fitPhoneScreen, 300);
-      setTimeout(fitPhoneScreen, 1000);
+      window.addEventListener("resize", lockPortrait);
+      window.addEventListener("orientationchange", lockPortrait);
+      window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=4", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=6", document.baseURI));
         });
       }
     </script>
+    <script src="mobile-viewport.js"></script>
   </body>
 </html>

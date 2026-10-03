@@ -1,5 +1,6 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
 import {
@@ -12,7 +13,16 @@ import {
   saveDiscoverFilters,
   type DiscoverFilters,
 } from "@/lib/discover";
+import { withCurrentWeight, type NutritionProfile } from "@/lib/macro-calculator";
 import { supabase } from "@/lib/supabase";
+import { isFoodEntry, sumFoodEntries } from "@/lib/food-journal";
+import { mergeVerifiedLogs, workoutLogKey } from "@/lib/workout-log-sync";
+import { goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
+import { createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
+import { accountSyncError } from "@/lib/account-sync";
+import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
+
+export type { NutritionProfile };
 
 export type Gender = "Male" | "Female" | "Any";
 
@@ -97,15 +107,6 @@ export type SavedMeal = Omit<FoodLogEntry, "id" | "date"> & {
   id: string;
 };
 
-export type NutritionProfile = {
-  sex: "Male" | "Female";
-  age: number;
-  weightLb: number;
-  heightIn: number;
-  activityLevel: "1–2 workouts/week" | "3–4 workouts/week" | "5–6 workouts/week" | "Daily intense training";
-  goal: "Lose 0.5 lb/week" | "Lose 1 lb/week" | "Maintain weight" | "Gain 0.5 lb/week" | "Gain 1 lb/week";
-};
-
 type AppData = {
   preferences: Preferences;
   discoverFilters: DiscoverFilters;
@@ -117,12 +118,14 @@ type AppData = {
   workouts: Workout[];
   completedWorkoutIds: string[];
   logs: SessionLog[];
+  deletedWorkoutIds: string[];
   streak: number;
   weeklyWorkoutGoal: number;
   nutrition: NutritionTotals | null;
   foodEntries: FoodLogEntry[];
   savedMeals: SavedMeal[];
   nutritionProfile: NutritionProfile | null;
+  trackedLifts: TrackedLift[];
 };
 
 type AppDataContextValue = AppData & {
@@ -138,16 +141,32 @@ type AppDataContextValue = AppData & {
   updateDiscoverFilters: (filters: DiscoverFilters) => void;
   discoverPrefsLoaded: boolean;
   completeWorkout: (workoutId: string) => void;
-  updateNutrition: (nutrition: Partial<NutritionTotals>) => void;
-  addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">) => void;
-  deleteFoodEntry: (entryId: string) => void;
-  saveMeal: (meal: Omit<SavedMeal, "id">) => void;
-  updateNutritionProfile: (profile: NutritionProfile) => void;
-  updateWeeklyWorkoutGoal: (goal: number) => void;
-  logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>) => void;
+  updateNutrition: (nutrition: NutritionGoals) => Promise<boolean>;
+  nutritionPlanReady: boolean;
+  nutritionPlanError: string | null;
+  addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">, date?: string) => Promise<boolean>;
+  updateFoodEntry: (entryId: string, entry: Omit<FoodLogEntry, "id" | "date">) => Promise<boolean>;
+  deleteFoodEntry: (entryId: string) => Promise<boolean>;
+  foodJournalReady: boolean;
+  foodJournalError: string | null;
+  recipesReady: boolean;
+  recipeStorageError: string | null;
+  saveMeal: (meal: Omit<SavedMeal, "id">) => Promise<boolean>;
+  updateSavedMeal: (mealId: string, meal: Omit<SavedMeal, "id">) => Promise<boolean>;
+  deleteSavedMeal: (mealId: string) => Promise<boolean>;
+  updateNutritionProfile: (profile: NutritionProfile) => Promise<boolean>;
+  logWeighIn: (weightLb: number) => Promise<boolean>;
+  saveTrackedLift: (id: string, details: LiftDetails) => Promise<boolean>;
+  deleteTrackedLift: (id: string) => Promise<boolean>;
+  liftStorageError: string | null;
+  accountSyncError: string | null;
+  retryAccountSync: () => void;
+  updateWeeklyWorkoutGoal: (goal: number) => Promise<boolean>;
+  logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>) => Promise<boolean>;
   syncVerifiedWorkoutLogs: (logs: SessionLog[]) => void;
-  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => void;
-  deleteWorkoutLog: (logId: string) => void;
+  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => Promise<boolean>;
+  deleteWorkoutLog: (logId: string) => Promise<boolean>;
+  workoutStorageError: string | null;
   resetDeck: () => void;
 };
 
@@ -209,11 +228,19 @@ const defaultNutrition: NutritionTotals = {
   fatGoal: 75,
 };
 
-const seedSavedMeals: SavedMeal[] = [
-  { id: "saved-1", meal: "Breakfast", name: "Protein shake", calories: 210, protein: 32, carbs: 12, fats: 4 },
-  { id: "saved-2", meal: "Lunch", name: "Chicken burrito bowl", calories: 650, protein: 45, carbs: 75, fats: 18 },
-  { id: "saved-3", meal: "Dinner", name: "Turkey pasta", calories: 590, protein: 46, carbs: 62, fats: 16 },
-];
+function isSavedMeal(value: unknown): value is SavedMeal {
+  if (!value || typeof value !== "object") return false;
+  const meal = value as Partial<SavedMeal>;
+  return (
+    typeof meal.id === "string" &&
+    (meal.meal === "Breakfast" || meal.meal === "Lunch" || meal.meal === "Dinner" || meal.meal === "Snack") &&
+    typeof meal.name === "string" &&
+    typeof meal.calories === "number" &&
+    typeof meal.protein === "number" &&
+    typeof meal.carbs === "number" &&
+    typeof meal.fats === "number"
+  );
+}
 
 // Mock data until the Supabase backend is ready.
 function seedData(): AppData {
@@ -273,12 +300,14 @@ function seedData(): AppData {
     ],
     completedWorkoutIds: [],
     logs: [],
+    deletedWorkoutIds: [],
     streak: 0,
     weeklyWorkoutGoal: 3,
     nutrition: defaultNutrition,
     foodEntries: [],
-    savedMeals: seedSavedMeals,
+    savedMeals: [],
     nutritionProfile: null,
+    trackedLifts: [],
   };
 }
 
@@ -295,49 +324,109 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   const [data, setData] = useState<AppData>(seedData);
   const [discoverPrefsLoaded, setDiscoverPrefsLoaded] = useState(false);
   const [dashboardHydrated, setDashboardHydrated] = useState(false);
+  const [recipeStorageError, setRecipeStorageError] = useState<string | null>(null);
+  const accountStores = useRef<ReturnType<typeof createAccountStores> | null>(null);
+  const accountQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const accountGeneration = useRef(0);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [liftStorageError, setLiftStorageError] = useState<string | null>(null);
+  const [retrySync, setRetrySync] = useState(0);
+  const [nutritionPlanError, setNutritionPlanError] = useState<string | null>(null);
+  const [workoutStorageError, setWorkoutStorageError] = useState<string | null>(null);
+  const [foodJournalError, setFoodJournalError] = useState<string | null>(null);
+  const [today, setToday] = useState(() => daysFromToday(0));
+  useEffect(() => {
+    const refreshDate = () => setToday(daysFromToday(0));
+    const timer = setInterval(refreshDate, 60000);
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") refreshDate(); });
+    if (typeof window !== "undefined") window.addEventListener("focus", refreshDate);
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", refreshDate);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+      if (typeof window !== "undefined") window.removeEventListener("focus", refreshDate);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", refreshDate);
+    };
+  }, []);
   const filtersTouched = useRef(false);
   const filterSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFilters = useRef<DiscoverFilters | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([AsyncStorage.getItem(weeklyWorkoutGoalKey), AsyncStorage.getItem(dashboardStateKey)])
-      .then(([savedGoal, savedDashboard]) => {
-        if (!active) return;
-        const parsedGoal = Number(savedGoal);
-        let saved: Partial<Pick<AppData, "logs" | "foodEntries" | "nutrition">> = {};
+    let loaded = false;
+    let refreshing = false;
+    let currentOwner: string | null = null;
+    function applySnapshot(snapshot: Awaited<ReturnType<typeof loadAccountStores>>) {
+      setData((current) => ({ ...current,
+        savedMeals: snapshot.recipes, foodEntries: snapshot.foodEntries,
+        nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile,
+        logs: mergeVerifiedLogs(snapshot.logs, current.logs.filter((log) => log.checkedIn && log.plannedWorkoutId), snapshot.deletedWorkoutIds),
+        deletedWorkoutIds: snapshot.deletedWorkoutIds, weeklyWorkoutGoal: snapshot.weeklyWorkoutGoal,
+        trackedLifts: snapshot.lifts,
+      }));
+    }
+    const refresh = async (owner: string | null, force = false) => {
+      if (!active || refreshing) return;
+      if (owner !== currentOwner || force) {
+        currentOwner = owner; loaded = false; accountGeneration.current++;
+        accountStores.current = owner ? createAccountStores(owner) : null;
+        setDashboardHydrated(false); setData(seedData());
+        setRecipeStorageError(null); setFoodJournalError(null); setWorkoutStorageError(null);
+        setNutritionPlanError(null); setLiftStorageError(null); setSyncError(null);
+      }
+      const stores = accountStores.current;
+      if (!owner || !stores) return;
+      const generation = accountGeneration.current;
+      refreshing = true;
+      const operation = accountQueue.current.then(async () => {
+        if (!active || generation !== accountGeneration.current) return;
         try {
-          saved = savedDashboard ? JSON.parse(savedDashboard) : {};
-        } catch {
-          saved = {};
+          const snapshot = loaded ? await refreshAccountStores(stores, defaultNutrition) : await loadAccountStores(stores, defaultNutrition);
+          if (!active || generation !== accountGeneration.current) return;
+          applySnapshot(snapshot);
+          if (!loaded) {
+            setRecipeStorageError(null); setFoodJournalError(null); setWorkoutStorageError(null);
+            setNutritionPlanError(null); setLiftStorageError(null);
+          }
+          loaded = true; setDashboardHydrated(true); setSyncError(null);
+        } catch (error) {
+          if (!active || generation !== accountGeneration.current) return;
+          const message = accountSyncError(error);
+          setSyncError(message);
+          if (!loaded) {
+            setRecipeStorageError(message); setFoodJournalError(message); setWorkoutStorageError(message);
+            setNutritionPlanError(message); setLiftStorageError(message);
+          }
         }
-        setData((current) => ({
-          ...current,
-          logs: Array.isArray(saved.logs) ? saved.logs : current.logs,
-          foodEntries: Array.isArray(saved.foodEntries) ? saved.foodEntries : current.foodEntries,
-          nutrition: saved.nutrition && typeof saved.nutrition === "object" ? saved.nutrition : current.nutrition,
-          weeklyWorkoutGoal:
-            Number.isInteger(parsedGoal) && parsedGoal >= 1 && parsedGoal <= 7
-              ? parsedGoal
-              : current.weeklyWorkoutGoal,
-        }));
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (active) setDashboardHydrated(true);
       });
-    return () => {
-      active = false;
+      accountQueue.current = operation.catch(() => undefined);
+      await operation; refreshing = false;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!dashboardHydrated) return;
-    void AsyncStorage.setItem(
-      dashboardStateKey,
-      JSON.stringify({ logs: data.logs, foodEntries: data.foodEntries, nutrition: data.nutrition }),
-    );
-  }, [dashboardHydrated, data.foodEntries, data.logs, data.nutrition]);
+    void supabase.auth.getSession().then(({ data }) => refresh(data.session?.user.id ?? null, true));
+    const { data: auth } = supabase.auth.onAuthStateChange((event, session) => {
+      const owner = session?.user.id ?? null;
+      if (event === "SIGNED_OUT" || owner !== currentOwner) {
+        // Clear the old account synchronously, even while a server call is pending.
+        accountGeneration.current++; accountStores.current = null;
+        currentOwner = owner; loaded = false; setDashboardHydrated(false); setData(seedData());
+        setTimeout(() => { refreshing = false; void refresh(owner, true); }, 0);
+      }
+    });
+    const foreground = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refresh(currentOwner);
+    };
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") foreground(); });
+    const timer = setInterval(foreground, 15000);
+    if (typeof window !== "undefined") window.addEventListener("focus", foreground);
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", foreground);
+    return () => {
+      active = false; accountGeneration.current++; clearInterval(timer); auth.subscription.unsubscribe(); subscription.remove();
+      if (typeof window !== "undefined") window.removeEventListener("focus", foreground);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", foreground);
+    };
+  }, [retrySync]);
 
   useEffect(() => {
     let active = true;
@@ -393,9 +482,52 @@ export function AppDataProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AppDataContextValue>(() => {
     const update = (fn: (current: AppData) => AppData) => setData(fn);
+    const persistAccount = (operation: (stores: ReturnType<typeof createAccountStores>) => Promise<Partial<AppData>>, setError: (error: string | null) => void) => {
+      const stores = accountStores.current;
+      const generation = accountGeneration.current;
+      if (!dashboardHydrated || !stores) {
+        setError("Your account data is still loading. Please try again once loading finishes.");
+        return Promise.resolve(false);
+      }
+      const save = accountQueue.current.then(async () => {
+        if (generation !== accountGeneration.current || accountStores.current !== stores) return false;
+        try {
+          const changes = await operation(stores);
+          if (generation !== accountGeneration.current || accountStores.current !== stores) return false;
+          update((current) => ({ ...current, ...changes })); setError(null); setSyncError(null); return true;
+        } catch (error) {
+          if (generation === accountGeneration.current) setError(accountSyncError(error));
+          return false;
+        }
+      });
+      accountQueue.current = save.catch(() => undefined);
+      return save;
+    };
+    const persistPlan = (edit: (current: SavedNutritionPlan) => SavedNutritionPlan) => persistAccount(async (stores) => {
+      const plans = await stores.plan.change((current) => [edit(current[0] ?? { goals: defaultNutrition, profile: null })]);
+      return { nutrition: { ...defaultNutrition, ...plans[0].goals }, nutritionProfile: plans[0].profile };
+    }, setNutritionPlanError);
+    const persistRecipes = (edit: (current: SavedMeal[]) => SavedMeal[]) => persistAccount(async (stores) => ({ savedMeals: await stores.recipes.change(edit) }), setRecipeStorageError);
+    const persistFood = (edit: (current: FoodLogEntry[]) => FoodLogEntry[]) => persistAccount(async (stores) => ({ foodEntries: await stores.food.change(edit) }), setFoodJournalError);
+    const persistLogs = (edit: (current: SessionLog[]) => SessionLog[]) => persistAccount(async (stores) => {
+      const deletedWorkoutIds = await stores.deletions.refresh();
+      const logs = await stores.logs.change((current) => edit(current).filter((log) => !deletedWorkoutIds.includes(workoutLogKey(log))));
+      return { logs, deletedWorkoutIds };
+    }, setWorkoutStorageError);
 
     return {
       ...data,
+      liftStorageError,
+      accountSyncError: syncError,
+      retryAccountSync: () => setRetrySync((current) => current + 1),
+      nutrition: data.nutrition ? { ...data.nutrition, ...sumFoodEntries(data.foodEntries, today) } : null,
+      nutritionPlanReady: dashboardHydrated,
+      nutritionPlanError,
+      foodJournalReady: dashboardHydrated,
+      foodJournalError,
+      workoutStorageError,
+      recipesReady: dashboardHydrated,
+      recipeStorageError,
       review(partnerId, interested) {
         update((current) => {
           const connected =
@@ -547,107 +679,89 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         });
       },
       updateNutrition(nutrition) {
-        update((current) => ({
-          ...current,
-          nutrition: {
-            ...defaultNutrition,
-            ...(current.nutrition ?? {}),
-            ...nutrition,
-          },
-        }));
+        return persistPlan((current) => ({ ...current, goals: nutrition }));
       },
-      addFoodEntry(entry) {
-        update((current) => {
-          const nextEntry: FoodLogEntry = { ...entry, id: `food-${Date.now()}`, date: daysFromToday(0) };
-          const nutrition = current.nutrition ?? defaultNutrition;
-          return {
-            ...current,
-            foodEntries: [nextEntry, ...current.foodEntries],
-            nutrition: {
-              ...nutrition,
-              calories: nutrition.calories + entry.calories,
-              protein: nutrition.protein + entry.protein,
-              carbs: nutrition.carbs + entry.carbs,
-              fats: nutrition.fats + entry.fats,
-            },
-          };
-        });
+      async addFoodEntry(entry, date = daysFromToday(0)) {
+        const nextEntry: FoodLogEntry = { ...entry, id: `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, date };
+        if (!isFoodEntry(nextEntry)) return false;
+        return persistFood((current) => [nextEntry, ...current]);
       },
-      deleteFoodEntry(entryId) {
-        update((current) => {
-          const entry = current.foodEntries.find((item) => item.id === entryId);
-          if (!entry || entry.date !== daysFromToday(0)) return current;
-          const nutrition = current.nutrition ?? defaultNutrition;
-          return {
-            ...current,
-            foodEntries: current.foodEntries.filter((item) => item.id !== entryId),
-            nutrition: {
-              ...nutrition,
-              calories: Math.max(0, nutrition.calories - entry.calories),
-              protein: Math.max(0, nutrition.protein - entry.protein),
-              carbs: Math.max(0, nutrition.carbs - entry.carbs),
-              fats: Math.max(0, nutrition.fats - entry.fats),
-            },
-          };
-        });
+      async updateFoodEntry(entryId, entry) {
+        return persistFood((current) => current.map((saved) => saved.id === entryId ? { ...saved, ...entry } : saved));
       },
-      saveMeal(meal) {
-        update((current) => ({
-          ...current,
-          savedMeals: [{ ...meal, id: `saved-${Date.now()}` }, ...current.savedMeals],
-        }));
+      async deleteFoodEntry(entryId) {
+        return persistFood((current) => current.filter((item) => item.id !== entryId));
+      },
+      async saveMeal(meal) {
+        return persistRecipes((current) => [{ ...meal, id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }, ...current]);
+      },
+      async updateSavedMeal(mealId, meal) {
+        return persistRecipes((current) => current.map((saved) => (saved.id === mealId ? { ...saved, ...meal } : saved)));
+      },
+      async deleteSavedMeal(mealId) {
+        return persistRecipes((current) => current.filter((saved) => saved.id !== mealId));
       },
       updateNutritionProfile(profile) {
-        update((current) => ({ ...current, nutritionProfile: profile }));
+        return persistPlan((current) => {
+          const weighIns = new Map([...(profile.weighIns ?? []), ...(current.profile?.weighIns ?? [])].map((entry) => [entry.date, entry]));
+          const savedProfile = { ...profile, weighIns: [...weighIns.values()].sort((a, b) => a.date.localeCompare(b.date)) };
+          return { profile: savedProfile, goals: goalsFromProfile(savedProfile) };
+        });
+      },
+      logWeighIn(weightLb) {
+        return persistPlan((current) => {
+          if (!current.profile) throw new Error("Set up your macro plan first.");
+          const profile = withCurrentWeight(current.profile, daysFromToday(0), weightLb);
+          return { profile, goals: goalsFromProfile(profile) };
+        });
+      },
+      saveTrackedLift(id, details) {
+        return persistAccount(async (stores) => ({ trackedLifts: await stores.lifts.change((current) => saveLiftDetails(current, id, details, daysFromToday(0))) }), setLiftStorageError);
+      },
+      deleteTrackedLift(id) {
+        return persistAccount(async (stores) => ({ trackedLifts: await stores.lifts.change((current) => current.filter((lift) => lift.id !== id)) }), setLiftStorageError);
       },
       updateWeeklyWorkoutGoal(goal) {
         const normalized = Math.max(1, Math.min(7, Math.round(goal)));
-        update((current) => ({ ...current, weeklyWorkoutGoal: normalized }));
-        void AsyncStorage.setItem(weeklyWorkoutGoalKey, `${normalized}`);
+        return persistAccount(async (stores) => {
+          const settings = await stores.settings.change(() => [{ id: "weekly-workout-goal", value: normalized }]);
+          return { weeklyWorkoutGoal: settings[0].value };
+        }, setWorkoutStorageError);
       },
       logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}) {
-        update((current) => ({
-          ...current,
-          logs: current.logs.some(
-            (log) => details.plannedWorkoutId && log.plannedWorkoutId === details.plannedWorkoutId && log.date === date,
-          )
-            ? current.logs
-            : [
-                {
-                  id: `log-${Date.now()}`,
-                  date,
-                  title,
-                  notes,
-                  verified: details.verified ?? false,
-                  ...details,
-                },
-                ...current.logs,
-              ],
-        }));
+        const log: SessionLog = { id: "log-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), date, title, notes, verified: details.verified ?? false, ...details };
+        return persistLogs((current) => current.some((saved) => details.plannedWorkoutId && saved.plannedWorkoutId === details.plannedWorkoutId && saved.date === date) ? current : [log, ...current]);
       },
       syncVerifiedWorkoutLogs(logs) {
-        update((current) => {
-          const nonCheckInLogs = current.logs.filter((log) => !log.checkedIn || !log.plannedWorkoutId);
-          return { ...current, logs: [...logs, ...nonCheckInLogs] };
-        });
+        if (!dashboardHydrated) return;
+        // Verified attendance already lives on the server. Merge for display only;
+        // never rewrite manually edited calendar records from periodic attendance.
+        update((current) => ({ ...current, logs: mergeVerifiedLogs(current.logs, logs, current.deletedWorkoutIds) }));
       },
       updateWorkoutLog(logId, updates) {
-        update((current) => ({
-          ...current,
-          logs: current.logs.map((log) => (log.id === logId ? { ...log, ...updates } : log)),
-        }));
+        const shown = data.logs.find((item) => item.id === logId);
+        if (!shown) return Promise.resolve(false);
+        return persistLogs((current) => {
+          const key = workoutLogKey(shown);
+          const exists = current.some((log) => workoutLogKey(log) === key);
+          return exists ? current.map((log) => workoutLogKey(log) === key ? { ...log, ...updates } : log) : [...current, { ...shown, ...updates }];
+        });
       },
-      deleteWorkoutLog(logId) {
-        update((current) => ({
-          ...current,
-          logs: current.logs.filter((log) => log.id !== logId),
-        }));
+      async deleteWorkoutLog(logId) {
+        const log = data.logs.find((item) => item.id === logId);
+        if (!log) return true;
+        return persistAccount(async (stores) => {
+          const key = workoutLogKey(log);
+          const deletedWorkoutIds = await stores.deletions.change((current) => current.includes(key) ? current : [...current, key]);
+          const logs = await stores.logs.change((current) => current.filter((item) => !deletedWorkoutIds.includes(workoutLogKey(item))));
+          return { logs, deletedWorkoutIds };
+        }, setWorkoutStorageError);
       },
       resetDeck() {
         update((current) => ({ ...current, reviewed: [] }));
       },
     };
-  }, [data, discoverPrefsLoaded]);
+  }, [data, discoverPrefsLoaded, dashboardHydrated, recipeStorageError, foodJournalError, workoutStorageError, nutritionPlanError, liftStorageError, syncError, today]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }

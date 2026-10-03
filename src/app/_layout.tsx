@@ -45,12 +45,20 @@ function RootShell() {
     if (fontsLoaded) void SplashScreen.hideAsync();
   }, [fontsLoaded]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    // Match the browser canvas, including overscroll and safe-area regions.
+    document.documentElement.style.backgroundColor = theme.colors.background;
+    document.body.style.backgroundColor = theme.colors.background;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.colors.background);
+  }, [theme.colors.background]);
+
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <AppDataProvider>
         <PhoneFrame>
           <Stack
