@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText, Avatar, Field, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
 import { changeEmail, changePassword, currentEmail, discoverPaused, setDiscoverPaused } from "@/lib/account";
@@ -180,9 +181,47 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           </View>
         ))}
         {blockedMessage && blockedStatus === "ready" ? <AppText color={theme.colors.danger}>{blockedMessage}</AppText> : null}
+        {Platform.OS === "web" ? <ScreenLayoutDetails /> : null}
       </ScrollBody>
     </Screen>
   );
+}
+
+function ScreenLayoutDetails() {
+  const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const [report, setReport] = useState<string | null>(null);
+  function measure() {
+    const root = document.getElementById("root")?.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const home = document.querySelector('[aria-label="Home"]');
+    const nav = home?.parentElement;
+    const bounds = nav?.getBoundingClientRect();
+    const round = (value: number | undefined) => value === undefined ? "unknown" : String(Math.round(value * 10) / 10);
+    const standalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+    setReport([
+      "Screen layout: iphone-layout-2",
+      `Mode: ${standalone ? "Home Screen" : "Browser"}`,
+      `Screen: ${screen.width} × ${screen.height}`,
+      `Window: ${window.innerWidth} × ${window.innerHeight}`,
+      `Document: ${document.documentElement.clientWidth} × ${document.documentElement.clientHeight}`,
+      `Visible height / top: ${round(viewport?.height)} / ${round(viewport?.offsetTop)}`,
+      `Root top / bottom: ${round(root?.top)} / ${round(root?.bottom)}`,
+      `Safe area top / bottom: ${round(insets.top)} / ${round(insets.bottom)}`,
+      `Tabs bottom / padding: ${round(bounds?.bottom)} / ${nav ? getComputedStyle(nav).paddingBottom : "unknown"}`,
+      `Status bar: ${document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.getAttribute("content")}`,
+      `Browser: ${navigator.userAgent}`,
+    ].join("\n"));
+  }
+  return <View style={[styles.card, styles.section, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <AppText weight="semibold">Screen layout help</AppText>
+    <AppText size={13} muted>Show screen measurements to help investigate extra space below the tabs.</AppText>
+    <SecondaryButton height={44} fontSize={14} onPress={measure}>{report ? "Refresh screen details" : "Show screen details"}</SecondaryButton>
+    {report ? <>
+      <AppText selectable size={12}>{report}</AppText>
+      <SecondaryButton height={40} fontSize={14} onPress={() => setReport(null)}>Hide details</SecondaryButton>
+    </> : null}
+  </View>;
 }
 
 function EmailForm({ onChanged }: { onChanged: (email: string) => void }) {
