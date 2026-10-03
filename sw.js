@@ -1,4 +1,4 @@
-// v10: browser-driven lift animations with replay and motion preference feedback.
+// v11: play lift entrance once and report request cancellation errors accurately.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
