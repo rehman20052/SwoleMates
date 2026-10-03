@@ -1,4 +1,4 @@
-// v14: illustrated Fuel plan and weight check-in cards.
+// v15: recover from stalled startup downloads and failed font loading.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
