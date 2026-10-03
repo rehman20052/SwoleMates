@@ -1,4 +1,4 @@
-// v12: recent foods and combined saved recipe search in Fuel.
+// v13: align app and modal surfaces with keyboard viewport, hide bottom tabs.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

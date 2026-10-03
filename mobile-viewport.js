@@ -46,16 +46,21 @@
     document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
     if (keyboardOpen) {
       style.setProperty("--app-viewport-height", viewport.height + "px");
+      // Absolute app/modal surfaces use document coordinates. Safari can pan
+      // the visual viewport independently of its height while focusing a field.
+      var pageTop = typeof viewport.pageTop === "number" ? viewport.pageTop : (window.scrollY || 0) + viewport.offsetTop;
+      style.setProperty("--app-viewport-top", Math.max(0, pageTop) + "px");
     } else {
       // Never retain a keyboard-sized pixel height after the input loses focus.
       // CSS owns the resting viewport and adapts to browser/standalone chrome.
       style.removeProperty("--app-viewport-height");
+      style.removeProperty("--app-viewport-top");
       // A focused field can remain active after iOS's Done button dismisses
       // the keyboard. Small stale viewport reductions must not pin the app.
       if (!focused) restingHeight = Math.max(restingHeight, viewport.height, document.documentElement.clientHeight || 0);
     }
-    // Do not move the root with visualViewport.offsetTop. iOS pans its native
-    // scroll view too; following that offset can produce a scroll/layout loop.
+    // Position surfaces without scrolling the document during keyboard events.
+    // Only their inner scroller may reveal a field; no native pan/reset loop.
     clearTimeout(revealTimer);
     revealTimer = setTimeout(revealField, 120);
   }
