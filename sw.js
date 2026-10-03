@@ -1,4 +1,4 @@
-// v7: refresh installed iPhone viewport and status-bar configuration.
+// v8: stabilize keyboard layout and prevent scrolling the blank native region.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

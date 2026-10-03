@@ -4,6 +4,8 @@
   if (!viewport) return; // CSS dynamic viewport sizing remains the fallback.
   var frame = 0;
   var revealTimer = 0;
+  var restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
+  var touch = null;
 
   function editor(node) {
     return node && node.matches && node.matches('input, textarea, [contenteditable="true"]');
@@ -35,8 +37,19 @@
     // Pinch zoom should retain normal browser behavior.
     if (Math.abs(viewport.scale - 1) > 0.01) return;
     var style = document.documentElement.style;
-    style.setProperty("--app-viewport-height", viewport.height + "px");
-    style.setProperty("--app-viewport-top", viewport.offsetTop + "px");
+    var focused = editor(document.activeElement);
+    var keyboardOpen = focused && viewport.height < restingHeight * 0.85;
+    document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
+    if (focused) {
+      style.setProperty("--app-viewport-height", viewport.height + "px");
+    } else {
+      // Never retain a keyboard-sized pixel height after the input loses focus.
+      // CSS owns the resting viewport and adapts to browser/standalone chrome.
+      style.removeProperty("--app-viewport-height");
+      restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
+    }
+    // Do not move the root with visualViewport.offsetTop. iOS pans its native
+    // scroll view too; following that offset can produce a scroll/layout loop.
     clearTimeout(revealTimer);
     revealTimer = setTimeout(revealField, 120);
   }
@@ -51,6 +64,32 @@
   window.addEventListener("resize", schedule);
   document.addEventListener("focusin", schedule);
   document.addEventListener("focusout", schedule);
+  document.addEventListener("touchstart", function (event) {
+    if (event.touches.length !== 1) { touch = null; return; }
+    touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, target: event.target };
+  }, { passive: true });
+  document.addEventListener("touchmove", function (event) {
+    if (!touch || event.touches.length !== 1 || editor(touch.target)) return;
+    var point = event.touches[0];
+    var dy = point.clientY - touch.y;
+    var dx = point.clientX - touch.x;
+    touch.x = point.clientX; touch.y = point.clientY;
+    if (!dy || Math.abs(dx) > Math.abs(dy)) return; // Preserve horizontal swipes.
+    var node = touch.target;
+    while (node && node !== document.body && node !== document.documentElement) {
+      var overflow = window.getComputedStyle(node).overflowY;
+      var room = node.scrollHeight - node.clientHeight;
+      if ((overflow === "auto" || overflow === "scroll") && room > 1) {
+        if ((dy < 0 && node.scrollTop < room - 1) || (dy > 0 && node.scrollTop > 1)) return;
+      }
+      node = node.parentElement;
+    }
+    // No app scroller can consume this gesture. Keep it from reaching iOS's
+    // extra native blank scroll range below the document (WebKit 292603).
+    if (event.cancelable) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener("touchend", function () { touch = null; }, { passive: true });
+  document.addEventListener("touchcancel", function () { touch = null; }, { passive: true });
   document.addEventListener("pointerdown", function (event) {
     var field = document.activeElement;
     var button = event.target.closest && event.target.closest('[role="button"], button');
