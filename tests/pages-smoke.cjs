@@ -285,6 +285,18 @@ const assert = require('node:assert/strict');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(() => Math.abs(document.getElementById('root').getBoundingClientRect().height - visualViewport.height) < 1);
     assert.deepEqual(errors, []);
+    const fontFailurePage = await context.newPage();
+    fontFailurePage.setDefaultTimeout(15000);
+    await fontFailurePage.route(/\.(ttf|woff2?)(\?|$)/, route => route.abort());
+    await fontFailurePage.goto(base + '/SwoleMates/');
+    await fontFailurePage.getByText('Home', { exact: true }).waitFor();
+    await fontFailurePage.close();
+    const bundleFailurePage = await context.newPage();
+    bundleFailurePage.setDefaultTimeout(20000);
+    await bundleFailurePage.route(/entry-[a-f0-9]+\.js/, route => route.abort());
+    await bundleFailurePage.goto(base + '/SwoleMates/');
+    await bundleFailurePage.getByRole('button', { name: 'Reload app', exact: true }).waitFor();
+    await bundleFailurePage.close();
     console.log('Mobile Pages smoke passed: compact/searchable lifts, entrance animation, reduced motion, workout reuse/save failure/retry, milestones, recap, keyboard focus and resting-height recovery.');
     if (process.env.SCREENSHOT_PATH) {
       await page.getByRole('button', { name: 'Back', exact: true }).click();
