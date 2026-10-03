@@ -1,4 +1,4 @@
-// v9: restore resting layout when the keyboard closes with an input still focused.
+// v10: browser-driven lift animations with replay and motion preference feedback.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
