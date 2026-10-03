@@ -10,6 +10,8 @@ import { useAppTheme } from "@/theme";
 export function LiftProgressRow({ lift, onUpdate, onRemove }: { lift: TrackedLift; onUpdate: () => void; onRemove: () => void }) {
   const theme = useAppTheme();
   const [expanded, setExpanded] = useState(false);
+  const [replay, setReplay] = useState(0);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const progress = liftProgress(lift);
   const milestones = liftMilestones(lift);
   const latestBest = milestones.records.at(-1);
@@ -21,7 +23,8 @@ export function LiftProgressRow({ lift, onUpdate, onRemove }: { lift: TrackedLif
     <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
       <AppText size={14} weight="bold">{lift.currentWeight} / {lift.goalWeight} {lift.unit}</AppText><AppText size={12} weight="bold" primary>{progress >= 1 ? "Goal reached!" : `${Math.round(progress * 100)}%`}</AppText>
     </View>
-    <LiftProgressBar progress={progress} name={lift.name} />
+    <LiftProgressBar progress={progress} name={lift.name} replay={replay} onMotionPreference={setReducedMotion} />
+    {reducedMotion ? <AppText size={11} muted>Animations paused by your device’s Reduce Motion setting.</AppText> : <Pressable accessibilityRole="button" accessibilityLabel={`Replay ${lift.name} progress animation`} hitSlop={6} onPress={() => setReplay(value => value + 1)}><AppText size={11} primary>Replay progress</AppText></Pressable>}
     <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Hide" : "Show"} ${lift.name} details`} accessibilityState={{ expanded }} hitSlop={6} onPress={() => setExpanded(value => !value)}><AppText size={11} muted>{expanded ? "Hide details ▴" : "Milestones & history ▾"}</AppText></Pressable>
     {expanded ? <View style={{ gap: 10 }}>
       <AppText size={12} muted>Typical reps: {lift.minReps === lift.maxReps ? lift.minReps : `${lift.minReps}–${lift.maxReps}`}{progress < 1 ? ` · ${Math.round((lift.goalWeight - lift.currentWeight) * 100) / 100} ${lift.unit} to go` : ""}</AppText>

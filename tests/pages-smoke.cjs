@@ -100,7 +100,14 @@ const assert = require('node:assert/strict');
       const inner = document.querySelector('[aria-label="Smoke bench goal progress"]').firstElementChild;
       return new DOMMatrix(getComputedStyle(inner).transform).m22 > 1.1;
     });
+    await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).click();
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
+      return new DOMMatrix(getComputedStyle(bar.firstElementChild).transform).m22 > 1.1;
+    });
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByText('Animations paused by your device’s Reduce Motion setting.', { exact: true }).first().waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).count(), 0);
     await page.waitForFunction(() => {
       const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
       const svg = bar?.querySelector('svg');

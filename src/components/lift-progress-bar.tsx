@@ -4,7 +4,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useAppTheme } from "@/theme";
 
 // Finite animations: no perpetual shimmer or work running between updates.
-export function LiftProgressBar({ progress, name }: { progress: number; name: string }) {
+export function LiftProgressBar({ progress, name, replay = 0, onMotionPreference }: { progress: number; name: string; replay?: number; onMotionPreference?: (reduced: boolean) => void }) {
   const theme = useAppTheme();
   const target = Math.max(0, Math.min(1, progress));
   const fill = useRef(new Animated.Value(target)).current;
@@ -12,9 +12,18 @@ export function LiftProgressBar({ progress, name }: { progress: number; name: st
   const pulse = useRef(new Animated.Value(0)).current;
   const swell = useRef(new Animated.Value(0)).current;
   const container = useRef<View>(null);
+  const fillElement = useRef<View>(null);
+  const swellElement = useRef<View>(null);
+  const shineElement = useRef<View>(null);
+  const haloElement = useRef<View>(null);
+  const previousReplay = useRef(replay);
   const [visible, setVisible] = useState(false);
   const previous = useRef<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
+
+  // A user pressing Replay is already viewing this row. This also provides a
+  // direct start if Safari has missed a visibility notification.
+  useEffect(() => { if (replay > 0) setVisible(true); }, [replay]);
 
   useEffect(() => {
     if (Platform.OS === "web") {
@@ -93,9 +102,38 @@ export function LiftProgressBar({ progress, name }: { progress: number; name: st
     const last = previous.current;
     previous.current = target;
     if (reducedMotion) { fill.setValue(target); return; }
-    const entered = last === null;
+    const entered = last === null || previousReplay.current !== replay;
+    previousReplay.current = replay;
     const increased = last !== null && target > last;
     const reached = last !== null && last < 1 && target >= 1;
+    const webFill = fillElement.current as unknown as HTMLElement | null;
+    if (Platform.OS === "web" && webFill && typeof webFill.animate === "function") {
+      // Browser animations avoid routing every Safari frame through RN's JS driver.
+      fill.setValue(target);
+      const browserAnimations: Animation[] = [webFill.animate(
+        [{ width: `${(entered ? 0 : last ?? target) * 100}%` }, { width: `${target * 100}%` }],
+        { duration: entered ? 1200 : 700, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      )];
+      const webSwell = swellElement.current as unknown as HTMLElement | null;
+      const webShine = shineElement.current as unknown as HTMLElement | null;
+      const webHalo = haloElement.current as unknown as HTMLElement | null;
+      if (entered && webSwell) browserAnimations.push(webSwell.animate([
+        { transform: "scale(1, 1)", offset: 0 },
+        { transform: "scale(1.025, 1.35)", offset: 0.2 },
+        { transform: "scale(1.025, 1.35)", offset: 0.6 },
+        { transform: "scale(1, 1)", offset: 1 },
+      ], { duration: 1400, easing: "ease-in-out" }));
+      if ((entered || increased) && target > 0 && webShine) browserAnimations.push(webShine.animate([
+        { left: "-25%", opacity: 0 }, { left: "0%", opacity: 0.45 },
+        { left: "90%", opacity: 0.45 }, { left: "110%", opacity: 0 },
+      ], { duration: 1400, easing: "ease-in-out" }));
+      if (increased && webHalo) browserAnimations.push(webHalo.animate([
+        { opacity: 0, transform: "scaleY(1)" },
+        { opacity: 0.65, transform: "scaleY(1.55)" },
+        { opacity: 0, transform: "scaleY(1)" },
+      ], { duration: reached ? 1400 : 900 }));
+      return () => browserAnimations.forEach(animation => animation.cancel());
+    }
     if (entered) fill.setValue(0);
     const animations = [Animated.timing(fill, { toValue: target, duration: entered ? 950 : 700, easing: Easing.out(Easing.cubic), useNativeDriver: false })];
     if (entered) animations.push(Animated.sequence([
@@ -111,14 +149,16 @@ export function LiftProgressBar({ progress, name }: { progress: number; name: st
     const animation = Animated.parallel(animations);
     animation.start();
     return () => animation.stop();
-  }, [target, reducedMotion, visible, fill, sweep, pulse, swell]);
+  }, [target, reducedMotion, visible, replay, fill, sweep, pulse, swell]);
+
+  useEffect(() => { if (reducedMotion !== null) onMotionPreference?.(reducedMotion); }, [reducedMotion, onMotionPreference]);
 
   const bright = theme.isDark ? "#CCFF00" : "#73B600";
   return <View ref={container} collapsable={false} accessibilityRole="progressbar" accessibilityLabel={`${name} goal progress`} accessibilityValue={{ min: 0, max: 100, now: Math.round(target * 100) }} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(target * 100)} style={styles.wrapper}>
-    <Animated.View style={[styles.wrapper, { transform: [{ scaleX: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] }) }, { scaleY: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }] }]}>
-    <Animated.View pointerEvents="none" style={[styles.halo, { borderColor: bright, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, theme.isDark ? 0.8 : 0.45] }), transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] }) }] }]} />
+    <Animated.View ref={swellElement} style={[styles.wrapper, { transform: [{ scaleX: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] }) }, { scaleY: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }] }]}>
+    <Animated.View ref={haloElement} pointerEvents="none" style={[styles.halo, { borderColor: bright, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, theme.isDark ? 0.8 : 0.45] }), transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] }) }] }]} />
     <View style={[styles.track, { backgroundColor: theme.colors.border }]}>
-      <Animated.View style={[styles.fill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]}>
+      <Animated.View ref={fillElement} style={[styles.fill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]}>
         <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 16">
           <Defs><LinearGradient id="energy" x1="0%" y1="0%" x2="100%" y2="0%">
             <Stop offset="0%" stopColor={theme.isDark ? "#729F00" : "#375F00"} />
@@ -128,7 +168,7 @@ export function LiftProgressBar({ progress, name }: { progress: number; name: st
           <Rect width="100" height="16" fill="url(#energy)" />
           <Rect x="0" y="0" width="100" height="2" fill="white" opacity="0.23" />
         </Svg>
-        <Animated.View pointerEvents="none" style={[styles.shine, { left: sweep.interpolate({ inputRange: [0, 1], outputRange: ["-25%", "110%"] }), opacity: sweep.interpolate({ inputRange: [0, 0.12, 0.82, 1], outputRange: [0, 0.45, 0.45, 0] }) }]} />
+        <Animated.View ref={shineElement} pointerEvents="none" style={[styles.shine, { left: sweep.interpolate({ inputRange: [0, 1], outputRange: ["-25%", "110%"] }), opacity: sweep.interpolate({ inputRange: [0, 0.12, 0.82, 1], outputRange: [0, 0.45, 0.45, 0] }) }]} />
       </Animated.View>
       {[25, 50, 75].map(mark => <View key={mark} pointerEvents="none" style={[styles.tick, { left: `${mark}%`, backgroundColor: theme.colors.surfaceRaised }]} />)}
     </View>
