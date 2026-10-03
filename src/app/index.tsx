@@ -454,6 +454,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
+          enabled={Platform.OS !== 'web'}
           behavior="padding"
           style={styles.authInnerContainer}
         >

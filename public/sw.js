@@ -1,4 +1,4 @@
-// v11: play lift entrance once and report request cancellation errors accurately.
+// v13: align app and modal surfaces with keyboard viewport, hide bottom tabs.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

@@ -6,6 +6,8 @@ import { sumFoodEntries } from "@/lib/food-journal";
 import { daysFromToday, type FoodLogEntry, type NutritionTotals, type SavedMeal, useAppData } from "@/state/app-data";
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
 import { SaveFeedback } from "@/components/save-feedback";
+import { FoodSearch } from "@/components/food-search";
+import type { FoodChoice } from "@/lib/food-search";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -127,6 +129,14 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setSavingNewRecipe(false);
     setFormError(null);
     setShowAddFood(true);
+  }
+
+  function reuseFood(choice: FoodChoice) {
+    openFoodForm(false);
+    const food = choice.food;
+    setMeal(food.meal); setName(food.name);
+    setCalories(`${food.calories}`); setProtein(`${food.protein}`);
+    setCarbs(`${food.carbs}`); setFats(`${food.fats}`);
   }
 
   function openRecipeEditor(saved: SavedMeal) {
@@ -311,6 +321,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
           </View>
           <PrimaryButton height={38} fontSize={13} style={styles.addButton} onPress={() => openFoodForm(false)}>+ Add food</PrimaryButton>
         </View>
+        <FoodSearch entries={foodEntries} recipes={savedMeals} ready={foodJournalReady && recipesReady} onSelect={reuseFood} />
         {todayEntries.length === 0 ? (
           <Card padding={18} radius={18} gap={5}>
             <AppText weight="bold">No food logged {isToday ? "today" : "for this day"}</AppText>
@@ -421,7 +432,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const sheets = (
     <>
       <Modal animationType="slide" transparent visible={showAddFood} onRequestClose={() => setShowAddFood(false)}>
-        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowAddFood(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>
@@ -452,7 +463,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
       </Modal>
 
       <Modal animationType="slide" transparent visible={editingRecipe != null} onRequestClose={closeRecipeEditor}>
-        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={closeRecipeEditor}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>
@@ -499,7 +510,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
       </Modal>
 
       <Modal animationType="slide" transparent visible={showGoals} onRequestClose={() => setShowGoals(false)}>
-        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoiding}>
+        <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={styles.overlay} onPress={() => setShowGoals(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
               <ScrollBody contentContainerStyle={styles.sheetBody}>
