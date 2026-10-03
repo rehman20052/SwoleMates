@@ -9,7 +9,9 @@
     />
     <meta name="theme-color" content="#0A0A0C" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Let iOS own the status-bar region instead of requesting an overlapping
+         translucent web view, whose geometry regressed in installed iOS apps. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="SwoleMates" />
     <meta name="screen-orientation" content="portrait" />
     <link rel="manifest" href="manifest.json" />
@@ -20,6 +22,7 @@
       /* These styles make the body full-height */
       html,
       body {
+        position: relative;
         height: 100%;
         margin: 0;
         background: #0a0a0c;
@@ -34,7 +37,9 @@
       /* These styles make the root element full-height */
       #root {
         display: flex;
-        position: fixed;
+        /* The document never scrolls. Absolute positioning follows its origin
+           without iOS's separate fixed-element compositing/offset behavior. */
+        position: absolute;
         top: var(--app-viewport-top, 0px);
         left: 0;
         width: 100%;
@@ -96,7 +101,7 @@
       window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=6", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=7", document.baseURI));
         });
       }
     </script>
