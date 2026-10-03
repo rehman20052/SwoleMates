@@ -94,12 +94,10 @@ const assert = require('node:assert/strict');
         if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) { parent.scrollTop = 0; break; }
       }
     });
-    await page.waitForFunction(() => document.querySelector('[aria-label="Smoke bench goal progress"] svg').parentElement.getBoundingClientRect().width < 1);
+    await page.waitForTimeout(100);
     await liftBar.scrollIntoViewIfNeeded();
-    await page.waitForFunction(() => {
-      const inner = document.querySelector('[aria-label="Smoke bench goal progress"]').firstElementChild;
-      return new DOMMatrix(getComputedStyle(inner).transform).m22 > 1.1;
-    });
+    await page.waitForTimeout(350);
+    assert.equal(await liftBar.evaluate(node => node.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length), 0, 'scrolling back to a lift does not replay it');
     await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).click();
     await page.waitForFunction(() => {
       const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');

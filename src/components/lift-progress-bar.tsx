@@ -48,7 +48,7 @@ export function LiftProgressBar({ progress, name, replay = 0, onMotionPreference
       const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
       const resume = () => { if (document.hidden) setVisible(false); else schedule(); };
       // A scroll container clips intersections too. Start only after most of
-      // the bar appears; rearm after it leaves, not on tiny scroll movements.
+      // the bar appears. Scrolling away does not reset its played state.
       const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(schedule, { threshold: [0, 0.05, 0.6, 1] });
       observer?.observe(element);
       // Installed Safari can resume without a fresh intersection callback.
@@ -94,8 +94,7 @@ export function LiftProgressBar({ progress, name, replay = 0, onMotionPreference
     fill.stopAnimation(); sweep.stopAnimation(); pulse.stopAnimation(); swell.stopAnimation();
     sweep.setValue(0); pulse.setValue(0); swell.setValue(0);
     if (!visible) {
-      previous.current = null;
-      fill.setValue(reducedMotion ? target : 0);
+      fill.setValue(target);
       return;
     }
     if (reducedMotion === null) { fill.setValue(target); return; }
@@ -106,6 +105,7 @@ export function LiftProgressBar({ progress, name, replay = 0, onMotionPreference
     previousReplay.current = replay;
     const increased = last !== null && target > last;
     const reached = last !== null && last < 1 && target >= 1;
+    if (!entered && last === target) { fill.setValue(target); return; }
     const webFill = fillElement.current as unknown as HTMLElement | null;
     if (Platform.OS === "web" && webFill && typeof webFill.animate === "function") {
       // Browser animations avoid routing every Safari frame through RN's JS driver.
