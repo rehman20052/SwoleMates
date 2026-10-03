@@ -145,7 +145,7 @@ test("blocks vertical dragging on blank space and scroll boundaries, while allow
 
 test("a short keyboard viewport does not trigger the portrait lock", () => {
   const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(script => script.includes('function lockPortrait'));
   const lock = { style: {} };
   const screen = { orientation: { type: "portrait-primary" }, width: 390, height: 844 };
   const context = vm.createContext({

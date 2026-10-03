@@ -10,8 +10,8 @@ import {
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { View } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, View } from "react-native";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -32,7 +32,8 @@ export default function RootLayout() {
 
 function RootShell() {
   const theme = useAppTheme();
-  const [fontsLoaded] = useFonts({
+  const [fontWaitExpired, setFontWaitExpired] = useState(false);
+  const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -40,10 +41,17 @@ function RootShell() {
     Inter_800ExtraBold,
     Inter_900Black,
   });
+  const ready = fontsLoaded || !!fontError || fontWaitExpired;
 
   useEffect(() => {
-    if (fontsLoaded) void SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (Platform.OS !== "web" || ready) return;
+    const timer = setTimeout(() => setFontWaitExpired(true), 6000);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -53,7 +61,7 @@ function RootShell() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.colors.background);
   }, [theme.colors.background]);
 
-  if (!fontsLoaded) {
+  if (!ready) {
     return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
   }
 
