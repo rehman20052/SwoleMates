@@ -11,7 +11,7 @@ export type Route =
   | { name: "social-profile"; userId: string }
   | { name: "schedule"; partnerId?: string }
   | { name: "scheduled"; workoutId: string }
-  | { name: "nutrition" };
+  | { name: "nutrition"; date?: string };
 
 export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "social-profile", "schedule", "scheduled"];
 

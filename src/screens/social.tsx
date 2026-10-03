@@ -2,11 +2,12 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { appFrameSize } from "@/components/phone-frame";
+import { NotificationMedia } from "@/components/notification-media";
 import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
 import { MAX_MEDIA_BYTES } from "@/lib/media-limits";
 import { prepareVideo } from "@/lib/prepare-video";
@@ -837,6 +838,7 @@ function NotificationBell() {
                 </AppText>
                 <AppText size={11} muted>{timeAgo(notice.at)}</AppText>
               </View>
+              {open && notice.media ? <NotificationMedia media={notice.media} /> : null}
             </Pressable>
           ))
         ) : (
@@ -1169,11 +1171,23 @@ function Composer() {
 function FeedMedia({ media, postId }: { media: PostMedia; postId: string }) {
   const { openMedia } = useSocial();
   if (media.type === "video") {
-    return <PostVideo postId={postId} uri={media.uri} onOpen={() => openMedia(media)} />;
+    return <PostVideo key={media.uri} postId={postId} uri={media.uri} onOpen={() => openMedia(media)} />;
   }
+  return <FeedPhoto key={media.uri} uri={media.uri} onOpen={() => openMedia(media)} />;
+}
+
+function FeedPhoto({ uri, onOpen }: { uri: string; onOpen: () => void }) {
+  const [aspectRatio, setAspectRatio] = useState(1);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={() => openMedia(media)}>
-      <Image source={{ uri: media.uri }} style={styles.postMedia} contentFit="cover" />
+    <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen}>
+      <Image
+        source={{ uri }}
+        style={[styles.postMedia, { aspectRatio }]}
+        contentFit="contain"
+        onLoad={({ source }) => {
+          if (source.width > 0 && source.height > 0) setAspectRatio(source.width / source.height);
+        }}
+      />
     </Pressable>
   );
 }
@@ -1329,6 +1343,7 @@ function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlayi
 
 function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpen: () => void }) {
   const ref = useRef<View>(null);
+  const [aspectRatio, setAspectRatio] = useState(1);
   const { activeVideoId, registerVideo } = useSocial();
   const source = useRef(uri);
   const player = useVideoPlayer(source.current, (clip) => {
@@ -1337,6 +1352,34 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
   });
   const play = activeVideoId === postId;
   const [soundOn, setSoundOn] = useState(feedAudioReady);
+  const soundTouched = useRef(false);
+
+  useEffect(() => {
+    const updateSize = (size?: { width: number; height: number }) => {
+      if (size && size.width > 0 && size.height > 0) setAspectRatio(size.width / size.height);
+    };
+    if (Platform.OS === "web") {
+      // Expo's web player does not expose video tracks. Use the browser's
+      // displayed dimensions, which also account for the clip's rotation.
+      const video = (ref.current as unknown as HTMLElement | null)?.querySelector("video");
+      if (!video) return;
+      const update = () => updateSize({ width: video.videoWidth, height: video.videoHeight });
+      video.addEventListener("loadedmetadata", update);
+      video.addEventListener("resize", update);
+      update();
+      return () => {
+        video.removeEventListener("loadedmetadata", update);
+        video.removeEventListener("resize", update);
+      };
+    }
+    updateSize(player.videoTrack?.size ?? player.availableVideoTracks[0]?.size);
+    const loaded = player.addListener("sourceLoad", (event) => updateSize(event.availableVideoTracks[0]?.size));
+    const changed = player.addListener("videoTrackChange", (event) => updateSize(event.videoTrack?.size));
+    return () => {
+      loaded.remove();
+      changed.remove();
+    };
+  }, [player]);
 
   useEffect(() => {
     armFeedAudio();
@@ -1344,7 +1387,7 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
       setSoundOn(true);
       return;
     }
-    const waiter = () => setSoundOn(true);
+    const waiter = () => { if (!soundTouched.current) setSoundOn(true); };
     feedAudioWaiters.add(waiter);
     return () => {
       feedAudioWaiters.delete(waiter);
@@ -1374,16 +1417,22 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
           throws the video fullscreen the moment it starts playing on scroll. */}
       <VideoView
         player={player}
-        style={styles.postMedia}
-        contentFit="cover"
+        style={[styles.postMedia, { aspectRatio }]}
+        contentFit="contain"
         nativeControls={false}
         playsInline
         allowsPictureInPicture={false}
         fullscreenOptions={{ enable: false }}
         onFullscreenEnter={dismissNativeFullscreen}
       />
-      <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen} style={StyleSheet.absoluteFillObject} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen} style={StyleSheet.absoluteFill} />
       <VideoScrubber player={player} keepPlaying={play} />
+      <VideoSoundButton muted={!soundOn} onPress={() => {
+        soundTouched.current = true;
+        const next = !soundOn;
+        player.muted = !next;
+        setSoundOn(next);
+      }} />
     </View>
   );
 }
@@ -1434,8 +1483,20 @@ function MediaLightbox({ media, onClose }: { media: PostMedia | null; onClose: (
   );
 }
 
+function VideoSoundButton({ muted, onPress }: { muted: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={muted ? "Unmute video" : "Mute video"}
+    accessibilityState={{ selected: muted }} onPress={(event) => { event.stopPropagation(); onPress(); }}
+    style={{ position: "absolute", bottom: 28, right: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
+    <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}>
+      <Path d="M3 9h4l5-4v14l-5-4H3z" stroke="#fff" strokeWidth={1.8} fill="none" strokeLinejoin="round" />
+      <Path d={muted ? "M16 9l5 6m0-6l-5 6" : "M16 8c2 2 2 6 0 8m3-11c4 4 4 10 0 14"} stroke="#fff" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+    </Svg>
+  </Pressable>;
+}
+
 function LightboxVideo({ uri }: { uri: string }) {
   const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(false);
   const player = useVideoPlayer(uri, (clip) => {
     clip.loop = true;
     clip.muted = false;
@@ -1466,9 +1527,10 @@ function LightboxVideo({ uri }: { uri: string }) {
           else player.play();
           setPlaying(!playing);
         }}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       <VideoScrubber player={player} keepPlaying={playing} />
+      <VideoSoundButton muted={muted} onPress={() => { player.muted = !muted; setMuted(!muted); }} />
     </View>
   );
 }
@@ -1945,6 +2007,7 @@ function Comments({ post }: { post: Post }) {
           onChangeText={setDraft}
           onSubmitEditing={() => void send()}
           returnKeyType="send"
+          submitBehavior="submit"
           maxLength={COMMENT_LIMIT}
           style={{ flex: 1, height: 40 }}
         />
@@ -2304,7 +2367,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     touchAction: "none",
     userSelect: "none",
-  },
+  } as ViewStyle,
   scrubberTrack: {
     backgroundColor: "rgba(255, 255, 255, 0.38)",
     height: 3,

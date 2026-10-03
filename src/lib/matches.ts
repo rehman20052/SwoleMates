@@ -1,6 +1,7 @@
 import { normalizeProfile, type UserProfile } from "@/lib/profile";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
+import { markAccountRead, readAccountMarkers } from "@/lib/account-markers";
 
 const PHOTO_BUCKET = "profile-photos";
 
@@ -254,13 +255,16 @@ export async function syncIncomingReadCursors(matchIds: string[]) {
 export async function chatReadTimes() {
   const me = await signedInUserId();
   if (!me) return {};
-  return readMap(me);
+  try {
+    const reads = await readAccountMarkers(me, "chat_reads", readMap(me));
+    saveReadMap(me, reads); return reads;
+  } catch { return readMap(me); }
 }
 
 export async function openedChatIds() {
   const me = await signedInUserId();
   if (!me) return new Set<string>();
-  return new Set(Object.keys(readMap(me)));
+  return new Set(Object.keys(await chatReadTimes()));
 }
 
 export async function markChatRead(requestId: string, at?: string) {
@@ -272,8 +276,13 @@ export async function markChatRead(requestId: string, at?: string) {
   const reads = readMap(me);
   const previous = reads[requestId];
   if (previous && new Date(previous).getTime() >= new Date(stamp).getTime()) return;
-  reads[requestId] = stamp;
-  saveReadMap(me, reads);
+  try {
+    const synced = await markAccountRead(me, "chat_reads", requestId, stamp, reads);
+    saveReadMap(me, synced);
+  } catch {
+    // Read receipts are non-blocking, but retain a local cursor for this device.
+    reads[requestId] = stamp; saveReadMap(me, reads);
+  }
   notifyChatAlerts();
 }
 
@@ -367,7 +376,7 @@ export async function chatAlertCount() {
     return 0;
   }
 
-  let reads = readMap(me);
+  let reads = await chatReadTimes();
   const blocked = await blockedUserIds();
   const visible = connections.filter((person) => !blocked.has(person.userId));
   const incoming = visible.filter((person) => person.status === "pending" && person.direction === "incoming").length;

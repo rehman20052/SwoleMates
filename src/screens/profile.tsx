@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FlatList, Modal, PanResponder, Platform, Pressable, StyleSheet, View, type LayoutRectangle, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 
@@ -18,6 +18,7 @@ import {
 import { experienceLevels } from "@/data/partners";
 import { photoDisplayUri } from "@/lib/heic-media";
 import { pickProfileMedia } from "@/lib/pick-photo";
+import { moveProfileMedia } from "@/lib/profile-media-order";
 import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profileMediaKind, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfileMediaKind, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -99,6 +100,66 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   const [gymStatus, setGymStatus] = useState<string | null>(null);
   const [addressStatus, setAddressStatus] = useState<string | null>(null);
   const [birthText, setBirthText] = useState(() => birthDateText(profile.birthDate));
+  const [photoDrag, setPhotoDrag] = useState<{ from: number; to: number; dx: number; dy: number } | null>(null);
+  const dragRef = useRef<(NonNullable<typeof photoDrag> & { x: number; y: number }) | null>(null);
+  const photoBoxes = useRef(new Map<number, LayoutRectangle>());
+  const photoGridRef = useRef<View>(null);
+  const photoPanActive = useRef(false);
+  const profileRef = useRef(profile);
+  const onChangeRef = useRef(onChange);
+  profileRef.current = profile;
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || mode !== "edit") return;
+    const node = photoGridRef.current as unknown as HTMLElement | null;
+    const suppressMenu = (event: Event) => event.preventDefault();
+    node?.addEventListener("contextmenu", suppressMenu);
+    return () => node?.removeEventListener("contextmenu", suppressMenu);
+  }, [mode]);
+
+  const movePhoto = (from: number, to: number) => {
+    const current = profileRef.current;
+    onChangeRef.current({ ...current, ...moveProfileMedia({
+      photos: current.photos,
+      photoMedia: current.photos.map((photo, index) => profileMediaKind(photo, current.photoMedia?.[index])),
+      photoCaptions: current.photos.map((_, index) => current.photoCaptions?.[index] ?? ""),
+    }, from, to) });
+  };
+
+  const finishPhotoDrag = (commit: boolean) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setPhotoDrag(null);
+    if (!commit || !drag || drag.from === drag.to) return;
+    movePhoto(drag.from, drag.to);
+  };
+
+  const photoPan = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: () => dragRef.current != null,
+    onPanResponderGrant: () => { photoPanActive.current = true; },
+    onPanResponderMove: (event) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      drag.dx = event.nativeEvent.pageX - drag.x;
+      drag.dy = event.nativeEvent.pageY - drag.y;
+      const origin = photoBoxes.current.get(drag.from);
+      if (origin) {
+        const x = origin.x + origin.width / 2 + drag.dx;
+        const y = origin.y + origin.height / 2 + drag.dy;
+        let nearest = Infinity;
+        photoBoxes.current.forEach((box, index) => {
+          if (index >= profileRef.current.photos.length) return;
+          const distance = (x - box.x - box.width / 2) ** 2 + (y - box.y - box.height / 2) ** 2;
+          if (distance < nearest) { nearest = distance; drag.to = index; }
+        });
+      }
+      setPhotoDrag({ from: drag.from, to: drag.to, dx: drag.dx, dy: drag.dy });
+    },
+    onPanResponderRelease: () => { finishPhotoDrag(true); photoPanActive.current = false; },
+    onPanResponderTerminate: () => { finishPhotoDrag(false); photoPanActive.current = false; },
+    onPanResponderTerminationRequest: () => false,
+  }), []);
 
   useEffect(() => {
     const zip = profile.zipCode.trim();
@@ -298,7 +359,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         })}
       </View>
 
-      <ScrollBody>
+      <ScrollBody scrollEnabled={!photoDrag}>
         <AppText size={20} weight="extrabold">
           {title}
         </AppText>
@@ -306,9 +367,9 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         <Card>
           <SectionLabel>Photos</SectionLabel>
           <AppText size={12} muted>
-            Add a photo or a clip in each spot, up to {MAX_PHOTOS}. Clips over 50MB are compressed to fit. At least 1 is required.
+            Add a photo or a clip in each spot, up to {MAX_PHOTOS}. Hold and drag to reorder. The first spot appears first on your profile. Clips over 50MB are compressed to fit. At least 1 is required.
           </AppText>
-          <View style={styles.photoGrid}>
+          <View ref={photoGridRef} style={styles.photoGrid} {...photoPan.panHandlers} onTouchEnd={() => finishPhotoDrag(true)} onTouchCancel={() => finishPhotoDrag(false)}>
             {Array.from({ length: MAX_PHOTOS }, (_, index) => {
               const photo = profile.photos[index];
               const kind = photo ? profileMediaKind(photo, profile.photoMedia?.[index]) : "image";
@@ -317,12 +378,18 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
               return (
                 <View
                   key={index}
+                  onLayout={({ nativeEvent }) => photoBoxes.current.set(index, nativeEvent.layout)}
                   style={[
                     styles.photoSlot,
                     {
                       backgroundColor: theme.colors.surfaceRaised,
-                      borderColor: photo ? theme.colors.border : theme.colors.primary,
+                      borderColor: photoDrag?.to === index ? theme.colors.primary : photo ? theme.colors.border : theme.colors.primary,
                       opacity: locked ? 0.45 : 1,
+                    },
+                    photoDrag?.from === index && {
+                      zIndex: 10,
+                      elevation: 10,
+                      transform: [{ translateX: photoDrag.dx }, { translateY: photoDrag.dy }, { scale: 1.05 }],
                     },
                   ]}
                 >
@@ -331,7 +398,22 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                     accessibilityLabel={photo ? `Replace photo or clip ${index + 1}` : index === 0 ? "Add profile photo or clip" : `Add photo or clip ${index + 1}`}
                     disabled={locked || saving || compressing}
                     onPress={() => addPhoto(index)}
-                    style={styles.photoPress}
+                    delayLongPress={400}
+                    onLongPress={photo ? (event) => {
+                      const next = { from: index, to: index, dx: 0, dy: 0, x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+                      dragRef.current = next;
+                      setPhotoDrag(next);
+                    } : undefined}
+                    accessibilityHint={photo ? "Hold and drag to change the order" : undefined}
+                    accessibilityActions={photo ? [{ name: "decrement", label: "Move earlier" }, { name: "increment", label: "Move later" }] : undefined}
+                    onAccessibilityAction={({ nativeEvent }) => {
+                      if (saving || compressing) return;
+                      movePhoto(index, index + (nativeEvent.actionName === "decrement" ? -1 : 1));
+                    }}
+                    onPressOut={() => {
+                      setTimeout(() => { if (!photoPanActive.current && dragRef.current) finishPhotoDrag(true); }, 0);
+                    }}
+                    style={[styles.photoPress, Platform.OS === "web" && photo ? ({ touchAction: "none", userSelect: "none" } as unknown as ViewStyle) : undefined]}
                   >
                     {photo ? (
                       <ProfileMedia key={`${kind}:${photo}`} uri={photo} kind={kind} />
@@ -347,10 +429,16 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                     )}
                   </Pressable>
                   {photo ? (
+                    <View pointerEvents="none" style={[styles.photoOrder, { backgroundColor: theme.colors.background }]}>
+                      <AppText size={11} weight="bold">{index + 1}</AppText>
+                    </View>
+                  ) : null}
+                  {photo ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Remove photo ${index + 1}`}
                       hitSlop={6}
+                      disabled={!!photoDrag || saving || compressing}
                       onPress={() => removePhoto(index)}
                       style={[styles.removePhoto, { backgroundColor: theme.colors.background }]}
                     >
@@ -1234,6 +1322,14 @@ const styles = StyleSheet.create({
   },
   photoPress: {
     flex: 1,
+  },
+  photoOrder: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
   },
   photoEmpty: {
     alignItems: "center",

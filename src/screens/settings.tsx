@@ -11,7 +11,7 @@ import { useAppTheme, useColorScheme } from "@/theme";
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const theme = useAppTheme();
   const nav = useNavigation();
-  const { scheme, setScheme } = useColorScheme();
+  const { scheme, setScheme, schemeError, savingScheme } = useColorScheme();
   const [email, setEmail] = useState("");
   const [people, setPeople] = useState<BlockedPerson[]>([]);
   const [blockedStatus, setBlockedStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -130,8 +130,11 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
               {scheme === "dark" ? "The app is using the dark theme." : "The app is using the light theme."}
             </AppText>
           </View>
-          <Toggle accessibilityLabel="Dark mode" value={scheme === "dark"} onChange={(on) => setScheme(on ? "dark" : "light")} />
+          <Toggle accessibilityLabel="Dark mode" value={scheme === "dark"} onChange={(on) => { if (!savingScheme) void setScheme(on ? "dark" : "light"); }} />
         </View>
+
+        {savingScheme ? <AppText size={12} muted>Saving appearance…</AppText> : null}
+        {schemeError ? <AppText size={13} color={theme.colors.danger}>{schemeError}</AppText> : null}
 
         <AppText size={13} weight="bold" primary upper style={styles.section}>
           Safety

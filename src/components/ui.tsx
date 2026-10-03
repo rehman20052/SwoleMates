@@ -171,6 +171,8 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
   }, []);
 
   useEffect(() => {
+    // Web keyboard layout and focused-field scrolling are owned by the shell.
+    if (Platform.OS === "web") return;
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const showSub = Keyboard.addListener(showEvent, (event: KeyboardEvent) => {
