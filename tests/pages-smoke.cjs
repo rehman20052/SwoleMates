@@ -56,6 +56,30 @@ const assert = require('node:assert/strict');
     const liftBar = page.getByRole('progressbar', { name: 'Smoke bench goal progress' });
     await liftBar.waitFor();
     assert.equal(await liftBar.getAttribute('aria-valuenow'), '60');
+    // Reaching an offscreen bar should animate then settle at the saved value.
+    await liftBar.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
+      const transform = getComputedStyle(bar.firstElementChild).transform;
+      return transform !== 'none' && new DOMMatrix(transform).m22 > 1.1;
+    });
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
+      const svg = bar.querySelector('svg');
+      const transform = getComputedStyle(bar.firstElementChild).transform;
+      return Math.abs(svg.parentElement.getBoundingClientRect().width / svg.parentElement.parentElement.getBoundingClientRect().width - 0.6) < 0.01 && (transform === 'none' || Math.abs(new DOMMatrix(transform).m22 - 1) < 0.01);
+    });
+    await liftBar.evaluate(node => {
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+        if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) { parent.scrollTop = 0; break; }
+      }
+    });
+    await page.waitForFunction(() => document.querySelector('[aria-label="Smoke bench goal progress"] svg').parentElement.getBoundingClientRect().width < 1);
+    await liftBar.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => {
+      const inner = document.querySelector('[aria-label="Smoke bench goal progress"]').firstElementChild;
+      return new DOMMatrix(getComputedStyle(inner).transform).m22 > 1.1;
+    });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.waitForFunction(() => {
       const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
