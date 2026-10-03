@@ -1,4 +1,4 @@
-// v13: align app and modal surfaces with keyboard viewport, hide bottom tabs.
+// v14: illustrated Fuel plan and weight check-in cards.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

@@ -65,6 +65,10 @@ const assert = require('node:assert/strict');
     const yogurt = { meal: 'Breakfast', name: 'Smoke yogurt', calories: 150, protein: 20, carbs: 10, fats: 3 };
     cloud.set('food', [{ record_id: 'seed-food', revision: 1, deleted: false, payload: { ...yogurt, id: 'seed-food', date: previousDate } }]);
     cloud.set('recipes', [{ record_id: 'seed-recipe', revision: 1, deleted: false, payload: { ...yogurt, id: 'seed-recipe', name: 'Smoke yogurt bowl', calories: 250 } }]);
+    cloud.set('nutrition_plan', [{ record_id: 'plan', revision: 1, deleted: false, payload: {
+      goals: { calorieGoal: 2179, proteinGoal: 146, carbGoal: 275, fatGoal: 55 },
+      profile: { sex: 'Male', age: 28, weightLb: 183, heightIn: 70, goal: 'maintain', steps: '4to7', strengthDays: 3, cardioSessions: 0, cardioLength: null, bodyFat: null, targetWeightLb: null, targetWeeks: null, weighIns: [{ date: today, weightLb: 183 }], plannedWeeklyLb: 0, calorieAdjustment: 0, calibratedThrough: null },
+    } }]);
     for (const [index, name] of ['Smoke squat', 'Smoke deadlift', 'Smoke press'].entries()) cloud.get('lifts').push({ record_id: `smoke-extra-${index}`, revision: 1, deleted: false, payload: { id: `smoke-extra-${index}`, name, unit: 'lb', currentWeight: 100, goalWeight: 200, minReps: 6, maxReps: 10, history: [] } });
     const messageRows = Array.from({ length: 25 }, (_, index) => ({ id: `message-${index}`, match_id: 'smoke-match', sender_id: partnerId, body: `Training message ${index}`, created_at: new Date(Date.now() - (25 - index) * 1000).toISOString() }));
     await context.route('**/*', async route => {
@@ -177,6 +181,13 @@ const assert = require('node:assert/strict');
     assert.equal(await page.getByLabel('Exercise 1 weight', { exact: true }).inputValue(), '145');
     await page.getByText('Close Log', { exact: true }).click();
     await page.getByText('Fuel', { exact: true }).click();
+    await page.getByRole('button', { name: 'Open your macro plan' }).waitFor();
+    await page.getByRole('button', { name: 'Edit weight', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel weight edit' }).click();
+    if (process.env.FUEL_SCREENSHOT_PATH) {
+      await page.getByRole('button', { name: 'Open your macro plan' }).scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Open your macro plan' }).locator('..').screenshot({ path: process.env.FUEL_SCREENSHOT_PATH });
+    }
     const foodSearch = page.getByPlaceholder('Search recent foods and recipes');
     await foodSearch.fill('SMOKE yogurt');
     await page.getByRole('button', { name: 'Use recent food Smoke yogurt', exact: true }).waitFor();
