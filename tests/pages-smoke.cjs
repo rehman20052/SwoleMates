@@ -63,6 +63,12 @@ const assert = require('node:assert/strict');
       return false;
     });
     assert.equal(hiddenScrollbar, true, 'exercise list hides the scrollbar');
+    await page.getByRole('button', { name: 'Close lift editor' }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Show screen details' }).click();
+    const details = await page.getByText(/^Screen layout: iphone-layout-2/).textContent();
+    assert.match(details, /Tabs bottom \/ padding: [\d.]+ \/ [\d.]+px/);
+    assert.match(details, /Root top \/ bottom:/);
     assert.deepEqual(errors, []);
     console.log('Mobile Pages smoke passed: bottom-edge geometry at three phone sizes, authenticated startup, account loading, lift picker, hidden scrollbar.');
   } finally {
