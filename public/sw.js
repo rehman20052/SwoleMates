@@ -1,4 +1,4 @@
-// v15: recover from stalled startup downloads and failed font loading.
+// v17: refreshed Fuel journal, search, recipes, and bundled thumbnail artwork.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

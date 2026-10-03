@@ -232,7 +232,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         <View style={styles.hero}>
           <SectionLabel>{dayLabel}</SectionLabel>
           <AppText size={29} weight="black">{isToday ? "Fuel your training." : "Your food journal."}</AppText>
-          <AppText muted>{isToday ? "Log your meals to keep your daily macros in view." : "Review this day's food, add a missed meal, or edit an entry."}</AppText>
           {!nutritionPlanReady ? <AppText muted>Loading saved daily targets…</AppText> : null}
           {nutritionPlanError ? <AppText>{nutritionPlanError}</AppText> : null}
         </View>
@@ -244,7 +243,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         <View style={[styles.sectionHeader, { flexWrap: "wrap", gap: 12 }]}>
           <View style={{ flex: 1, minWidth: 140 }}>
             <AppText size={20} weight="extrabold">Macro plan</AppText>
-            <AppText size={13} muted>Your daily targets and weight progress.</AppText>
           </View>
         </View>
         <SaveFeedback area="plan" />
@@ -293,26 +291,29 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         </View>
         ) : null}
 
-        <Card padding={18} radius={24} gap={14} style={{ backgroundColor: theme.colors.primaryDeep }}>
+        <Card padding={18} radius={24} gap={16}>
           <View style={styles.summaryHeader}>
-            <View>
-              <AppText size={12} weight="bold" muted upper>Calories consumed</AppText>
-              <AppText size={31} weight="black">{currentNutrition.calories.toLocaleString()} <AppText size={15} muted>/ {currentNutrition.calorieGoal.toLocaleString()}</AppText></AppText>
+            <View style={{ gap: 5 }}>
+              <AppText size={11} weight="bold" primary upper>Daily energy</AppText>
+              <AppText size={38} weight="black">{currentNutrition.calories.toLocaleString()}<AppText size={12} muted> cal</AppText></AppText>
+              <AppText size={11} muted>of {currentNutrition.calorieGoal.toLocaleString()} daily target</AppText>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Edit nutrition goals" onPress={openGoals} style={[styles.goalButton, { borderColor: theme.colors.primary }]}> 
               <AppText size={12} weight="bold" primary>Goals</AppText>
             </Pressable>
           </View>
           <ProgressBar progress={Math.min(currentNutrition.calories / Math.max(currentNutrition.calorieGoal, 1), 1)} />
-          <AppText size={13} muted>
-            {Math.max(currentNutrition.calorieGoal - currentNutrition.calories, 0).toLocaleString()} calories remaining
-          </AppText>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <View style={{ borderRadius: 20, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: theme.colors.primaryTint }}><AppText size={11} weight="bold" primary>{Math.max(currentNutrition.calorieGoal - currentNutrition.calories, 0).toLocaleString()} cal left</AppText></View>
+            <AppText size={11} muted>{Math.round(currentNutrition.calories / Math.max(currentNutrition.calorieGoal, 1) * 100)}% of target</AppText>
+          </View>
           <View style={styles.macroRow}>
             {(["protein", "carbs", "fats"] as Macro[]).map((macro) => (
               <View key={macro} style={[styles.macroTile, { backgroundColor: theme.colors.surfaceRaised }]}>
                 <AppText size={11} weight="bold" muted upper>{macroLabel(macro)}</AppText>
                 <AppText size={17} weight="extrabold">{currentNutrition[macro]}g</AppText>
                 <AppText size={11} muted>/ {nutrition[macroGoals[macro]]}g</AppText>
+                <View style={{ height: 4, borderRadius: 2, overflow: "hidden", marginTop: 5, backgroundColor: theme.colors.border }}><View style={{ height: "100%", width: `${Math.min(100, currentNutrition[macro] / Math.max(1, nutrition[macroGoals[macro]]) * 100)}%`, backgroundColor: macro === "protein" ? theme.colors.primary : macro === "carbs" ? "#B38542" : "#659A99" }} /></View>
               </View>
             ))}
           </View>
@@ -328,18 +329,21 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         </View>
         <FoodSearch entries={foodEntries} recipes={savedMeals} ready={foodJournalReady && recipesReady} onSelect={reuseFood} />
         {todayEntries.length === 0 ? (
-          <Card padding={18} radius={18} gap={5}>
-            <AppText weight="bold">No food logged {isToday ? "today" : "for this day"}</AppText>
-            <AppText size={13} muted>Add a meal to track this day's calories and macros.</AppText>
+          <Card padding={18} radius={24} gap={10}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}><FuelThumbnail kind="plan" size={52} /><View style={{ flex: 1, gap: 4 }}><AppText weight="bold">Your journal starts here</AppText><AppText size={12} muted>Tap Add food to log your first meal.</AppText></View></View>
           </Card>
         ) : null}
         {entriesByMeal.map(({ meal: mealName, entries }) => (
           entries.length ? (
             <View key={mealName} style={styles.mealSection}>
-              <AppText size={12} weight="extrabold" muted upper>{mealName}</AppText>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: theme.colors.primaryTint, alignItems: "center", justifyContent: "center" }}><AppText size={12} weight="black" primary>{mealName[0]}</AppText></View>
+                <AppText size={13} weight="extrabold" style={{ flex: 1 }}>{mealName}</AppText><AppText size={11} muted>{entries.reduce((total, entry) => total + entry.calories, 0)} cal</AppText>
+              </View>
               {entries.map((entry) => (
                 <Card key={entry.id} padding={14} radius={16} gap={8}>
                   <View style={styles.foodRow}>
+                    <FuelThumbnail kind="plan" size={38} />
                     <View style={{ flex: 1, gap: 3 }}>
                       <AppText weight="bold">{entry.name}</AppText>
                       <AppText size={12} muted>{entry.protein}g protein · {entry.carbs}g carbs · {entry.fats}g fat</AppText>
@@ -366,27 +370,27 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         <View style={[styles.sectionHeader, { flexWrap: "wrap", gap: 12 }]}>
           <View style={{ flex: 1, minWidth: 140, gap: 3 }}>
             <AppText size={20} weight="extrabold">Saved recipes</AppText>
-            <AppText size={13} muted>Your recipes, ready when you need them.</AppText>
+            <AppText size={11} muted>{savedMeals.length} saved · yours to reuse</AppText>
           </View>
           <SecondaryButton height={38} fontSize={13} onPress={() => openFoodForm(true)}>+ Save recipe</SecondaryButton>
         </View>
         {savedMeals.length === 0 ? (
-          <Card padding={18} radius={18} gap={5}>
-            <AppText weight="bold">No saved recipes yet</AppText>
-            <AppText size={13} muted>Save a recipe for later. It only counts toward today when you choose to add it.</AppText>
+          <Card padding={18} radius={24} gap={10}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}><FuelThumbnail kind="plan" size={52} /><View style={{ flex: 1, gap: 4 }}><AppText weight="bold">Your recipe collection</AppText><AppText size={12} muted>Save a favorite. Log it when you eat it.</AppText></View></View>
           </Card>
         ) : null}
         <View style={styles.savedMeals}>
           {savedMeals.map((savedMeal) => {
             const confirming = confirmDeleteId === savedMeal.id;
             return (
-              <Card key={savedMeal.id} padding={14} radius={16} gap={10}>
-                <View style={styles.sectionHeader}>
+              <Card key={savedMeal.id} padding={16} radius={24} gap={14}>
+                <View style={[styles.sectionHeader, { gap: 14 }]}>
+                  <FuelThumbnail kind="plan" size={58} />
                   <View style={{ flex: 1, gap: 3 }}>
                     <AppText size={11} weight="bold" muted upper>{savedMeal.meal}</AppText>
                     <AppText weight="bold">{savedMeal.name}</AppText>
                     <AppText size={12} muted>
-                      {savedMeal.calories} cal · {savedMeal.protein}g protein · {savedMeal.carbs}g carbs · {savedMeal.fats}g fat
+                      {savedMeal.calories} cal · {savedMeal.protein}g protein
                     </AppText>
                   </View>
                 </View>

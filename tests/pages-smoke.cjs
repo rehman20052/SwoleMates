@@ -51,7 +51,8 @@ const assert = require('node:assert/strict');
     await context.addInitScript(({ user, token, exp }) => {
       localStorage.setItem('sb-wypmjwbtnimsasicvoos-auth-token', JSON.stringify({ user, access_token: token, refresh_token: 'test', expires_at: exp, expires_in: 3600, token_type: 'bearer' }));
     }, { user, token, exp });
-    const base = `http://127.0.0.1:${server.address().port}`;
+    const base = process.env.SMOKE_BASE_URL || `http://127.0.0.1:${server.address().port}`;
+    const appUrl = base + (process.env.SMOKE_BASE_URL ? '/' : '/SwoleMates/');
     const partnerId = '22222222-2222-4222-8222-222222222222';
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -100,7 +101,7 @@ const assert = require('node:assert/strict');
       }
       return route.fulfill({ json: [], headers: { 'content-range': '0-0/0' } });
     });
-    await page.goto(base + '/SwoleMates/');
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.getByText('Home', { exact: true }).click({ timeout: 30000 });
     await page.getByText('Weekly recap', { exact: true }).waitFor();
     const liftBar = page.getByRole('progressbar', { name: 'Smoke bench goal progress' });
@@ -212,7 +213,7 @@ const assert = require('node:assert/strict');
     await page.getByText('No matching foods or recipes. Use Add food to enter something new.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Clear food search' }).click();
     const freshPage = await context.newPage();
-    await freshPage.goto(base + '/SwoleMates/');
+    await freshPage.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await freshPage.getByText('Home', { exact: true }).click();
     await freshPage.getByText('Fuel', { exact: true }).click();
     await freshPage.getByRole('button', { name: 'Use recent food Smoke yogurt', exact: true }).waitFor();
@@ -288,15 +289,17 @@ const assert = require('node:assert/strict');
     const fontFailurePage = await context.newPage();
     fontFailurePage.setDefaultTimeout(15000);
     await fontFailurePage.route(/\.(ttf|woff2?)(\?|$)/, route => route.abort());
-    await fontFailurePage.goto(base + '/SwoleMates/');
+    await fontFailurePage.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await fontFailurePage.getByText('Home', { exact: true }).waitFor();
     await fontFailurePage.close();
+    if (!process.env.SMOKE_BASE_URL) {
     const bundleFailurePage = await context.newPage();
     bundleFailurePage.setDefaultTimeout(20000);
     await bundleFailurePage.route(/entry-[a-f0-9]+\.js/, route => route.abort());
     await bundleFailurePage.goto(base + '/SwoleMates/');
     await bundleFailurePage.getByRole('button', { name: 'Reload app', exact: true }).waitFor();
     await bundleFailurePage.close();
+    }
     console.log('Mobile Pages smoke passed: compact/searchable lifts, entrance animation, reduced motion, workout reuse/save failure/retry, milestones, recap, keyboard focus and resting-height recovery.');
     if (process.env.SCREENSHOT_PATH) {
       await page.getByRole('button', { name: 'Back', exact: true }).click();
