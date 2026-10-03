@@ -1,4 +1,4 @@
-// v11: play lift entrance once and report request cancellation errors accurately.
+// v12: recent foods and combined saved recipe search in Fuel.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
