@@ -152,7 +152,7 @@
       window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=15", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=17", document.baseURI));
         });
       }
     </script>
