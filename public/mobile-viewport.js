@@ -6,6 +6,8 @@
   var revealTimer = 0;
   var restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
   var touch = null;
+  var recoveryTimers = [];
+  var wasKeyboardOpen = false;
 
   function editor(node) {
     return node && node.matches && node.matches('input, textarea, [contenteditable="true"]');
@@ -39,14 +41,18 @@
     var style = document.documentElement.style;
     var focused = editor(document.activeElement);
     var keyboardOpen = focused && viewport.height < restingHeight * 0.85;
+    if (wasKeyboardOpen && !keyboardOpen) recover();
+    wasKeyboardOpen = keyboardOpen;
     document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
-    if (focused) {
+    if (keyboardOpen) {
       style.setProperty("--app-viewport-height", viewport.height + "px");
     } else {
       // Never retain a keyboard-sized pixel height after the input loses focus.
       // CSS owns the resting viewport and adapts to browser/standalone chrome.
       style.removeProperty("--app-viewport-height");
-      restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
+      // A focused field can remain active after iOS's Done button dismisses
+      // the keyboard. Small stale viewport reductions must not pin the app.
+      if (!focused) restingHeight = Math.max(restingHeight, viewport.height, document.documentElement.clientHeight || 0);
     }
     // Do not move the root with visualViewport.offsetTop. iOS pans its native
     // scroll view too; following that offset can produce a scroll/layout loop.
@@ -58,12 +64,32 @@
     if (!frame) frame = requestAnimationFrame(update);
   }
 
+  function recover() {
+    recoveryTimers.forEach(clearTimeout);
+    recoveryTimers = [0, 250, 600].map(function (delay) {
+      return setTimeout(function () {
+        if (Math.abs(viewport.scale - 1) > 0.01) return;
+        if (editor(document.activeElement) && viewport.height < restingHeight * 0.85) return;
+        // Only reset the document after dismissal, never a content scroller or
+        // during viewport scroll events. This avoids recreating the pan loop.
+        var scrolling = document.scrollingElement;
+        if (scrolling && scrolling.scrollTop) scrolling.scrollTop = 0;
+        if (document.body.scrollTop) document.body.scrollTop = 0;
+        schedule();
+      }, delay);
+    });
+  }
+
   viewport.addEventListener("resize", schedule);
   viewport.addEventListener("scroll", schedule);
   window.addEventListener("pageshow", schedule);
+  window.addEventListener("focus", recover);
   window.addEventListener("resize", schedule);
   document.addEventListener("focusin", schedule);
-  document.addEventListener("focusout", schedule);
+  document.addEventListener("focusout", function () { schedule(); recover(); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) recover();
+  });
   document.addEventListener("touchstart", function (event) {
     if (event.touches.length !== 1) { touch = null; return; }
     touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, target: event.target };
