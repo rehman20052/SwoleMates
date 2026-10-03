@@ -35,7 +35,7 @@ function setup() {
   };
 }
 
-test("follows keyboard sizing without chasing native viewport panning and releases height on blur", () => {
+test("aligns keyboard height and panned viewport position, releasing both on blur", () => {
   const app = setup();
   assert.equal(app.styles.has("--app-viewport-height"), false);
   app.document.activeElement = { matches: () => true };
@@ -43,12 +43,13 @@ test("follows keyboard sizing without chasing native viewport panning and releas
     Object.assign(app.viewport, { height, offsetTop });
     app.resize();
     assert.equal(app.styles.get("--app-viewport-height"), height < 844 * 0.85 ? `${height}px` : undefined);
-    assert.equal(app.styles.has("--app-viewport-top"), false);
+    assert.equal(app.styles.get("--app-viewport-top"), height < 844 * 0.85 ? `${offsetTop}px` : undefined);
     assert.equal(app.classes.has("keyboard-open"), height < 844 * 0.85);
   }
   app.viewport.height = 510; app.resize();
   app.document.activeElement = null; app.resize();
   assert.equal(app.styles.has("--app-viewport-height"), false);
+  assert.equal(app.styles.has("--app-viewport-top"), false);
   assert.equal(app.classes.has("keyboard-open"), false);
 });
 
@@ -62,6 +63,16 @@ test("reveals social reply in its scroller without scrolling the document", () =
   app.resize();
   app.settle();
   assert.equal(scroller.scrollTop, 222);
+});
+
+test("document pageTop accounts for native document pan as well as the visual offset", () => {
+  const app = setup();
+  app.document.activeElement = { matches: () => true };
+  Object.assign(app.viewport, { height: 400, offsetTop: 90, pageTop: 152 });
+  app.resize();
+  assert.equal(app.styles.get("--app-viewport-top"), '152px');
+  app.document.activeElement = null; app.resize();
+  assert.equal(app.styles.has("--app-viewport-top"), false);
 });
 
 test("keeps composer focus on Send but permits unrelated buttons", () => {

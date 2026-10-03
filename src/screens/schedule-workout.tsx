@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
 import {
@@ -95,7 +95,7 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
   return (
     <Screen>
       <TitleBar title="Schedule workout" onBack={nav.back} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <KeyboardAvoidingView enabled={Platform.OS !== "web"} style={{ flex: 1 }} behavior="padding">
         <ScrollBody>
           <Card gap={14}>
             <Field label="Workout type">
@@ -187,7 +187,7 @@ function MockSchedule({ partnerId: presetPartner }: { partnerId?: string }) {
         }
       />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <KeyboardAvoidingView enabled={Platform.OS !== "web"} style={{ flex: 1 }} behavior="padding">
         <ScrollBody>
           <Card gap={14}>
             <Field label="SwoleMate Partner">

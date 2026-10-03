@@ -42,7 +42,7 @@
         /* The document never scrolls. Absolute positioning follows its origin
            without iOS's separate fixed-element compositing/offset behavior. */
         position: absolute;
-        top: 0;
+        top: var(--app-viewport-top, 0px);
         left: 0;
         width: 100%;
         height: var(--app-viewport-height, 100%);
@@ -57,7 +57,25 @@
       /* The keyboard already covers the home-indicator region. Safari can keep
          reporting its old inset, so do not add it again above the keyboard. */
       html.keyboard-open #app-bottom-safe-area { padding-bottom: 0 !important; }
-      html.keyboard-open #app-bottom-navigation { padding-bottom: 4px !important; }
+      html.keyboard-open #app-bottom-navigation { display: none !important; }
+      /* The portal's slide-transition wrapper must not establish a transformed
+         fixed containing block while its form is following keyboard panning. */
+      html.keyboard-open body > div:has([aria-modal="true"]) > div {
+        position: absolute !important;
+        top: 0 !important;
+        bottom: auto !important;
+        height: 100% !important;
+        transform: none !important;
+      }
+      /* RN Web modals are portals outside #root. Size and position their
+         surfaces with the same visible viewport as the app beneath them. */
+      html.keyboard-open [aria-modal="true"] {
+        position: absolute !important;
+        top: var(--app-viewport-top, 0px) !important;
+        bottom: auto !important;
+        height: var(--app-viewport-height) !important;
+        min-height: 0 !important;
+      }
       /* iPhone focus zoom introduces another moving viewport below 16px. */
       @media (hover: none) and (pointer: coarse) {
         input, textarea { font-size: max(16px, 1em) !important; }
@@ -111,7 +129,7 @@
       window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=11", document.baseURI));
+          navigator.serviceWorker.register(new URL("sw.js?v=13", document.baseURI));
         });
       }
     </script>
