@@ -38,6 +38,19 @@ const assert = require('node:assert/strict');
     });
     await page.goto(base + '/SwoleMates/');
     await page.getByText('Home', { exact: true }).click({ timeout: 30000 });
+    for (const size of [{ width: 375, height: 812 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
+      await page.setViewportSize(size);
+      await page.waitForFunction(() => Math.abs(document.getElementById('root').getBoundingClientRect().height - visualViewport.height) < 1);
+      const geometry = await page.getByText('Home', { exact: true }).last().evaluate(node => {
+        // Label -> tab button -> navigation row.
+        const nav = node.parentElement.parentElement.getBoundingClientRect();
+        const root = document.getElementById('root').getBoundingClientRect();
+        return { navBottom: nav.bottom, rootBottom: root.bottom, visibleBottom: visualViewport.offsetTop + visualViewport.height };
+      });
+      assert.ok(Math.abs(geometry.rootBottom - geometry.visibleBottom) < 1, 'app root reaches the visible bottom');
+      assert.ok(Math.abs(geometry.navBottom - geometry.rootBottom) < 1, 'tab navigation reaches the app bottom without an extra band');
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByText('Add lift', { exact: true }).click();
     await page.getByText('Choose an exercise', { exact: true }).waitFor();
     await page.getByPlaceholder('Search exercises').fill('bench');
@@ -51,7 +64,7 @@ const assert = require('node:assert/strict');
     });
     assert.equal(hiddenScrollbar, true, 'exercise list hides the scrollbar');
     assert.deepEqual(errors, []);
-    console.log('Mobile Pages smoke passed: authenticated startup, account loading, lift picker, hidden scrollbar.');
+    console.log('Mobile Pages smoke passed: bottom-edge geometry at three phone sizes, authenticated startup, account loading, lift picker, hidden scrollbar.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

@@ -1,4 +1,4 @@
-// v6: refresh the phone shell for account sync, keyboard handling, and lift tracking.
+// v7: refresh installed iPhone viewport and status-bar configuration.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
