@@ -1,4 +1,4 @@
-// v5: drop cached shells so the phone shortcut picks up the macro plan.
+// v6: refresh the phone shell for account sync, keyboard handling, and lift tracking.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
