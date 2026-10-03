@@ -7,6 +7,7 @@ const source = readFileSync(new URL("../public/mobile-viewport.js", import.meta.
 
 function setup() {
   const styles = new Map();
+  const classes = new Set();
   const listeners = new Map();
   const documentListeners = new Map();
   let nextFrame;
@@ -15,7 +16,7 @@ function setup() {
   const body = {};
   const document = {
     activeElement: null, body,
-    documentElement: { style: { setProperty: (name, value) => styles.set(name, value) } },
+    documentElement: { style: { setProperty: (name, value) => styles.set(name, value), removeProperty: name => styles.delete(name) }, classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) } },
     addEventListener: (name, fn) => documentListeners.set(name, fn),
   };
   vm.runInNewContext(source, {
@@ -25,21 +26,27 @@ function setup() {
     clearTimeout: () => { nextTimer = null; },
     setTimeout: (fn) => { nextTimer = fn; return 1; },
   });
-  return { viewport, styles, document, documentListeners,
+  return { viewport, styles, classes, document, documentListeners,
     resize() { listeners.get("resize")(); const fn = nextFrame; nextFrame = null; fn(); },
     settle() { nextTimer?.(); },
   };
 }
 
-test("follows keyboard opening, emoji keyboard resizing, viewport panning, and closing", () => {
+test("follows keyboard sizing without chasing native viewport panning and releases height on blur", () => {
   const app = setup();
-  assert.equal(app.styles.get("--app-viewport-height"), "844px");
+  assert.equal(app.styles.has("--app-viewport-height"), false);
+  app.document.activeElement = { matches: () => true };
   for (const [height, offsetTop] of [[510, 0], [460, 32], [510, 0], [844, 0]]) {
     Object.assign(app.viewport, { height, offsetTop });
     app.resize();
     assert.equal(app.styles.get("--app-viewport-height"), `${height}px`);
-    assert.equal(app.styles.get("--app-viewport-top"), `${offsetTop}px`);
+    assert.equal(app.styles.has("--app-viewport-top"), false);
+    assert.equal(app.classes.has("keyboard-open"), height < 844 * 0.85);
   }
+  app.viewport.height = 510; app.resize();
+  app.document.activeElement = null; app.resize();
+  assert.equal(app.styles.has("--app-viewport-height"), false);
+  assert.equal(app.classes.has("keyboard-open"), false);
 });
 
 test("reveals social reply in its scroller without scrolling the document", () => {
@@ -69,9 +76,30 @@ test("keeps composer focus on Send but permits unrelated buttons", () => {
 
 test("does not resize the app for pinch zoom", () => {
   const app = setup();
+  app.document.activeElement = { matches: () => true }; app.resize();
   Object.assign(app.viewport, { scale: 2, height: 300 });
   app.resize();
   assert.equal(app.styles.get("--app-viewport-height"), "844px");
+});
+
+test("blocks vertical dragging on blank space and scroll boundaries, while allowing content and horizontal gestures", () => {
+  const app = setup();
+  const scroller = { overflow: "auto", scrollHeight: 1000, clientHeight: 400, scrollTop: 200, parentElement: app.document.body };
+  const target = { matches: () => false, parentElement: scroller };
+  function drag(node, dx, dy) {
+    let blocked = false;
+    app.documentListeners.get("touchstart")({ target: node, touches: [{ clientX: 0, clientY: 0 }] });
+    app.documentListeners.get("touchmove")({ touches: [{ clientX: dx, clientY: dy }], cancelable: true, preventDefault: () => { blocked = true; } });
+    return blocked;
+  }
+  assert.equal(drag(target, 0, -20), false);
+  scroller.scrollTop = 600;
+  assert.equal(drag(target, 0, -20), true);
+  scroller.scrollTop = 0;
+  assert.equal(drag(target, 0, 20), true);
+  assert.equal(drag(app.document.body, 0, -20), true);
+  assert.equal(drag(target, 20, 1), false);
+  assert.equal(drag({ matches: () => true }, 0, 20), false);
 });
 
 test("a short keyboard viewport does not trigger the portrait lock", () => {

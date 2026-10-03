@@ -5,6 +5,7 @@ import { goalsFromProfile, isNutritionGoals, isSavedPlan, type NutritionGoals } 
 import { parseNutritionProfile } from "./macro-calculator";
 import { workoutLogKey } from "./workout-log-sync";
 import { isLift } from "./lift-progression";
+import { validWorkoutExercises } from "./workout-session";
 import type { SavedMeal, SessionLog } from "@/state/app-data";
 
 export type AccountSetting = { id: string; value: number };
@@ -20,7 +21,8 @@ export function isWorkoutLog(value: unknown): value is SessionLog {
   if (!value || typeof value !== "object") return false;
   const log = value as SessionLog;
   return typeof log.id === "string" && typeof log.title === "string"
-    && typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date) && typeof log.verified === "boolean";
+    && typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date) && typeof log.verified === "boolean"
+    && (log.exercises === undefined || validWorkoutExercises(log.exercises));
 }
 export function createAccountStores(userId: string) {
   return {

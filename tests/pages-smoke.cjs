@@ -31,6 +31,14 @@ const assert = require('node:assert/strict');
     }, { user, token, exp });
     const base = `http://127.0.0.1:${server.address().port}`;
     const partnerId = '22222222-2222-4222-8222-222222222222';
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const cloud = new Map([
+      ['lifts', [{ record_id: 'smoke-lift', revision: 1, deleted: false, payload: { id: 'smoke-lift', name: 'Smoke bench', unit: 'lb', currentWeight: 135, goalWeight: 225, minReps: 6, maxReps: 10, history: [{ date: today, weight: 125, minReps: 6, maxReps: 10 }, { date: today, weight: 135, minReps: 6, maxReps: 10 }] } }]],
+      ['workout_logs', [{ record_id: 'seed-workout', revision: 1, deleted: false, payload: { id: 'seed-workout', date: today, title: 'Seed workout', verified: false, exercises: [{ id: 'bench', name: 'Bench press', sets: 3, reps: 8, weight: 135, unit: 'lb' }] } }]],
+    ]);
+    let failSave = false;
+    for (const [index, name] of ['Smoke squat', 'Smoke deadlift', 'Smoke press'].entries()) cloud.get('lifts').push({ record_id: `smoke-extra-${index}`, revision: 1, deleted: false, payload: { id: `smoke-extra-${index}`, name, unit: 'lb', currentWeight: 100, goalWeight: 200, minReps: 6, maxReps: 10, history: [] } });
     const messageRows = Array.from({ length: 25 }, (_, index) => ({ id: `message-${index}`, match_id: 'smoke-match', sender_id: partnerId, body: `Training message ${index}`, created_at: new Date(Date.now() - (25 - index) * 1000).toISOString() }));
     await context.route('**/*', async route => {
       const url = route.request().url();
@@ -45,16 +53,28 @@ const assert = require('node:assert/strict');
         }
         return route.fulfill({ json: messageRows });
       }
-      if (url.includes('/rest/v1/account_records') && new URL(url).searchParams.get('namespace') === 'eq.lifts') return route.fulfill({ json: [{
-        record_id: 'smoke-lift', revision: 1, deleted: false,
-        payload: { id: 'smoke-lift', name: 'Smoke bench', unit: 'lb', currentWeight: 135, goalWeight: 225, minReps: 6, maxReps: 10, history: [] },
-      }] });
+      if (url.includes('/rest/v1/account_records')) return route.fulfill({ json: cloud.get(new URL(url).searchParams.get('namespace')?.replace(/^eq\./, '')) ?? [] });
+      if (url.includes('/rpc/account_import_records') || url.includes('/rpc/account_save_records')) {
+        const body = route.request().postDataJSON();
+        const rows = cloud.get(body.p_namespace) ?? [];
+        if (url.includes('/rpc/account_save_records') && failSave) return route.fulfill({ status: 503, json: { code: '503', message: 'Simulated connection failure' } });
+        for (const item of body.p_records ?? body.p_changes ?? []) {
+          const previous = rows.find(row => row.record_id === item.id);
+          if (body.p_records && previous) continue;
+          if (previous) Object.assign(previous, { payload: item.payload, deleted: item.deleted ?? false, revision: previous.revision + 1 });
+          else rows.push({ record_id: item.id, payload: item.payload, deleted: item.deleted ?? false, revision: 1 });
+        }
+        cloud.set(body.p_namespace, rows);
+        return route.fulfill({ json: null });
+      }
       return route.fulfill({ json: [], headers: { 'content-range': '0-0/0' } });
     });
     await page.goto(base + '/SwoleMates/');
     await page.getByText('Home', { exact: true }).click({ timeout: 30000 });
+    await page.getByText('Weekly recap', { exact: true }).waitFor();
     const liftBar = page.getByRole('progressbar', { name: 'Smoke bench goal progress' });
     await liftBar.waitFor();
+    assert.equal(await page.getByRole('progressbar', { name: /goal progress$/ }).count(), 2, 'Home previews at most two lifts');
     assert.equal(await liftBar.getAttribute('aria-valuenow'), '60');
     // Reaching an offscreen bar should animate then settle at the saved value.
     await liftBar.scrollIntoViewIfNeeded();
@@ -88,6 +108,39 @@ const assert = require('node:assert/strict');
       return Math.abs(svg.parentElement.getBoundingClientRect().width / svg.parentElement.parentElement.getBoundingClientRect().width - 0.6) < 0.01;
     });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.getByRole('button', { name: 'Show Smoke bench details' }).click();
+    await page.getByLabel('Smoke bench: 50% checkpoint reached').waitFor();
+    await page.getByRole('button', { name: 'Hide Smoke bench details' }).click();
+    await page.getByPlaceholder('Search your lifts', { exact: true }).fill('deadlift');
+    await page.getByRole('progressbar', { name: 'Smoke deadlift goal progress' }).waitFor();
+    assert.equal(await page.getByRole('progressbar', { name: /goal progress$/ }).count(), 1);
+    await page.getByPlaceholder('Search your lifts', { exact: true }).fill('');
+    await page.getByRole('button', { name: 'View all 4 lifts' }).click();
+    await page.getByRole('button', { name: 'Close tracked lifts' }).waitFor();
+    assert.equal(await page.getByRole('progressbar', { name: /goal progress$/ }).count(), 4);
+    await page.getByPlaceholder('Search all tracked lifts', { exact: true }).fill('not a lift');
+    await page.getByText('No lifts match that search.', { exact: true }).last().waitFor();
+    await page.getByPlaceholder('Search all tracked lifts', { exact: true }).fill('');
+    await page.getByRole('button', { name: 'Close tracked lifts' }).click();
+    await page.getByText('Log Workout', { exact: true }).click();
+    await page.getByRole('button', { name: /Use last workout/ }).click();
+    await page.getByPlaceholder('Workout name, e.g. Push Day').fill('Smoke workout');
+    await page.getByLabel('Exercise 1 weight', { exact: true }).fill('145');
+    await page.getByLabel('Exercise 1 reps', { exact: true }).fill('6');
+    failSave = true;
+    await page.getByRole('button', { name: 'Save workout', exact: true }).click();
+    await page.getByText(/Save failed\. Simulated connection failure/).first().waitFor();
+    assert.equal(cloud.get('workout_logs').length, 1, 'failed save does not claim success or add a workout');
+    failSave = false;
+    await page.getByRole('button', { name: 'Try again', exact: true }).last().click();
+    await page.getByText('Workout saved to your account.', { exact: true }).waitFor();
+    await page.getByText('✓ Last change saved to your account', { exact: true }).waitFor();
+    const savedWorkout = cloud.get('workout_logs').find(row => row.payload.title === 'Smoke workout');
+    assert.equal(savedWorkout.payload.exercises[0].weight, 145); assert.equal(savedWorkout.payload.exercises[0].reps, 6);
+    await page.getByText('Log Workout', { exact: true }).click();
+    await page.getByRole('button', { name: /Use last workout/ }).click();
+    assert.equal(await page.getByLabel('Exercise 1 weight', { exact: true }).inputValue(), '145');
+    await page.getByText('Close Log', { exact: true }).click();
     for (const size of [{ width: 375, height: 812 }, { width: 390, height: 844 }, { width: 430, height: 932 }]) {
       await page.setViewportSize(size);
       await page.waitForFunction(() => Math.abs(document.getElementById('root').getBoundingClientRect().height - visualViewport.height) < 1);
@@ -141,8 +194,17 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await page.getByText('Focus survives scrolling', { exact: true }).waitFor();
     assert.equal(await composer.evaluate(node => document.activeElement === node), true);
+    await composer.evaluate(node => node.blur());
+    await page.waitForFunction(() => !document.documentElement.style.getPropertyValue('--app-viewport-height'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => Math.abs(document.getElementById('root').getBoundingClientRect().height - visualViewport.height) < 1);
     assert.deepEqual(errors, []);
-    console.log('Mobile Pages smoke passed: responsive bottom edge, animated lift progress and reduced motion, layout diagnostics, composer focus during scrolling/resizing/sending.');
+    console.log('Mobile Pages smoke passed: compact/searchable lifts, entrance animation, reduced motion, workout reuse/save failure/retry, milestones, recap, keyboard focus and resting-height recovery.');
+    if (process.env.SCREENSHOT_PATH) {
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await page.getByText('Home', { exact: true }).last().click();
+      await page.getByText('Lift progression', { exact: true }).locator('..').locator('..').screenshot({ path: process.env.SCREENSHOT_PATH });
+    }
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));
