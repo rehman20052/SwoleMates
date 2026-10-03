@@ -4,6 +4,7 @@ import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from "reac
 import { AppText, Card, PrimaryButton, ScrollBody, SectionLabel } from "@/components/ui";
 import { RepeatStepButton } from "@/components/repeat-step-button";
 import { SaveFeedback } from "@/components/save-feedback";
+import { FuelThumbnail } from "@/components/fuel-thumbnail";
 import {
   calculateMacroPlan,
   calibrationAdvice,
@@ -634,6 +635,7 @@ export function WeightTrendCard({
   const [editing, setEditing] = useState(latest == null);
   const [saving, setSaving] = useState(false);
   const advice = calibrationAdvice(profile);
+  const theme = useAppTheme();
 
   function openEditor() {
     setWeight(Math.round(latest?.weightLb ?? profile.weightLb));
@@ -641,22 +643,16 @@ export function WeightTrendCard({
   }
 
   return (
-    <Card padding={16} radius={18} gap={12}>
-      <View style={styles.sectionHeader}>
+    <Card padding={16} radius={24} gap={14}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Edit weight" disabled={disabled || saving || editing} onPress={openEditor} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, opacity: pressed ? 0.8 : 1 })}>
+        <FuelThumbnail kind="weight" size={68} />
         <View style={{ flex: 1, gap: 3 }}>
-          <SectionLabel>Current weight check in</SectionLabel>
-          <AppText size={13} muted>
-            {latest ? `Logged ${latest.weightLb} lb` : "Add your current weight to update the target."}
-          </AppText>
+          <AppText size={11} weight="bold" primary upper>Weight check-in</AppText>
+          <AppText size={27} weight="black">{latest?.weightLb ?? profile.weightLb}<AppText size={13} muted> lb</AppText></AppText>
+          <AppText size={11} muted>{latest ? `Last logged ${latest.date}` : "Log your first weigh-in"}</AppText>
         </View>
-        {latest && !editing ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Edit weight" hitSlop={8} onPress={openEditor}>
-            <AppText size={14} weight="extrabold" primary>
-              Edit
-            </AppText>
-          </Pressable>
-        ) : null}
-      </View>
+        {!editing ? <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primaryTint }}><AppText size={19} primary>+</AppText></View> : null}
+      </Pressable>
       {editing ? (
         <View style={{ gap: 10 }}>
           <Stepper label="Current weight (lb)" value={weight} min={90} max={400} onChange={setWeight} />

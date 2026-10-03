@@ -7,6 +7,7 @@ import { daysFromToday, type FoodLogEntry, type NutritionTotals, type SavedMeal,
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
 import { SaveFeedback } from "@/components/save-feedback";
 import { FoodSearch } from "@/components/food-search";
+import { FuelThumbnail } from "@/components/fuel-thumbnail";
 import type { FoodChoice } from "@/lib/food-search";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -252,22 +253,26 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
           accessibilityLabel={nutritionProfile ? "Open your macro plan" : "Build a macro plan"}
           disabled={!nutritionPlanReady || savingPlan}
           onPress={() => setShowCalculator(true)}
-          style={[styles.calculatorCallout, { backgroundColor: theme.colors.primaryTint, borderColor: theme.colors.primary }]}
+          style={({ pressed }) => ({ borderRadius: 24, borderWidth: 1, padding: 18, gap: 16, overflow: "hidden", backgroundColor: theme.colors.surface, borderColor: pressed ? theme.colors.primary : theme.colors.border, opacity: !nutritionPlanReady || savingPlan ? 0.55 : pressed ? 0.85 : 1 })}
         >
-          <View style={{ flex: 1, gap: 2 }}>
-            <SectionLabel>Daily targets</SectionLabel>
-            <AppText weight="bold">
-              {nutritionProfile ? `${currentNutrition.calorieGoal.toLocaleString()} calories a day` : "Set calories, protein, carbs, and fat"}
-            </AppText>
-            <AppText size={12} muted>
-              {nutritionProfile
-                ? `${currentNutrition.proteinGoal}g protein · ${currentNutrition.carbGoal}g carbs · ${currentNutrition.fatGoal}g fat`
-                : "Answer a few questions about your body, steps, and training."}
-            </AppText>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+            <FuelThumbnail kind="plan" size={frame.width < 360 ? 76 : 88} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <SectionLabel>Daily targets</SectionLabel>
+              <AppText size={nutritionProfile ? 30 : 22} weight="black">{nutritionProfile ? currentNutrition.calorieGoal.toLocaleString() : "Build your plan"}</AppText>
+              <AppText size={12} muted>{nutritionProfile ? "calories / day" : "Nutrition built around your training."}</AppText>
+            </View>
           </View>
-          <AppText size={18} primary>
-            ›
-          </AppText>
+          {nutritionProfile ? <View style={{ flexDirection: "row", gap: 8 }}>
+            {[{ label: "Protein", value: currentNutrition.proteinGoal, color: theme.colors.primary }, { label: "Carbs", value: currentNutrition.carbGoal, color: "#B38542" }, { label: "Fat", value: currentNutrition.fatGoal, color: "#659A99" }].map(item => <View key={item.label} style={{ flex: 1, gap: 4, padding: 10, borderRadius: 12, backgroundColor: theme.colors.surfaceRaised }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: item.color }} /><AppText size={10} muted>{item.label}</AppText></View>
+              <AppText size={16} weight="extrabold">{item.value}<AppText size={11} muted> g</AppText></AppText>
+            </View>)}
+          </View> : null}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderRadius: 12, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: theme.colors.primary }}>
+            <AppText size={13} weight="extrabold" color={theme.colors.primaryText}>{nutritionProfile ? "View & adjust plan" : "Create my macro plan"}</AppText>
+            <AppText size={18} color={theme.colors.primaryText}>↗</AppText>
+          </View>
         </Pressable>
         {nutritionProfile ? (
           <WeightTrendCard
