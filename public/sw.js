@@ -1,4 +1,4 @@
-// v8: stabilize keyboard layout and prevent scrolling the blank native region.
+// v9: restore resting layout when the keyboard closes with an input still focused.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

@@ -12,6 +12,8 @@ function setup() {
   const documentListeners = new Map();
   let nextFrame;
   let nextTimer;
+  let timerId = 0;
+  const timers = new Map();
   const viewport = { height: 844, offsetTop: 0, scale: 1, addEventListener: (name, fn) => listeners.set(name, fn) };
   const body = {};
   const document = {
@@ -23,12 +25,13 @@ function setup() {
     window: { visualViewport: viewport, addEventListener() {}, getComputedStyle: (node) => ({ overflowY: node.overflow }) },
     document,
     requestAnimationFrame: (fn) => { nextFrame = fn; return 1; },
-    clearTimeout: () => { nextTimer = null; },
-    setTimeout: (fn) => { nextTimer = fn; return 1; },
+    clearTimeout: (id) => { timers.delete(id); },
+    setTimeout: (fn) => { nextTimer = fn; timers.set(++timerId, fn); return timerId; },
   });
   return { viewport, styles, classes, document, documentListeners,
     resize() { listeners.get("resize")(); const fn = nextFrame; nextFrame = null; fn(); },
     settle() { nextTimer?.(); },
+    recover() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); if (nextFrame) { const fn = nextFrame; nextFrame = null; fn(); } },
   };
 }
 
@@ -39,7 +42,7 @@ test("follows keyboard sizing without chasing native viewport panning and releas
   for (const [height, offsetTop] of [[510, 0], [460, 32], [510, 0], [844, 0]]) {
     Object.assign(app.viewport, { height, offsetTop });
     app.resize();
-    assert.equal(app.styles.get("--app-viewport-height"), `${height}px`);
+    assert.equal(app.styles.get("--app-viewport-height"), height < 844 * 0.85 ? `${height}px` : undefined);
     assert.equal(app.styles.has("--app-viewport-top"), false);
     assert.equal(app.classes.has("keyboard-open"), height < 844 * 0.85);
   }
@@ -79,7 +82,34 @@ test("does not resize the app for pinch zoom", () => {
   app.document.activeElement = { matches: () => true }; app.resize();
   Object.assign(app.viewport, { scale: 2, height: 300 });
   app.resize();
-  assert.equal(app.styles.get("--app-viewport-height"), "844px");
+  assert.equal(app.styles.has("--app-viewport-height"), false);
+});
+
+test("dismissal restores layout even when iOS keeps the field focused and reports a stale bottom inset", () => {
+  const app = setup();
+  app.document.activeElement = { matches: () => true };
+  app.viewport.height = 460; app.resize();
+  assert.equal(app.styles.get("--app-viewport-height"), "460px");
+  app.viewport.height = 782; app.resize();
+  assert.equal(app.styles.has("--app-viewport-height"), false);
+  assert.equal(app.classes.has("keyboard-open"), false);
+});
+
+test("post-blur recovery resets only document panning and waits when another editor opens", () => {
+  const app = setup();
+  app.document.scrollingElement = { scrollTop: 62 };
+  app.document.body.scrollTop = 62;
+  app.document.activeElement = { matches: () => true };
+  app.viewport.height = 460; app.resize();
+  app.documentListeners.get("focusout")();
+  app.recover();
+  assert.equal(app.document.scrollingElement.scrollTop, 62);
+  app.document.activeElement = null;
+  app.documentListeners.get("focusout")();
+  app.recover();
+  assert.equal(app.document.scrollingElement.scrollTop, 0);
+  assert.equal(app.document.body.scrollTop, 0);
+  assert.equal(app.styles.has("--app-viewport-height"), false);
 });
 
 test("blocks vertical dragging on blank space and scroll boundaries, while allowing content and horizontal gestures", () => {

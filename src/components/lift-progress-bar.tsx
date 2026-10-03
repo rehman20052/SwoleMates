@@ -19,14 +19,43 @@ export function LiftProgressBar({ progress, name }: { progress: number; name: st
   useEffect(() => {
     if (Platform.OS === "web") {
       const element = container.current as unknown as HTMLElement | null;
-      if (!element || typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+      if (!element) return;
+      let frame = 0;
+      const measure = () => {
+        frame = 0;
+        if (document.hidden) { setVisible(false); return; }
+        const box = element.getBoundingClientRect();
+        let top = 0;
+        let bottom = window.visualViewport?.height ?? window.innerHeight;
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          if (/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowY)) {
+            const bounds = parent.getBoundingClientRect();
+            top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom);
+          }
+        }
+        const ratio = box.height > 0 ? Math.max(0, Math.min(box.bottom, bottom) - Math.max(box.top, top)) / box.height : 0;
+        setVisible(current => ratio >= (current ? 0.05 : 0.6));
+      };
+      const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+      const resume = () => { if (document.hidden) setVisible(false); else schedule(); };
       // A scroll container clips intersections too. Start only after most of
       // the bar appears; rearm after it leaves, not on tiny scroll movements.
-      const observer = new IntersectionObserver(([entry]) => {
-        setVisible(current => current ? entry.isIntersecting && entry.intersectionRatio > 0.05 : entry.isIntersecting && entry.intersectionRatio >= 0.6);
-      }, { threshold: [0, 0.05, 0.6, 1] });
-      observer.observe(element);
-      return () => observer.disconnect();
+      const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(schedule, { threshold: [0, 0.05, 0.6, 1] });
+      observer?.observe(element);
+      // Installed Safari can resume without a fresh intersection callback.
+      // Capture inner scroller events and rearm on foregrounding as well.
+      document.addEventListener("scroll", schedule, true);
+      document.addEventListener("visibilitychange", resume);
+      window.addEventListener("pageshow", schedule);
+      window.addEventListener("resize", schedule);
+      schedule();
+      return () => {
+        observer?.disconnect(); cancelAnimationFrame(frame);
+        document.removeEventListener("scroll", schedule, true);
+        document.removeEventListener("visibilitychange", resume);
+        window.removeEventListener("pageshow", schedule);
+        window.removeEventListener("resize", schedule);
+      };
     }
     let active = true;
     const measure = () => container.current?.measureInWindow((_x, y, _width, height) => {
