@@ -400,7 +400,9 @@ export function MatchChat({ userId }: { userId: string }) {
           nativeID="thread-scroll"
           style={{ flex: 1 }}
           contentContainerStyle={styles.messages}
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          // RN Web dismisses on every scroll event, including scrollToEnd and
+          // keyboard-driven layout changes. That blurs the composer on focus.
+          keyboardDismissMode={Platform.OS === "web" ? "none" : Platform.OS === "ios" ? "interactive" : "on-drag"}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: Platform.OS !== "web" })}
@@ -910,7 +912,7 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 22,
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     height: 44,
     paddingHorizontal: 16,
   },

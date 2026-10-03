@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, ScrollBody, SecondaryButton, SectionLabel, SelectField } from "@/components/ui";
+import { AppText, Card, Field, Input, PrimaryButton, ScrollBody, SecondaryButton, SectionLabel, SelectField } from "@/components/ui";
+import { LiftProgressBar } from "./lift-progress-bar";
 import { exerciseOptions, loadExerciseCatalog } from "@/lib/exercise-catalog";
 import { liftProgress, validLiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { daysFromToday, formatShortDate, useAppData } from "@/state/app-data";
@@ -94,9 +95,7 @@ export function LiftProgression() {
             <AppText size={19} weight="black">{lift.currentWeight} {lift.unit}</AppText>
             <AppText size={12} muted>Goal: {lift.goalWeight} {lift.unit}</AppText>
           </View>
-          <View accessibilityRole="progressbar" accessibilityLabel={`${lift.name} goal progress`} accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
-            <ProgressBar progress={progress} />
-          </View>
+          <LiftProgressBar progress={progress} name={lift.name} />
           <AppText size={12} primary weight="bold">{progress >= 1 ? "Goal reached!" : `${Math.round(progress * 100)}% of goal · ${Math.round((lift.goalWeight - lift.currentWeight) * 100) / 100} ${lift.unit} to go`}</AppText>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: showHistory }} onPress={() => setHistoryOpen((current) => {
