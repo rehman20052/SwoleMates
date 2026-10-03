@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from "reac
 
 import { AppText, Card, PrimaryButton, ScrollBody, SectionLabel } from "@/components/ui";
 import { RepeatStepButton } from "@/components/repeat-step-button";
+import { SaveFeedback } from "@/components/save-feedback";
 import {
   calculateMacroPlan,
   calibrationAdvice,
@@ -421,6 +422,7 @@ export function MacroCalculator({
         ) : null}
       </ScrollBody>
       {error ? <AppText size={13}>{error}</AppText> : null}
+      <SaveFeedback area="plan" onRetried={onClose} />
       <View style={styles.footer}>
         {page === "results" && profile ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Edit questionnaire" onPress={() => setStep(0)} style={styles.back}>

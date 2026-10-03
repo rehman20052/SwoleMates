@@ -583,7 +583,7 @@ export default function App() {
     {/* The tab bar carries the home-indicator space itself, so this view stops at the
         screen edge instead of leaving a band of background under the tabs. */}
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.mainAppContainer, hideTabBar && { paddingBottom: insets.bottom }]}>
+      <View nativeID="app-bottom-safe-area" style={[styles.mainAppContainer, hideTabBar && { paddingBottom: insets.bottom }]}>
         <View style={styles.tabStage}>
           {activeTab === 'Social' ? (
             <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />
@@ -599,6 +599,7 @@ export default function App() {
 
         {!hideTabBar && (
         <View
+          nativeID="app-bottom-navigation"
           style={[
             styles.bottomNav,
             {

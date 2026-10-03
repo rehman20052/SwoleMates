@@ -3,10 +3,11 @@ import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText, Card, Field, Input, PrimaryButton, ScrollBody, SecondaryButton, SectionLabel, SelectField } from "@/components/ui";
-import { LiftProgressBar } from "./lift-progress-bar";
+import { LiftProgressRow } from "./lift-progress-row";
+import { SaveFeedback } from "./save-feedback";
 import { exerciseOptions, loadExerciseCatalog } from "@/lib/exercise-catalog";
-import { liftProgress, validLiftDetails, type TrackedLift } from "@/lib/lift-progression";
-import { daysFromToday, formatShortDate, useAppData } from "@/state/app-data";
+import { validLiftDetails, type TrackedLift } from "@/lib/lift-progression";
+import { useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
 export function LiftProgression() {
@@ -29,7 +30,8 @@ export function LiftProgression() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<TrackedLift | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(new Set<string>());
+  const [liftQuery, setLiftQuery] = useState("");
+  const [directory, setDirectory] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +44,7 @@ export function LiftProgression() {
     return () => { active = false; };
   }, [open]);
   function openEditor(lift?: TrackedLift) {
+    setDirectory(false);
     setEditingId(lift?.id ?? null);
     setExercise(lift?.name ?? ""); setCustomName(""); setSearch("");
     setPicking(!lift); setWeight(lift ? `${lift.currentWeight}` : "");
@@ -70,6 +73,8 @@ export function LiftProgression() {
     setSaving(false); if (saved) setOpen(false);
   }
   const options = exerciseOptions(names, search);
+  const filteredLifts = trackedLifts.filter(lift => lift.name.toLocaleLowerCase().includes(liftQuery.trim().toLocaleLowerCase()));
+  const renderLift = (lift: TrackedLift) => <LiftProgressRow key={lift.id} lift={lift} onUpdate={() => openEditor(lift)} onRemove={() => { setDirectory(false); setConfirmDelete(lift); }} />;
   return <>
     <Card padding={16} radius={20} gap={14}>
       <View style={styles.header}>
@@ -78,39 +83,17 @@ export function LiftProgression() {
       </View>
       {!foodJournalReady ? <AppText muted>Loading your saved lifts…</AppText> : !trackedLifts.length ?
         <AppText muted>Track a lift, your usual reps, and the weight you want to reach.</AppText> : null}
-      {trackedLifts.map((lift) => {
-        const progress = liftProgress(lift);
-        const showHistory = historyOpen.has(lift.id);
-        return <View key={lift.id} style={[styles.lift, { backgroundColor: theme.colors.surfaceRaised }]}>
-          <View style={styles.header}>
-            <View style={{ flex: 1, gap: 3 }}>
-              <AppText weight="extrabold">{lift.name}</AppText>
-              <AppText size={12} muted>Typical reps: {lift.minReps === lift.maxReps ? lift.minReps : `${lift.minReps}–${lift.maxReps}`}</AppText>
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Update ${lift.name}`} hitSlop={8} onPress={() => openEditor(lift)}>
-              <AppText size={13} weight="bold" primary>Update</AppText>
-            </Pressable>
-          </View>
-          <View style={styles.header}>
-            <AppText size={19} weight="black">{lift.currentWeight} {lift.unit}</AppText>
-            <AppText size={12} muted>Goal: {lift.goalWeight} {lift.unit}</AppText>
-          </View>
-          <LiftProgressBar progress={progress} name={lift.name} />
-          <AppText size={12} primary weight="bold">{progress >= 1 ? "Goal reached!" : `${Math.round(progress * 100)}% of goal · ${Math.round((lift.goalWeight - lift.currentWeight) * 100) / 100} ${lift.unit} to go`}</AppText>
-          <View style={styles.header}>
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded: showHistory }} onPress={() => setHistoryOpen((current) => {
-              const next = new Set(current); if (next.has(lift.id)) next.delete(lift.id); else next.add(lift.id); return next;
-            })}><AppText size={12} muted>{showHistory ? "Hide history" : `History (${lift.history.length})`}</AppText></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${lift.name}`} onPress={() => setConfirmDelete(lift)}><AppText size={12} muted>Remove</AppText></Pressable>
-          </View>
-          {showHistory ? [...lift.history].reverse().map((entry, index) => <View key={`${entry.date}-${index}`} style={styles.header}>
-            <AppText size={12} muted>{entry.date === daysFromToday(0) ? "Today" : formatShortDate(entry.date)}</AppText>
-            <AppText size={12}>{entry.weight} {lift.unit} · {entry.minReps}–{entry.maxReps} reps</AppText>
-          </View>) : null}
-        </View>;
-      })}
+      {trackedLifts.length ? <Input bordered placeholder="Search your lifts" accessibilityLabel="Search your lifts" value={liftQuery} onChangeText={setLiftQuery} /> : null}
+      {trackedLifts.length ? <AppText size={11} muted>{liftQuery.trim() ? `${filteredLifts.length} matching lifts` : `Showing ${Math.min(2, trackedLifts.length)} of ${trackedLifts.length} tracked lifts`}</AppText> : null}
+      {!directory ? filteredLifts.slice(0, 2).map(renderLift) : null}
+      {trackedLifts.length > 0 && !filteredLifts.length ? <AppText muted>No lifts match that search.</AppText> : null}
+      {filteredLifts.length > 2 ? <SecondaryButton height={38} fontSize={12} onPress={() => setDirectory(true)}>{liftQuery.trim() ? `View all ${filteredLifts.length} matches` : `View all ${trackedLifts.length} lifts`}</SecondaryButton> : null}
+      <SaveFeedback area="lifts" />
       {liftStorageError ? <AppText color={theme.colors.danger}>{liftStorageError}</AppText> : null}
-      {confirmDelete ? <View style={{ gap: 10 }}>
+    </Card>
+    <Modal transparent animationType="fade" visible={!!confirmDelete} onRequestClose={() => { if (!saving) setConfirmDelete(null); }}>
+      <View style={[styles.overlay, { justifyContent: "center", padding: 20 }]}>
+      {confirmDelete ? <View style={{ gap: 14, borderRadius: 20, padding: 20, backgroundColor: theme.colors.surface }}>
         <AppText>Remove {confirmDelete.name} and its progression history from your account?</AppText>
         <View style={styles.header}>
           <SecondaryButton disabled={saving} onPress={() => setConfirmDelete(null)}>Cancel</SecondaryButton>
@@ -120,8 +103,25 @@ export function LiftProgression() {
             setSaving(false); if (removed) setConfirmDelete(null);
           }}>{saving ? "Removing…" : "Remove lift"}</PrimaryButton>
         </View>
+        <SaveFeedback area="lifts" onRetried={() => setConfirmDelete(null)} />
       </View> : null}
-    </Card>
+      </View>
+    </Modal>
+    <Modal transparent animationType="slide" visible={directory} onRequestClose={() => setDirectory(false)}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={styles.overlay}>
+          <View style={[styles.sheet, { height: "88%", backgroundColor: theme.colors.background, borderColor: theme.colors.border, paddingBottom: Math.max(18, insets.bottom) }]}>
+            <View style={[styles.header, { marginBottom: 12 }]}><AppText size={23} weight="black">Tracked lifts</AppText><Pressable accessibilityRole="button" accessibilityLabel="Close tracked lifts" hitSlop={10} onPress={() => setDirectory(false)}><AppText size={24} muted>×</AppText></Pressable></View>
+            <Input bordered placeholder="Search all tracked lifts" accessibilityLabel="Search all tracked lifts" value={liftQuery} onChangeText={setLiftQuery} />
+            <ScrollBody contentContainerStyle={{ gap: 10, paddingTop: 12, paddingBottom: 16 }}>
+              <AppText size={12} muted>{filteredLifts.length} {filteredLifts.length === 1 ? "lift" : "lifts"}</AppText>
+              {filteredLifts.map(renderLift)}
+              {!filteredLifts.length ? <AppText muted>No lifts match that search.</AppText> : null}
+            </ScrollBody>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
     <Modal transparent animationType="slide" visible={open} onRequestClose={() => { if (!saving) setOpen(false); }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={styles.overlay} onPress={() => { if (!saving) setOpen(false); }}>
@@ -158,6 +158,7 @@ export function LiftProgression() {
               </View>
               <AppText size={12} muted>Updating weight or reps adds a dated history entry. Your lift and goal sync to your account.</AppText>
               {error || liftStorageError ? <AppText color={theme.colors.danger}>{error ?? liftStorageError}</AppText> : null}
+              <SaveFeedback area="lifts" onRetried={() => setOpen(false)} />
               <PrimaryButton disabled={saving || !foodJournalReady} onPress={save}>{saving ? "Saving…" : "Save lift"}</PrimaryButton>
             </ScrollBody>
           </Pressable>

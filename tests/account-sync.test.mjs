@@ -41,6 +41,18 @@ function backend() {
   return { state, remote };
 }
 const valid = (item) => item && typeof item.id === 'string';
+test('structured workout sets, reps and weights reopen on a second device and keep later edits', async () => {
+  const server = backend();
+  const phone = device(server, 'alice', 'workout_logs'); await phone.store.load([]);
+  const log = { id: 'log-sets', date: '2026-10-03', title: 'Push day', verified: false,
+    exercises: [{ id: 'bench', name: 'Bench press', sets: 3, reps: 8, weight: 135, unit: 'lb' }] };
+  await phone.store.change(rows => [...rows, log]);
+  const tablet = device(server, 'alice', 'workout_logs');
+  assert.equal((await tablet.store.load([]))[0].exercises[0].weight, 135);
+  await tablet.store.change(rows => rows.map(row => ({ ...row, exercises: row.exercises.map(exercise => ({ ...exercise, weight: 145, reps: 6 })) })));
+  const reopened = await device(server, 'alice', 'workout_logs').store.load([]);
+  assert.equal(reopened[0].exercises[0].weight, 145); assert.equal(reopened[0].exercises[0].reps, 6);
+});
 function device(server, userId = 'alice', namespace = 'recipes', local = storage()) {
   return { local, store: createAccountList({ userId, namespace, local, remote: server.remote(userId), identify: (item) => item.id, validate: valid }) };
 }

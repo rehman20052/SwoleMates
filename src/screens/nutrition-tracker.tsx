@@ -5,6 +5,7 @@ import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, Scroll
 import { sumFoodEntries } from "@/lib/food-journal";
 import { daysFromToday, type FoodLogEntry, type NutritionTotals, type SavedMeal, useAppData } from "@/state/app-data";
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
+import { SaveFeedback } from "@/components/save-feedback";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -235,6 +236,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             <AppText size={13} muted>Your daily targets and weight progress.</AppText>
           </View>
         </View>
+        <SaveFeedback area="plan" />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={nutritionProfile ? "Open your macro plan" : "Build a macro plan"}
@@ -438,8 +440,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
                 </View>
                 {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
-                {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
+        <SaveFeedback area="food" />
+        {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
                 {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
+                <SaveFeedback area={savingNewRecipe ? "recipes" : "food"} onRetried={() => { setShowAddFood(false); resetForm(); }} />
                 <PrimaryButton disabled={savingRecipe || (savingNewRecipe ? !recipesReady : !foodJournalReady)} onPress={() => void saveFood(savingNewRecipe)}>{savingRecipe ? "Saving..." : savingNewRecipe ? "Save recipe" : editingFood ? "Save changes" : isToday ? "Add to today" : "Add to this day"}</PrimaryButton>
               </ScrollBody>
             </Pressable>
@@ -471,7 +475,9 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
                   <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
                 </View>
-                {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
+        <SaveFeedback area="recipes" />
+        {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
+                <SaveFeedback area="recipes" onRetried={closeRecipeEditor} />
                 <PrimaryButton disabled={savingRecipe || !recipesReady} onPress={() => void saveRecipeEdits()}>{savingRecipe ? "Saving..." : "Save changes"}</PrimaryButton>
                 <SecondaryButton
                   textColor={theme.colors.danger}
@@ -502,6 +508,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                 <View style={styles.goalGrid}>{(["protein", "carbs", "fats"] as Macro[]).map((macro) => <Field key={macro} label={`${macroLabel(macro)} (g)`} style={styles.goalHalf}><Input value={goalValues[macro]} onChangeText={(value) => setGoalValues((current) => ({ ...current, [macro]: value }))} keyboardType="number-pad" bordered /></Field>)}</View>
                 {goalError || nutritionPlanError ? <AppText>{goalError ?? nutritionPlanError}</AppText> : null}
                 <AppText size={12} muted>These daily targets carry forward until you change them.</AppText>
+                <SaveFeedback area="plan" onRetried={() => setShowGoals(false)} />
                 <PrimaryButton disabled={!nutritionPlanReady || savingPlan} onPress={saveGoals}>{savingPlan ? "Saving…" : "Save goals"}</PrimaryButton>
               </ScrollBody>
             </Pressable>

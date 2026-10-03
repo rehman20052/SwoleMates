@@ -15,6 +15,10 @@ import {
   TitleBar,
 } from "@/components/ui";
 import { LiftProgression } from "@/components/lift-progression";
+import { QuickWorkoutLog } from "@/components/quick-workout-log";
+import { WeeklyRecap } from "@/components/weekly-recap";
+import { SaveFeedback } from "@/components/save-feedback";
+import { exerciseSummary } from "@/lib/workout-session";
 import { type UserProfile } from "@/lib/profile";
 import {
   completeWorkout as checkInWorkout,
@@ -181,13 +185,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
-  const [logTitle, setLogTitle] = useState("");
-  const [logNotes, setLogNotes] = useState("");
-  const [editTitle, setEditTitle] = useState("");
-  const [editNotes, setEditNotes] = useState("");
   const [calendarLogOpen, setCalendarLogOpen] = useState(false);
-  const [calendarLogTitle, setCalendarLogTitle] = useState("");
-  const [calendarLogNotes, setCalendarLogNotes] = useState("");
   const [deletingCalendarLogId, setDeletingCalendarLogId] = useState<string | null>(null);
   const [goalDraft, setGoalDraft] = useState(3);
   const {
@@ -198,11 +196,9 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     workoutStorageError,
     accountSyncError,
     retryAccountSync,
-    logWorkout,
     logs,
     syncVerifiedWorkoutLogs,
     updateWeeklyWorkoutGoal,
-    updateWorkoutLog,
     weeklyWorkoutGoal,
   } = useAppData();
 
@@ -265,48 +261,14 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setTimeout(() => setNotice(null), 2400);
   }
 
-  async function handleSaveLog() {
-    const title = logTitle.trim();
-    const notes = logNotes.trim();
-    if (!title) {
-      showNotice("Add a workout name first.");
-      return;
-    }
-
-    if (!await logWorkout(title, notes || undefined)) return;
-    setLogTitle("");
-    setLogNotes("");
-    setShowLogForm(false);
-    showNotice("Workout logged. Weekly goal updated.");
-  }
-
   function beginEditLog(log: SessionLog) {
     setEditingLogId(log.id);
-    setEditTitle(log.title);
-    setEditNotes(log.notes ?? "");
-  }
-
-  async function handleSaveEditedLog() {
-    if (!editingLogId) return;
-    const title = editTitle.trim();
-    if (!title) {
-      showNotice("Workout name cannot be empty.");
-      return;
-    }
-
-    if (!await updateWorkoutLog(editingLogId, { title, notes: editNotes.trim() || undefined })) return;
-    setEditingLogId(null);
-    setEditTitle("");
-    setEditNotes("");
-    showNotice("Activity updated.");
   }
 
   async function handleDeleteEditedLog() {
     if (!editingLogId) return;
     if (!await deleteWorkoutLog(editingLogId)) return;
     setEditingLogId(null);
-    setEditTitle("");
-    setEditNotes("");
     showNotice("Activity deleted. Weekly goal updated.");
   }
 
@@ -332,19 +294,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     setDeletingCalendarLogId(null);
     setCalendarLogOpen(false);
     setShowCalendar(false);
-  }
-
-  async function saveCalendarWorkout() {
-    const title = calendarLogTitle.trim();
-    if (!title) {
-      showNotice("Add a workout name first.");
-      return;
-    }
-    if (!await logWorkout(title, calendarLogNotes.trim() || undefined, selectedCalendarDate)) return;
-    setCalendarLogTitle("");
-    setCalendarLogNotes("");
-    setCalendarLogOpen(false);
-    showNotice("Workout logged. Weekly goal updated.");
   }
 
   async function deleteCalendarWorkout(log: SessionLog) {
@@ -440,6 +389,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         </View>
 
         <CheckInPanel />
+        <SaveFeedback area="workouts" />
 
         {notice ? (
           <View style={[styles.notice, { backgroundColor: theme.colors.primaryTint, borderColor: theme.colors.primary }]}>
@@ -523,6 +473,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           </View>
         </Card>
 
+        <WeeklyRecap />
+
         <View style={styles.quickActions}>
           <SecondaryButton height={46} fontSize={13} style={styles.quickButton} onPress={() => nav.setTab("Discover")}>
             Find Partner
@@ -533,20 +485,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         </View>
 
         {showLogForm ? (
-          <Card padding={16} radius={20} gap={12}>
-            <SectionLabel>Quick Workout Log</SectionLabel>
-            <Input bordered placeholder="Workout name, e.g. Push Day" value={logTitle} onChangeText={setLogTitle} />
-            <Input
-              bordered
-              multiline
-              placeholder="Exercises, sets, notes… e.g. Bench 3x8, incline DB press, triceps"
-              value={logNotes}
-              onChangeText={setLogNotes}
-            />
-            <PrimaryButton height={46} onPress={handleSaveLog}>
-              Save Workout
-            </PrimaryButton>
-          </Card>
+          <QuickWorkoutLog onSaved={() => { setShowLogForm(false); showNotice("Workout saved to your account."); }} />
         ) : null}
 
         <LiftProgression />
@@ -571,8 +510,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
               <AppText size={12} weight="bold" muted upper>
                 Edit Activity
               </AppText>
-              <Input bordered value={editTitle} onChangeText={setEditTitle} placeholder="Workout name" />
-              <Input bordered multiline value={editNotes} onChangeText={setEditNotes} placeholder="Exercises and notes" />
+              <QuickWorkoutLog key={editingLogId} existing={logs.find(log => log.id === editingLogId)} onSaved={() => { setEditingLogId(null); showNotice("Workout updated."); }} />
               <View style={styles.quickActions}>
                 <SecondaryButton
                   height={42}
@@ -586,9 +524,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                 <SecondaryButton height={42} fontSize={13} style={styles.quickButton} onPress={() => setEditingLogId(null)}>
                   Cancel
                 </SecondaryButton>
-                <PrimaryButton height={42} fontSize={13} style={styles.quickButton} onPress={handleSaveEditedLog}>
-                  Save
-                </PrimaryButton>
               </View>
             </Card>
           ) : null}
@@ -607,7 +542,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                       {log.title}
                     </AppText>
                     <AppText size={12} muted numberOfLines={log.notes ? 2 : 1}>
-                      {log.notes || (log.verified ? "Verified partner session" : "Self-logged workout")}
+                      {log.exercises?.length ? exerciseSummary(log.exercises) : log.notes || (log.verified ? "Verified partner session" : "Self-logged workout")}
                     </AppText>
                   </View>
                   <SecondaryButton
@@ -776,7 +711,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                                 </AppText>
                               ) : null}
                               <AppText size={12} muted numberOfLines={2}>
-                                {log.notes || (log.checkedIn ? "Checked in for this workout" : log.verified ? "Verified partner attendance" : "Self-logged workout")}
+                                {log.exercises?.length ? exerciseSummary(log.exercises) : log.notes || (log.checkedIn ? "Checked in for this workout" : log.verified ? "Verified partner attendance" : "Self-logged workout")}
                               </AppText>
                             </View>
                             <Pressable
@@ -860,19 +795,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                 {selectedCalendarDate <= todayIso ? (
                   calendarLogOpen ? (
                     <View style={{ gap: 10 }}>
-                      <Input
-                        bordered
-                        placeholder="Workout name, e.g. Pull Day"
-                        value={calendarLogTitle}
-                        onChangeText={setCalendarLogTitle}
-                      />
-                      <Input
-                        bordered
-                        multiline
-                        placeholder="Exercises, sets, or notes"
-                        value={calendarLogNotes}
-                        onChangeText={setCalendarLogNotes}
-                      />
+                      <QuickWorkoutLog key={selectedCalendarDate} date={selectedCalendarDate} onSaved={() => { setCalendarLogOpen(false); showNotice("Workout saved to this day."); }} />
                       <View style={styles.quickActions}>
                         <SecondaryButton
                           height={42}
@@ -882,9 +805,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                         >
                           Cancel
                         </SecondaryButton>
-                        <PrimaryButton height={42} fontSize={13} style={styles.quickButton} onPress={saveCalendarWorkout}>
-                          Save workout
-                        </PrimaryButton>
                       </View>
                     </View>
                   ) : (

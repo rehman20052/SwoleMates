@@ -21,6 +21,7 @@ import { goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "
 import { createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
+import { type WorkoutExercise } from "@/lib/workout-session";
 
 export type { NutritionProfile };
 
@@ -74,11 +75,13 @@ export type SessionLog = {
   plannedWorkoutId?: string;
   partnerName?: string;
   partnerPhoto?: string | null;
+  exercises?: WorkoutExercise[];
+  loggedAt?: string;
 };
 
 export type WorkoutLogDetails = Pick<
   SessionLog,
-  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto"
+  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto" | "exercises"
 >;
 
 export type NutritionTotals = {
@@ -129,6 +132,8 @@ type AppData = {
 };
 
 type AppDataContextValue = AppData & {
+  saveFeedback: Partial<Record<SaveArea, SaveFeedback>>;
+  retrySave: (area: SaveArea) => Promise<boolean>;
   review: (partnerId: string, interested: boolean) => void;
   clearReview: (partnerId: string) => void;
   respondToInvite: (partnerId: string, accept: boolean) => void;
@@ -162,15 +167,17 @@ type AppDataContextValue = AppData & {
   accountSyncError: string | null;
   retryAccountSync: () => void;
   updateWeeklyWorkoutGoal: (goal: number) => Promise<boolean>;
-  logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>) => Promise<boolean>;
+  logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>, recordId?: string) => Promise<boolean>;
   syncVerifiedWorkoutLogs: (logs: SessionLog[]) => void;
-  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes">>) => Promise<boolean>;
+  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes" | "exercises">>) => Promise<boolean>;
   deleteWorkoutLog: (logId: string) => Promise<boolean>;
   workoutStorageError: string | null;
   resetDeck: () => void;
 };
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
+export type SaveArea = "food" | "recipes" | "plan" | "lifts" | "workouts";
+export type SaveFeedback = { phase: "saving" | "saved" | "error"; message?: string };
 const weeklyWorkoutGoalKey = "swolemates.weekly-workout-goal";
 const dashboardStateKey = "swolemates.dashboard-state";
 
@@ -334,6 +341,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   const [nutritionPlanError, setNutritionPlanError] = useState<string | null>(null);
   const [workoutStorageError, setWorkoutStorageError] = useState<string | null>(null);
   const [foodJournalError, setFoodJournalError] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<Partial<Record<SaveArea, SaveFeedback>>>({});
+  const saveRetries = useRef<Partial<Record<SaveArea, () => Promise<boolean>>>>({});
   const [today, setToday] = useState(() => daysFromToday(0));
   useEffect(() => {
     const refreshDate = () => setToday(daysFromToday(0));
@@ -374,6 +383,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         setDashboardHydrated(false); setData(seedData());
         setRecipeStorageError(null); setFoodJournalError(null); setWorkoutStorageError(null);
         setNutritionPlanError(null); setLiftStorageError(null); setSyncError(null);
+        setSaveFeedback({}); saveRetries.current = {};
       }
       const stores = accountStores.current;
       if (!owner || !stores) return;
@@ -483,6 +493,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   const value = useMemo<AppDataContextValue>(() => {
     const update = (fn: (current: AppData) => AppData) => setData(fn);
     const persistAccount = (operation: (stores: ReturnType<typeof createAccountStores>) => Promise<Partial<AppData>>, setError: (error: string | null) => void) => {
+      const area: SaveArea = setError === setRecipeStorageError ? "recipes" : setError === setFoodJournalError ? "food" : setError === setNutritionPlanError ? "plan" : setError === setLiftStorageError ? "lifts" : "workouts";
+      const feedback = (value: SaveFeedback) => setSaveFeedback(current => ({ ...current, [area]: value }));
       const stores = accountStores.current;
       const generation = accountGeneration.current;
       if (!dashboardHydrated || !stores) {
@@ -491,12 +503,18 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       }
       const save = accountQueue.current.then(async () => {
         if (generation !== accountGeneration.current || accountStores.current !== stores) return false;
+        feedback({ phase: "saving" });
         try {
           const changes = await operation(stores);
           if (generation !== accountGeneration.current || accountStores.current !== stores) return false;
-          update((current) => ({ ...current, ...changes })); setError(null); setSyncError(null); return true;
+          update((current) => ({ ...current, ...changes })); setError(null); setSyncError(null);
+          feedback({ phase: "saved" }); delete saveRetries.current[area]; return true;
         } catch (error) {
-          if (generation === accountGeneration.current) setError(accountSyncError(error));
+          if (generation === accountGeneration.current) {
+            const message = accountSyncError(error); setError(message);
+            feedback({ phase: "error", message });
+            saveRetries.current[area] = () => generation === accountGeneration.current ? persistAccount(operation, setError) : Promise.resolve(false);
+          }
           return false;
         }
       });
@@ -517,6 +535,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
 
     return {
       ...data,
+      saveFeedback,
+      retrySave: (area) => saveRetries.current[area]?.() ?? Promise.resolve(false),
       liftStorageError,
       accountSyncError: syncError,
       retryAccountSync: () => setRetrySync((current) => current + 1),
@@ -728,9 +748,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           return { weeklyWorkoutGoal: settings[0].value };
         }, setWorkoutStorageError);
       },
-      logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}) {
-        const log: SessionLog = { id: "log-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), date, title, notes, verified: details.verified ?? false, ...details };
-        return persistLogs((current) => current.some((saved) => details.plannedWorkoutId && saved.plannedWorkoutId === details.plannedWorkoutId && saved.date === date) ? current : [log, ...current]);
+      logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}, recordId) {
+        const log: SessionLog = { id: recordId ?? "log-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), date, title, notes, loggedAt: new Date().toISOString(), verified: details.verified ?? false, ...details };
+        return persistLogs((current) => current.some((saved) => saved.id === log.id || (details.plannedWorkoutId && saved.plannedWorkoutId === details.plannedWorkoutId && saved.date === date)) ? current : [log, ...current]);
       },
       syncVerifiedWorkoutLogs(logs) {
         if (!dashboardHydrated) return;
@@ -761,7 +781,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         update((current) => ({ ...current, reviewed: [] }));
       },
     };
-  }, [data, discoverPrefsLoaded, dashboardHydrated, recipeStorageError, foodJournalError, workoutStorageError, nutritionPlanError, liftStorageError, syncError, today]);
+  }, [data, discoverPrefsLoaded, dashboardHydrated, recipeStorageError, foodJournalError, workoutStorageError, nutritionPlanError, liftStorageError, syncError, today, saveFeedback]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
