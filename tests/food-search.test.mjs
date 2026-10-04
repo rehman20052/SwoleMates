@@ -7,6 +7,10 @@ const exports = {};
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/food-search.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports });
 const { foodChoices } = exports;
 const food = { meal: 'Breakfast', name: 'Greek yogurt', calories: 100, protein: 15, carbs: 5, fats: 0 };
+test('recent reuse prefers the newest same-day image choice', () => {
+  const entries = [{ ...food, id: 'new', date: '2026-10-04', artwork: { kind: 'preset', key: 'oats' } }, { ...food, id: 'old', date: '2026-10-04', artwork: { kind: 'preset', key: 'yogurt' } }];
+  assert.equal(foodChoices(entries, [], '')[0].food.artwork.key, 'oats');
+});
 test('recent foods deduplicate repeat logs, keep portion variants, and search recipes together', () => {
   const entries = [
     { ...food, id: 'old', date: '2026-10-01' },

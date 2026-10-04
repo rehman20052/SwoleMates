@@ -1,6 +1,12 @@
 // Static assets exported from the SwoleMates Figma file.
 
 export const icons = {
+  chef: require("../assets/figma/icons/chef.svg"),
+  training: require("../assets/figma/icons/training.svg"),
+  fuel: require("../assets/figma/icons/fuel.svg"),
+  progress: require("../assets/figma/icons/progress.svg"),
+  bars: require("../assets/figma/icons/bars.svg"),
+  partners: require("../assets/figma/icons/partners.svg"),
   arrowLeft: require("../assets/figma/icons/arrow-left.svg"),
   arrowUp: require("../assets/figma/icons/arrow-up.svg"),
   award: require("../assets/figma/icons/award.svg"),

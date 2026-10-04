@@ -45,7 +45,7 @@ const assert = require('node:assert/strict');
       assert.equal(geometry.nav, 'none', 'bottom tabs stay hidden while typing');
     }
     page.on('pageerror', error => errors.push(error.message));
-    const user = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'smoke@example.test', user_metadata: { profile: { fullName: 'Smoke Tester', birthDate: '1998-01-01' } } };
+    const user = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'smoke@example.test', user_metadata: { profile: { fullName: 'Smoke Tester', birthDate: '1998-01-01', displayLifts: [], photos: ['11111111-1111-4111-8111-111111111111/one.png', '11111111-1111-4111-8111-111111111111/two.png'], photoCaptions: ['First', 'Second'] } } };
     const exp = Math.floor(Date.now() / 1000) + 3600;
     const token = ['eyJhbGciOiJIUzI1NiJ9', Buffer.from(JSON.stringify({ sub: user.id, exp, aud: 'authenticated' })).toString('base64url'), 'test'].join('.');
     await context.addInitScript(({ user, token, exp }) => {
@@ -75,8 +75,15 @@ const assert = require('node:assert/strict');
     await context.route('**/*', async route => {
       const url = route.request().url();
       if (url.startsWith(base)) return route.continue();
+      if (url.includes('/storage/v1/object/public/profile-photos/')) return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=', 'base64') });
+      if (url.startsWith('https://wger.de/api/v2/exerciseinfo/')) return route.fulfill({ json: { results: [{ translations: [{ language: 2, name: 'Catalog cable press' }] }], next: null } });
       // All external traffic is mocked: this check cannot write to a real account.
-      if (url.includes('/auth/v1/user')) return route.fulfill({ json: user });
+      if (url.includes('/auth/v1/user')) {
+        if (route.request().method() === 'PUT') {
+          Object.assign(user.user_metadata, route.request().postDataJSON()?.data ?? {});
+        }
+        return route.fulfill({ json: user });
+      }
       if (url.includes('/rpc/my_connections')) return route.fulfill({ json: [{ id: 'smoke-match', other_user_id: partnerId, direction: 'incoming', status: 'accepted', profile: { fullName: 'Smoke Partner' }, last_message: 'Training message 24', created_at: new Date().toISOString() }] });
       if (url.includes('/rest/v1/match_messages')) {
         if (route.request().method() === 'POST') {
@@ -130,6 +137,7 @@ const assert = require('node:assert/strict');
     await liftBar.scrollIntoViewIfNeeded();
     await page.waitForTimeout(350);
     assert.equal(await liftBar.evaluate(node => node.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length), 0, 'scrolling back to a lift does not replay it');
+    await page.getByRole('button', { name: 'Show Smoke bench details' }).click();
     await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).click();
     await page.waitForFunction(() => {
       const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
@@ -145,7 +153,6 @@ const assert = require('node:assert/strict');
       return Math.abs(svg.parentElement.getBoundingClientRect().width / svg.parentElement.parentElement.getBoundingClientRect().width - 0.6) < 0.01;
     });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.getByRole('button', { name: 'Show Smoke bench details' }).click();
     await page.getByLabel('Smoke bench: 50% checkpoint reached').waitFor();
     await page.getByRole('button', { name: 'Hide Smoke bench details' }).click();
     await page.getByPlaceholder('Search your lifts', { exact: true }).fill('deadlift');
@@ -162,25 +169,61 @@ const assert = require('node:assert/strict');
     await page.getByText('No lifts match that search.', { exact: true }).last().waitFor();
     await page.getByPlaceholder('Search all tracked lifts', { exact: true }).fill('');
     await page.getByRole('button', { name: 'Close tracked lifts' }).click();
+    await page.getByRole('button', { name: 'Close tracked lifts' }).waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'Update Smoke bench', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Change lift image', exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Save lift', exact: true }).click();
+    await page.getByRole('button', { name: 'Close lift editor', exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(cloud.get('lifts').find(row => row.record_id === 'smoke-lift').payload.history.length, 2, 'image edits do not create fake progression entries');
     await page.getByText('Log Workout', { exact: true }).click();
-    await page.getByRole('button', { name: /Use last workout/ }).click();
+    assert.equal(await page.getByRole('button', { name: /Use last workout/ }).count(), 0);
+    await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose exercise', exact: true }).click();
+    await page.getByPlaceholder('Search exercises', { exact: true }).fill('Catalog cable');
+    await page.getByRole('button', { name: 'Select Catalog cable press', exact: true }).waitFor();
+    await page.getByPlaceholder('Search exercises', { exact: true }).fill('unknown niche lift');
+    await page.getByRole('button', { name: 'Select Other', exact: true }).waitFor();
+    await page.getByPlaceholder('Search exercises', { exact: true }).fill('bench');
+    await page.getByRole('button', { name: 'Select Bench press', exact: true }).click();
     await page.getByPlaceholder('Workout name, e.g. Push Day').fill('Smoke workout');
     await page.getByLabel('Exercise 1 weight', { exact: true }).fill('145');
     await page.getByLabel('Exercise 1 reps', { exact: true }).fill('6');
+    await page.getByLabel('Exercise 1 reps', { exact: true }).press('Tab');
+    await page.waitForTimeout(150);
     failSave = true;
     await page.getByRole('button', { name: 'Save workout', exact: true }).click();
     await page.getByText(/Save failed\. Simulated connection failure/).first().waitFor();
     assert.equal(cloud.get('workout_logs').length, 1, 'failed save does not claim success or add a workout');
     failSave = false;
-    await page.getByRole('button', { name: 'Try again', exact: true }).last().click();
-    await page.getByText('Workout saved to your account.', { exact: true }).waitFor();
-    await page.getByText('✓ Last change saved to your account', { exact: true }).waitFor();
+    await page.getByText('Quick workout log', { exact: true }).locator('..').getByRole('button', { name: 'Try again', exact: true }).click();
+    await page.getByText('Workout saved.', { exact: true }).waitFor();
+    await page.getByText('✓ Last change saved to your account', { exact: true }).first().waitFor();
     const savedWorkout = cloud.get('workout_logs').find(row => row.payload.title === 'Smoke workout');
     assert.equal(savedWorkout.payload.exercises[0].weight, 145); assert.equal(savedWorkout.payload.exercises[0].reps, 6);
     await page.getByText('Log Workout', { exact: true }).click();
-    await page.getByRole('button', { name: /Use last workout/ }).click();
-    assert.equal(await page.getByLabel('Exercise 1 weight', { exact: true }).inputValue(), '145');
+    assert.equal(await page.getByPlaceholder('Workout name, e.g. Push Day').inputValue(), '');
+    assert.equal(await page.getByLabel('Exercise 1 weight', { exact: true }).count(), 0);
     await page.getByText('Close Log', { exact: true }).click();
+    await page.getByRole('button', { name: 'Edit workout Smoke workout', exact: true }).click();
+    const editor = page.locator('[aria-modal="true"]');
+    const cancelEdit = editor.getByRole('button', { name: 'Cancel', exact: true });
+    await cancelEdit.waitFor();
+    await page.waitForTimeout(350);
+    const cancelBefore = await cancelEdit.boundingBox();
+    await editor.getByPlaceholder('Workout notes (optional)').scrollIntoViewIfNeeded();
+    const cancelAfter = await cancelEdit.boundingBox();
+    assert.ok(Math.abs(cancelBefore.y - cancelAfter.y) < 1, 'cancel remains fixed above the scrolling editor');
+    await editor.getByPlaceholder('Workout name, e.g. Push Day').fill('Unsaved edit');
+    await cancelEdit.click();
+    assert.equal(savedWorkout.payload.title, 'Smoke workout', 'cancel does not save edits');
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    const calendar = page.locator('[aria-modal="true"]');
+    await calendar.getByText('Smoke workout', { exact: true }).waitFor();
+    await calendar.getByText('Bench press', { exact: true }).first().waitFor();
+    await calendar.getByText('145 lb', { exact: true }).waitFor();
+    await calendar.getByText('3 × 6', { exact: true }).waitFor();
+    await calendar.getByRole('button', { name: 'Close calendar', exact: true }).last().click();
+    await page.waitForTimeout(350);
     await page.getByText('Fuel', { exact: true }).click();
     await page.getByRole('button', { name: 'Open your macro plan' }).waitFor();
     await page.getByRole('button', { name: 'Edit weight', exact: true }).click();
@@ -189,6 +232,63 @@ const assert = require('node:assert/strict');
       await page.getByRole('button', { name: 'Open your macro plan' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Open your macro plan' }).locator('..').screenshot({ path: process.env.FUEL_SCREENSHOT_PATH });
     }
+    // Existing preference sync must update both mounted Home tabs without reloading.
+    for (const tab of ['Fuel', 'Train']) {
+      await page.getByText(tab, { exact: true }).click();
+      const selected = page.getByRole('button').filter({ has: page.getByText(tab, { exact: true }) }).first();
+      let bounds;
+      for (const scheme of ['dark', 'light', 'dark']) {
+        user.user_metadata.colorScheme = scheme;
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await page.waitForFunction(expected => getComputedStyle(document.body).backgroundColor === expected,
+          scheme === 'light' ? 'rgb(245, 246, 242)' : 'rgb(10, 10, 12)');
+        assert.equal(await selected.evaluate(el => getComputedStyle(el).backgroundColor),
+          scheme === 'light' ? 'rgb(198, 245, 0)' : 'rgb(204, 255, 0)');
+        const rect = await selected.boundingBox();
+        if (!bounds) bounds = rect;
+        assert.equal(rect.width, bounds.width, 'theme preserves control width');
+        assert.equal(rect.height, bounds.height, 'theme preserves control height');
+        if (scheme === 'light') {
+          if (tab === 'Train') {
+            await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+            await page.getByRole('button', { name: 'Close calendar', exact: true }).last().click();
+            await page.getByRole('button', { name: 'Add lift', exact: true }).click();
+            await page.getByRole('button', { name: 'Close lift editor', exact: true }).click();
+          } else {
+            await page.getByRole('button', { name: 'Edit weight', exact: true }).click();
+            await page.getByRole('button', { name: 'Cancel weight edit' }).click();
+            await page.getByRole('button', { name: 'Open your macro plan' }).click();
+            await page.getByRole('button', { name: 'Close goal calculator' }).click();
+            await page.getByRole('button', { name: '+ Add food', exact: true }).click();
+            const foodName = page.getByPlaceholder('e.g. Chicken burrito bowl');
+            await foodName.waitFor();
+            assert.equal(await foodName.evaluate(el => getComputedStyle(el).color), 'rgb(17, 19, 15)', 'light input text is readable');
+            await page.getByRole('button', { name: 'Close add food', exact: true }).click();
+          }
+        }
+        if (process.env.THEME_SCREENSHOT_DIR) {
+          fs.mkdirSync(process.env.THEME_SCREENSHOT_DIR, { recursive: true });
+          await selected.scrollIntoViewIfNeeded();
+          await page.getByText(tab === 'Fuel' ? 'Fuel your training.' : 'Let’s train, Smoke', { exact: true }).scrollIntoViewIfNeeded();
+          await page.waitForTimeout(350);
+          await page.screenshot({ path: path.join(process.env.THEME_SCREENSHOT_DIR, tab.toLowerCase() + '-' + scheme + '.png') });
+          if (tab === 'Fuel' && scheme === 'light') {
+            await page.getByRole('button', { name: 'Open recipes', exact: true }).screenshot({ path: path.join(process.env.THEME_SCREENSHOT_DIR, 'recipes-light.png') });
+          }
+        }
+      }
+    }
+    // Exercise the real Settings switch in both directions as well.
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('switch', { name: 'Dark mode', exact: true }).click();
+    await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(245, 246, 242)');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByText('Fuel', { exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('switch', { name: 'Dark mode', exact: true }).click();
+    await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(10, 10, 12)');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByText('Fuel', { exact: true }).click();
     const foodSearch = page.getByPlaceholder('Search recent foods and recipes');
     await foodSearch.fill('SMOKE yogurt');
     await page.getByRole('button', { name: 'Use recent food Smoke yogurt', exact: true }).waitFor();
@@ -199,6 +299,7 @@ const assert = require('node:assert/strict');
     await keyboardViewport(null, 0);
     assert.equal(await page.locator('input[value="150"]').count(), 1, 'recent food prefills its calories');
     assert.equal(cloud.get('food').length, 1, 'selecting a result does not log food automatically');
+    assert.equal(await page.getByRole('button', { name: 'Change food image', exact: true }).count(), 0, 'food forms do not show item image controls');
     await page.getByRole('button', { name: 'Add to today', exact: true }).last().click();
     await page.getByRole('button', { name: 'Close add food', exact: true }).waitFor({ state: 'hidden' });
     assert.equal(cloud.get('food').filter(row => !row.deleted).length, 2);
@@ -215,6 +316,10 @@ const assert = require('node:assert/strict');
     const freshPage = await context.newPage();
     await freshPage.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await freshPage.getByText('Home', { exact: true }).click();
+    await freshPage.getByRole('button', { name: 'Update Smoke bench', exact: true }).click();
+    await freshPage.getByRole('button', { name: 'Close lift editor', exact: true }).waitFor();
+    await freshPage.getByRole('button', { name: 'Close lift editor', exact: true }).click();
+    await freshPage.waitForTimeout(350);
     await freshPage.getByText('Fuel', { exact: true }).click();
     await freshPage.getByRole('button', { name: 'Use recent food Smoke yogurt', exact: true }).waitFor();
     await freshPage.close();
@@ -285,6 +390,47 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => !document.documentElement.style.getPropertyValue('--app-viewport-height'));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(() => Math.abs(document.getElementById('root').getBoundingClientRect().height - visualViewport.height) < 1);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByText('Profile', { exact: true }).last().click();
+    await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+    const grid = page.locator('.profile-reorder-grid');
+    await grid.locator('img').first().waitFor({ state: 'attached' });
+    assert.equal(await grid.evaluate(node => getComputedStyle(node.querySelector('img')).pointerEvents), 'none', 'images cannot intercept hold-to-reorder');
+    const secondPhoto = await page.getByRole('button', { name: 'Replace photo or clip 2', exact: true }).locator('img').getAttribute('src');
+    await page.getByRole('button', { name: 'Move photo 2 earlier', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Replace photo or clip 1', exact: true }).locator('img').getAttribute('src'), secondPhoto, 'arrow moves the selected photo into the first slot');
+    const firstSlot = page.getByRole('button', { name: 'Replace photo or clip 1', exact: true });
+    const secondSlot = page.getByRole('button', { name: 'Replace photo or clip 2', exact: true });
+    const dragFrom = await firstSlot.boundingBox();
+    const dragTo = await secondSlot.boundingBox();
+    const restoredFirst = await secondSlot.locator('img').getAttribute('src');
+    const touch = await context.newCDPSession(page);
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: dragFrom.x + dragFrom.width / 2, y: dragFrom.y + dragFrom.height / 2 }] });
+    await page.waitForTimeout(550);
+    for (let step = 1; step <= 6; step++) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: dragFrom.x + dragFrom.width / 2 + (dragTo.x - dragFrom.x) * step / 6, y: dragFrom.y + dragFrom.height / 2 }] });
+      await page.waitForTimeout(35);
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(200);
+    assert.equal(await firstSlot.locator('img').getAttribute('src'), restoredFirst, 'holding and dragging reorders photos without opening the replace picker');
+    await touch.detach();
+    await page.getByRole('tab', { name: 'View profile', exact: true }).click();
+    await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Add lift', exact: true }).click();
+    const profileLiftPicker = page.locator('[aria-modal="true"]');
+    await profileLiftPicker.getByPlaceholder('Search exercises').fill('Catalog cable');
+    await profileLiftPicker.getByRole('button', { name: 'Select Catalog cable press', exact: true }).click();
+    await profileLiftPicker.getByLabel('Profile lift weight').fill('50');
+    await profileLiftPicker.getByRole('button', { name: 'Add to profile', exact: true }).click();
+    await page.waitForTimeout(350);
+    await page.getByRole('tab', { name: 'View profile', exact: true }).click();
+    await page.getByText('Catalog cable press', { exact: true }).waitFor();
+    await page.getByText('50 lb', { exact: true }).waitFor();
+    await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Remove profile lift Catalog cable press', exact: true }).click();
+    await page.getByRole('tab', { name: 'View profile', exact: true }).click();
+    assert.equal(await page.getByText('Catalog cable press', { exact: true }).count(), 0, 'removed lifts disappear from preview');
     assert.deepEqual(errors, []);
     const fontFailurePage = await context.newPage();
     fontFailurePage.setDefaultTimeout(15000);
@@ -300,7 +446,7 @@ const assert = require('node:assert/strict');
     await bundleFailurePage.getByRole('button', { name: 'Reload app', exact: true }).waitFor();
     await bundleFailurePage.close();
     }
-    console.log('Mobile Pages smoke passed: compact/searchable lifts, entrance animation, reduced motion, workout reuse/save failure/retry, milestones, recap, keyboard focus and resting-height recovery.');
+    console.log('Mobile Pages smoke passed: Train/Fuel dark-light-dark switching, Settings preference, light sheets, compact/searchable lifts, entrance animation, reduced motion, workout saves, recap and keyboard recovery.');
     if (process.env.SCREENSHOT_PATH) {
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.getByText('Home', { exact: true }).last().click();

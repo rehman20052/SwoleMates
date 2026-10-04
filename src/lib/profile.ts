@@ -3,6 +3,7 @@ import { jpegBytesFromHeic } from "@/lib/heic-jpeg";
 import { isHeicMedia, looksLikeHeic, renderJpegUrl } from "@/lib/heic-media";
 import { readLocalBytes } from "@/lib/local-file";
 import { supabase } from "@/lib/supabase";
+import { legacyLiftFields, profileLifts, type ProfileLift } from "./profile-lifts";
 import { lookupUsZip } from "@/lib/zip-location";
 
 export type ProfileGender = "" | "Male" | "Female" | "Other";
@@ -113,6 +114,7 @@ export type UserProfile = {
   deadlift: string;
   customLiftName: string;
   customLift: string;
+  displayLifts?: ProfileLift[];
   photos: string[];
   photoMedia: ProfileMediaKind[];
   photoCaptions: string[];
@@ -259,6 +261,7 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     deadlift: typeof profile.deadlift === "string" ? profile.deadlift : "N/A",
     customLiftName: typeof profile.customLiftName === "string" ? profile.customLiftName : "",
     customLift: typeof profile.customLift === "string" ? profile.customLift : "N/A",
+    displayLifts: profileLifts(profile),
     photos,
     photoMedia: photos.map((photo, index) => profileMediaKind(photo, Array.isArray(profile.photoMedia) ? profile.photoMedia[index] : undefined)),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photos.length),
@@ -355,11 +358,8 @@ function accountProfile(profile: UserProfile, photoPaths: string[], location: { 
     selectedGoals: chosen(profile.selectedGoals, profileGoals),
     availabilityDays: chosen(profile.availabilityDays, weekDays),
     availabilityTimes: chosen(profile.availabilityTimes, dayTimes),
-    bench: clip(profile.bench, 12),
-    squat: clip(profile.squat, 12),
-    deadlift: clip(profile.deadlift, 12),
-    customLiftName: clip(profile.customLiftName, 40),
-    customLift: clip(profile.customLift, 12),
+    ...legacyLiftFields(profileLifts(profile)),
+    displayLifts: profileLifts(profile),
     photos: photoPaths,
     photoMedia: photoPaths.map((_, index) => profile.photoMedia[index] ?? "image"),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photoPaths.length),
