@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppText, Card, Field, Input, PrimaryButton, ScrollBody, SecondaryButton, SectionLabel, SelectField } from "@/components/ui";
+import { AppText, Card, Field, Icon, Input, PrimaryButton, ScrollBody, SecondaryButton, SectionLabel, SelectField } from "@/components/ui";
+import { TrainingCard } from "./training-card";
+import { icons } from "@/assets";
 import { LiftProgressRow } from "./lift-progress-row";
 import { SaveFeedback } from "./save-feedback";
+import { saveArtworkPhoto, type ArtworkDraft } from "@/lib/artwork-photo";
 import { exerciseOptions, loadExerciseCatalog } from "@/lib/exercise-catalog";
 import { validLiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { useAppData } from "@/state/app-data";
@@ -29,6 +32,7 @@ export function LiftProgression() {
   const [maxReps, setMaxReps] = useState("10");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [artwork, setArtwork] = useState<ArtworkDraft>();
   const [confirmDelete, setConfirmDelete] = useState<TrackedLift | null>(null);
   const [liftQuery, setLiftQuery] = useState("");
   const [directory, setDirectory] = useState(false);
@@ -44,6 +48,7 @@ export function LiftProgression() {
     return () => { active = false; };
   }, [open]);
   function openEditor(lift?: TrackedLift) {
+    setArtwork(lift?.artwork);
     setDirectory(false);
     setEditingId(lift?.id ?? null);
     setExercise(lift?.name ?? ""); setCustomName(""); setSearch("");
@@ -66,23 +71,26 @@ export function LiftProgression() {
       setError("Choose a lift, enter current and goal weights, and a rep range from 1 to 100. Goal weight must be greater than zero."); return;
     }
     setSaving(true); setError(null);
+    let savedArtwork;
+    try { savedArtwork = await saveArtworkPhoto(artwork); setArtwork(savedArtwork); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not save your image."); setSaving(false); return; }
     const id = editingId ?? `lift-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     // Retain this ID after a failed response, so retry cannot create a duplicate.
     setEditingId(id);
-    const saved = await saveTrackedLift(id, details);
+    const saved = await saveTrackedLift(id, { ...details, artwork: savedArtwork });
     setSaving(false); if (saved) setOpen(false);
   }
   const options = exerciseOptions(names, search);
   const filteredLifts = trackedLifts.filter(lift => lift.name.toLocaleLowerCase().includes(liftQuery.trim().toLocaleLowerCase()));
   const renderLift = (lift: TrackedLift) => <LiftProgressRow key={lift.id} lift={lift} onUpdate={() => openEditor(lift)} onRemove={() => { setDirectory(false); setConfirmDelete(lift); }} />;
   return <>
-    <Card padding={16} radius={20} gap={14}>
+    <TrainingCard padding={16} gap={14}>
       <View style={styles.header}>
-        <SectionLabel>Lift progression</SectionLabel>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon source={icons.progress} size={22} tint={theme.colors.accent} /><AppText size={16} weight="bold">Lift progression</AppText></View>
         <SecondaryButton height={34} fontSize={12} disabled={!foodJournalReady} onPress={() => openEditor()}>Add lift</SecondaryButton>
       </View>
       {!foodJournalReady ? <AppText muted>Loading your saved lifts…</AppText> : !trackedLifts.length ?
-        <AppText muted>Track a lift, your usual reps, and the weight you want to reach.</AppText> : null}
+        <AppText size={13} muted>Add a lift and set your next weight goal.</AppText> : null}
       {trackedLifts.length ? <Input bordered placeholder="Search your lifts" accessibilityLabel="Search your lifts" value={liftQuery} onChangeText={setLiftQuery} /> : null}
       {trackedLifts.length ? <AppText size={11} muted>{liftQuery.trim() ? `${filteredLifts.length} matching lifts` : `Showing ${Math.min(2, trackedLifts.length)} of ${trackedLifts.length} tracked lifts`}</AppText> : null}
       {!directory ? filteredLifts.slice(0, 2).map(renderLift) : null}
@@ -90,9 +98,9 @@ export function LiftProgression() {
       {filteredLifts.length > 2 ? <SecondaryButton height={38} fontSize={12} onPress={() => setDirectory(true)}>{liftQuery.trim() ? `View all ${filteredLifts.length} matches` : `View all ${trackedLifts.length} lifts`}</SecondaryButton> : null}
       <SaveFeedback area="lifts" />
       {liftStorageError ? <AppText color={theme.colors.danger}>{liftStorageError}</AppText> : null}
-    </Card>
+    </TrainingCard>
     <Modal transparent animationType="fade" visible={!!confirmDelete} onRequestClose={() => { if (!saving) setConfirmDelete(null); }}>
-      <View style={[styles.overlay, { justifyContent: "center", padding: 20 }]}>
+      <View style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay, justifyContent: "center", padding: 20 }]}>
       {confirmDelete ? <View style={{ gap: 14, borderRadius: 20, padding: 20, backgroundColor: theme.colors.surface }}>
         <AppText>Remove {confirmDelete.name} and its progression history from your account?</AppText>
         <View style={styles.header}>
@@ -109,7 +117,7 @@ export function LiftProgression() {
     </Modal>
     <Modal transparent animationType="slide" visible={directory} onRequestClose={() => setDirectory(false)}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.overlay}>
+        <View style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]}>
           <View style={[styles.sheet, { height: "88%", backgroundColor: theme.colors.background, borderColor: theme.colors.border, paddingBottom: Math.max(18, insets.bottom) }]}>
             <View style={[styles.header, { marginBottom: 12 }]}><AppText size={23} weight="black">Tracked lifts</AppText><Pressable accessibilityRole="button" accessibilityLabel="Close tracked lifts" hitSlop={10} onPress={() => setDirectory(false)}><AppText size={24} muted>×</AppText></Pressable></View>
             <Input bordered placeholder="Search all tracked lifts" accessibilityLabel="Search all tracked lifts" value={liftQuery} onChangeText={setLiftQuery} />
@@ -124,7 +132,7 @@ export function LiftProgression() {
     </Modal>
     <Modal transparent animationType="slide" visible={open} onRequestClose={() => { if (!saving) setOpen(false); }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <Pressable style={styles.overlay} onPress={() => { if (!saving) setOpen(false); }}>
+        <Pressable style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]} onPress={() => { if (!saving) setOpen(false); }}>
           <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, paddingBottom: Math.max(18, insets.bottom) }]}>
             <ScrollBody contentContainerStyle={{ gap: 14 }}>
               <View style={styles.header}>

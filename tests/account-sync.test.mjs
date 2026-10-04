@@ -56,6 +56,18 @@ test('structured workout sets, reps and weights reopen on a second device and ke
 function device(server, userId = 'alice', namespace = 'recipes', local = storage()) {
   return { local, store: createAccountList({ userId, namespace, local, remote: server.remote(userId), identify: (item) => item.id, validate: valid }) };
 }
+test('meal and lift image selections carry to a second device and automatic clears them', async () => {
+  for (const namespace of ['recipes', 'food', 'lifts']) {
+    const server = backend(); const phone = device(server, 'alice', namespace);
+    await phone.store.load([]);
+    const artwork = { kind: 'photo', path: '11111111-1111-4111-8111-111111111111/item-artwork/123-photo.jpg' };
+    await phone.store.change(() => [{ id: 'custom', name: 'Custom entry', artwork }]);
+    const tablet = device(server, 'alice', namespace);
+    assert.deepEqual(copy(await tablet.store.load([]))[0].artwork, artwork);
+    await tablet.store.change(rows => rows.map(row => ({ ...row, artwork: undefined })));
+    assert.equal((await phone.store.refresh())[0].artwork, undefined);
+  }
+});
 test('two devices merge independent recipe additions and import only missing IDs', async () => {
   const server = backend(); const a = device(server); const b = device(server);
   await a.store.load([{ id: 'old', name: 'Original' }]); await b.store.load([{ id: 'old', name: 'Stale browser' }]);

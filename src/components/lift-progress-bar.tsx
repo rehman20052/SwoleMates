@@ -153,24 +153,24 @@ export function LiftProgressBar({ progress, name, replay = 0, onMotionPreference
 
   useEffect(() => { if (reducedMotion !== null) onMotionPreference?.(reducedMotion); }, [reducedMotion, onMotionPreference]);
 
-  const bright = theme.isDark ? "#CCFF00" : "#73B600";
+  const bright = theme.colors.progressEnd;
   return <View ref={container} collapsable={false} accessibilityRole="progressbar" accessibilityLabel={`${name} goal progress`} accessibilityValue={{ min: 0, max: 100, now: Math.round(target * 100) }} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(target * 100)} style={styles.wrapper}>
     <Animated.View ref={swellElement} style={[styles.wrapper, { transform: [{ scaleX: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] }) }, { scaleY: swell.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }] }]}>
-    <Animated.View ref={haloElement} pointerEvents="none" style={[styles.halo, { borderColor: bright, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, theme.isDark ? 0.8 : 0.45] }), transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] }) }] }]} />
-    <View style={[styles.track, { backgroundColor: theme.colors.border }]}>
+    <Animated.View ref={haloElement} pointerEvents="none" style={[styles.halo, { borderColor: bright, opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, theme.effects.progressHaloOpacity] }), transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] }) }] }]} />
+    <View style={[styles.track, { backgroundColor: theme.colors.progressTrack }]}>
       <Animated.View ref={fillElement} style={[styles.fill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]}>
         <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 16">
           <Defs><LinearGradient id="energy" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={theme.isDark ? "#729F00" : "#375F00"} />
+            <Stop offset="0%" stopColor={theme.colors.progressStart} />
             <Stop offset="65%" stopColor={theme.colors.primary} />
             <Stop offset="100%" stopColor={bright} />
           </LinearGradient></Defs>
           <Rect width="100" height="16" fill="url(#energy)" />
-          <Rect x="0" y="0" width="100" height="2" fill="white" opacity="0.23" />
+          <Rect x="0" y="0" width="100" height="2" fill={theme.colors.progressHighlight} opacity="0.23" />
         </Svg>
-        <Animated.View ref={shineElement} pointerEvents="none" style={[styles.shine, { left: sweep.interpolate({ inputRange: [0, 1], outputRange: ["-25%", "110%"] }), opacity: sweep.interpolate({ inputRange: [0, 0.12, 0.82, 1], outputRange: [0, 0.45, 0.45, 0] }) }]} />
+        <Animated.View ref={shineElement} pointerEvents="none" style={[styles.shine, { backgroundColor: theme.colors.progressHighlight, left: sweep.interpolate({ inputRange: [0, 1], outputRange: ["-25%", "110%"] }), opacity: sweep.interpolate({ inputRange: [0, 0.12, 0.82, 1], outputRange: [0, 0.45, 0.45, 0] }) }]} />
       </Animated.View>
-      {[25, 50, 75].map(mark => <View key={mark} pointerEvents="none" style={[styles.tick, { left: `${mark}%`, backgroundColor: theme.colors.surfaceRaised }]} />)}
+      {[20, 40, 60, 80].map(mark => <View key={mark} pointerEvents="none" style={[styles.tick, { left: `${mark}%`, backgroundColor: theme.colors.surfaceRaised }]} />)}
     </View>
     {target >= 1 ? <View pointerEvents="none" style={[styles.goalDot, { backgroundColor: bright, borderColor: theme.colors.surfaceRaised }]} /> : null}
     </Animated.View>

@@ -24,6 +24,8 @@ import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
 import { searchGymsByName, searchStreetAddresses, type GymPlace } from "@/lib/gym-location";
+import { ProfileLiftsEditor } from "@/components/profile-lifts-editor";
+import { legacyLiftFields, profileLifts } from "@/lib/profile-lifts";
 
 const MAX_PHOTOS = 6;
 const ABOUT_LIMIT = 280;
@@ -115,7 +117,11 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
     const node = photoGridRef.current as unknown as HTMLElement | null;
     const suppressMenu = (event: Event) => event.preventDefault();
     node?.addEventListener("contextmenu", suppressMenu);
-    return () => node?.removeEventListener("contextmenu", suppressMenu);
+    if (node) node.classList.add("profile-reorder-grid");
+    const style = document.createElement("style");
+    style.textContent = ".profile-reorder-grid, .profile-reorder-grid * {-webkit-touch-callout:none!important;-webkit-user-select:none!important;user-select:none!important;} .profile-reorder-grid img,.profile-reorder-grid video {pointer-events:none!important;-webkit-user-drag:none!important;}";
+    document.head.appendChild(style);
+    return () => { node?.removeEventListener("contextmenu", suppressMenu); node?.classList.remove("profile-reorder-grid"); style.remove(); };
   }, [mode]);
 
   const movePhoto = (from: number, to: number) => {
@@ -367,7 +373,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         <Card>
           <SectionLabel>Photos</SectionLabel>
           <AppText size={12} muted>
-            Add a photo or a clip in each spot, up to {MAX_PHOTOS}. Hold and drag to reorder. The first spot appears first on your profile. Clips over 50MB are compressed to fit. At least 1 is required.
+            Add up to {MAX_PHOTOS} photos or clips. Hold and drag, or use the arrows to reorder. The first appears first on your profile. At least 1 is required.
           </AppText>
           <View ref={photoGridRef} style={styles.photoGrid} {...photoPan.panHandlers} onTouchEnd={() => finishPhotoDrag(true)} onTouchCancel={() => finishPhotoDrag(false)}>
             {Array.from({ length: MAX_PHOTOS }, (_, index) => {
@@ -416,7 +422,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                     style={[styles.photoPress, Platform.OS === "web" && photo ? ({ touchAction: "none", userSelect: "none" } as unknown as ViewStyle) : undefined]}
                   >
                     {photo ? (
-                      <ProfileMedia key={`${kind}:${photo}`} uri={photo} kind={kind} />
+                      <View pointerEvents="none" style={StyleSheet.absoluteFill}><ProfileMedia key={`${kind}:${photo}`} uri={photo} kind={kind} /></View>
                     ) : (
                       <View style={styles.photoEmpty}>
                         <AppText size={22} weight="bold" primary>
@@ -433,6 +439,9 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                       <AppText size={11} weight="bold">{index + 1}</AppText>
                     </View>
                   ) : null}
+                  {photo && profile.photos.length > 1 ? <View style={{ position: "absolute", bottom: 4, right: 4, flexDirection: "row", gap: 4 }}>
+                    {[{ label: "earlier", step: -1, icon: "‹" }, { label: "later", step: 1, icon: "›" }].map(action => <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={`Move photo ${index + 1} ${action.label}`} disabled={saving || compressing || !!photoDrag || index + action.step < 0 || index + action.step >= profile.photos.length} onPress={() => movePhoto(index, index + action.step)} style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: theme.colors.background, opacity: index + action.step < 0 || index + action.step >= profile.photos.length ? 0.4 : 1 }}><AppText size={20} weight="bold">{action.icon}</AppText></Pressable>)}
+                  </View> : null}
                   {photo ? (
                     <Pressable
                       accessibilityRole="button"
@@ -825,23 +834,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
           </View>
         </Card>
 
-        <Card>
-          <SectionLabel>Lifts</SectionLabel>
-          <View style={styles.liftRow}>
-            <LiftField label="Bench" value={profile.bench} onPress={() => setActiveLift("bench")} />
-            <LiftField label="Squat" value={profile.squat} onPress={() => setActiveLift("squat")} />
-            <LiftField label="Deadlift" value={profile.deadlift} onPress={() => setActiveLift("deadlift")} />
-          </View>
-          <Field label="Lift of your choice">
-            <Input
-              value={profile.customLiftName}
-              onChangeText={(customLiftName) => update({ customLiftName })}
-              placeholder="Overhead press"
-              autoCapitalize="words"
-            />
-          </Field>
-          <LiftField label="Weight" value={profile.customLift} onPress={() => setActiveLift("customLift")} />
-        </Card>
+        <ProfileLiftsEditor lifts={profileLifts(profile)} disabled={saving} onChange={displayLifts => update({ displayLifts, ...legacyLiftFields(displayLifts) })} />
 
         {error ? (
           <AppText size={13} weight="medium" color={theme.colors.danger}>
@@ -1070,17 +1063,10 @@ export function ProfilePreview({
         </View>
       </View>
     </Card>,
-    <Card key="lifts">
+    ...(profileLifts(profile).length ? [<Card key="lifts">
       <SectionLabel>Lifts</SectionLabel>
-      <View style={styles.liftRow}>
-        <PreviewStat label="Bench" value={profile.bench} />
-        <PreviewStat label="Squat" value={profile.squat} />
-        <PreviewStat label="Deadlift" value={profile.deadlift} />
-      </View>
-      {profile.customLiftName.trim() ? (
-        <PreviewStat label={profile.customLiftName.trim()} value={profile.customLift} />
-      ) : null}
-    </Card>,
+      {profileLifts(profile).map(lift => <View key={lift.name} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}><AppText style={{ flex: 1 }}>{lift.name}</AppText><AppText weight="bold">{lift.weight} {lift.unit}</AppText></View>)}
+    </Card>] : []),
     <Card key="gym">
       <SectionLabel>Gym</SectionLabel>
       <AppText size={16} weight="extrabold">
@@ -1326,7 +1312,7 @@ const styles = StyleSheet.create({
   photoOrder: {
     position: "absolute",
     left: 6,
-    bottom: 6,
+    top: 6,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 3,

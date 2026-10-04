@@ -22,6 +22,7 @@ import { createAccountStores, loadAccountStores, refreshAccountStores } from "@/
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { type WorkoutExercise } from "@/lib/workout-session";
+import { validItemArtwork } from "@/lib/item-artwork";
 
 export type { NutritionProfile };
 
@@ -104,6 +105,7 @@ export type FoodLogEntry = {
   protein: number;
   carbs: number;
   fats: number;
+  artwork?: import("@/lib/item-artwork").ItemArtwork;
 };
 
 export type SavedMeal = Omit<FoodLogEntry, "id" | "date"> & {
@@ -242,6 +244,7 @@ function isSavedMeal(value: unknown): value is SavedMeal {
     typeof meal.id === "string" &&
     (meal.meal === "Breakfast" || meal.meal === "Lunch" || meal.meal === "Dinner" || meal.meal === "Snack") &&
     typeof meal.name === "string" &&
+    validItemArtwork(meal.artwork) &&
     typeof meal.calories === "number" &&
     typeof meal.protein === "number" &&
     typeof meal.carbs === "number" &&

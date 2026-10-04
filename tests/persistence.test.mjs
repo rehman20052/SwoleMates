@@ -21,6 +21,17 @@ const { createHiddenChatStore } = loadModule('src/lib/hidden-chats.ts');
 const { createDurableList } = loadModule('src/lib/durable-list.ts');
 const { mergeVerifiedLogs, workoutLogKey } = loadModule('src/lib/workout-log-sync.ts');
 const { moveProfileMedia } = loadModule('src/lib/profile-media-order.ts');
+const { profileLifts, legacyLiftFields } = loadModule('src/lib/profile-lifts.ts');
+
+test('optional profile lifts survive JSON reload and explicit removal overrides legacy lifts', () => {
+  const old = { bench: '135 lbs', squat: 'N/A', deadlift: '225 lbs', customLiftName: '', customLift: 'N/A' };
+  assert.deepEqual(plain(profileLifts(old)).map(lift => lift.name), ['Bench press', 'Deadlift']);
+  assert.deepEqual(plain(profileLifts({ ...old, displayLifts: [] })), []);
+  const displayLifts = [{ name: 'Cable press', weight: 50, unit: 'kg' }];
+  assert.deepEqual(plain(profileLifts(JSON.parse(JSON.stringify({ ...old, displayLifts })))), displayLifts);
+  assert.deepEqual(plain(legacyLiftFields([])), { bench: 'N/A', squat: 'N/A', deadlift: 'N/A', customLiftName: '', customLift: 'N/A' });
+  assert.equal(profileLifts({ displayLifts: [{ name: 'Bad', weight: -1, unit: 'lb' }, ...displayLifts, ...displayLifts] }).length, 1);
+});
 const { createNutritionPlanStore, nutritionPlanStorageKey, goalsFromProfile } = loadModule('src/lib/nutrition-plan-storage.ts');
 const { withCurrentWeight } = loadModule('src/lib/macro-calculator.ts');
 const plain = (value) => JSON.parse(JSON.stringify(value));

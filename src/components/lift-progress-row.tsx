@@ -15,22 +15,24 @@ export function LiftProgressRow({ lift, onUpdate, onRemove }: { lift: TrackedLif
   const progress = liftProgress(lift);
   const milestones = liftMilestones(lift);
   const latestBest = milestones.records.at(-1);
-  return <View style={{ borderRadius: 14, padding: 14, gap: 8, backgroundColor: theme.colors.surfaceRaised }}>
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <AppText weight="extrabold" style={{ flex: 1 }}>{lift.name}</AppText>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Update ${lift.name}`} hitSlop={8} onPress={onUpdate}><AppText size={12} weight="bold" primary>Update</AppText></Pressable>
+  return <View style={{ borderRadius: 16, borderWidth: 1, borderColor: theme.colors.panelBorder, padding: 10, gap: 8, backgroundColor: theme.colors.rowSurface }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Hide" : "Show"} ${lift.name} details`} accessibilityState={{ expanded }} accessibilityHint="Shows lift milestones and history" onPress={() => setExpanded(value => !value)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><AppText size={13} weight="extrabold" style={{ flex: 1 }}>{lift.name}</AppText><AppText size={11} muted>{expanded ? "⌃" : "⌄"}</AppText></Pressable>
+        <AppText size={11} muted>{lift.currentWeight} / {lift.goalWeight} {lift.unit}</AppText>
+        <LiftProgressBar progress={progress} name={lift.name} replay={replay} onMotionPreference={setReducedMotion} />
+      </View>
+      <View style={{ alignItems: "flex-end", gap: 6 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Update ${lift.name}`} onPress={onUpdate} style={{ minHeight: 36, paddingHorizontal: 10, borderRadius: 12, justifyContent: "center", borderWidth: 1, borderColor: theme.colors.borderStrong }}><AppText size={11} weight="bold">Update</AppText></Pressable>
+        <AppText size={15} weight="extrabold" primary>{Math.round(progress * 100)}%</AppText>
+      </View>
     </View>
-    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
-      <AppText size={14} weight="bold">{lift.currentWeight} / {lift.goalWeight} {lift.unit}</AppText><AppText size={12} weight="bold" primary>{progress >= 1 ? "Goal reached!" : `${Math.round(progress * 100)}%`}</AppText>
-    </View>
-    <LiftProgressBar progress={progress} name={lift.name} replay={replay} onMotionPreference={setReducedMotion} />
-    {reducedMotion ? <AppText size={11} muted>Animations paused by your device’s Reduce Motion setting.</AppText> : <Pressable accessibilityRole="button" accessibilityLabel={`Replay ${lift.name} progress animation`} hitSlop={6} onPress={() => setReplay(value => value + 1)}><AppText size={11} primary>Replay progress</AppText></Pressable>}
-    <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Hide" : "Show"} ${lift.name} details`} accessibilityState={{ expanded }} hitSlop={6} onPress={() => setExpanded(value => !value)}><AppText size={11} muted>{expanded ? "Hide details ▴" : "Milestones & history ▾"}</AppText></Pressable>
     {expanded ? <View style={{ gap: 10 }}>
+      {reducedMotion ? <AppText size={11} muted>Animations paused by your device’s Reduce Motion setting.</AppText> : <Pressable accessibilityRole="button" accessibilityLabel={`Replay ${lift.name} progress animation`} hitSlop={6} onPress={() => setReplay(value => value + 1)}><AppText size={11} primary>Replay progress</AppText></Pressable>}
       <AppText size={12} muted>Typical reps: {lift.minReps === lift.maxReps ? lift.minReps : `${lift.minReps}–${lift.maxReps}`}{progress < 1 ? ` · ${Math.round((lift.goalWeight - lift.currentWeight) * 100) / 100} ${lift.unit} to go` : ""}</AppText>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
         {[25, 50, 75, 100].map(mark => <View key={mark} accessibilityLabel={`${lift.name}: ${mark === 100 ? "goal" : `${mark}% checkpoint`} ${progress * 100 >= mark ? "reached" : "ahead"}`} style={{ borderRadius: 8, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: progress * 100 >= mark ? theme.colors.primaryTint : "transparent", borderColor: progress * 100 >= mark ? theme.colors.primary : theme.colors.border }}>
-          <AppText size={10} weight="bold" color={progress * 100 >= mark ? theme.colors.primary : theme.colors.muted}>{progress * 100 >= mark ? "✓ " : ""}{mark === 100 ? "Goal" : `${mark}%`}</AppText>
+          <AppText size={10} weight="bold" color={progress * 100 >= mark ? theme.colors.accent : theme.colors.muted}>{progress * 100 >= mark ? "✓ " : ""}{mark === 100 ? "Goal" : `${mark}%`}</AppText>
         </View>)}
       </View>
       <AppText size={12} muted>Best logged: {milestones.best} {lift.unit}{latestBest ? ` · +${latestBest.increase} ${lift.unit} on ${formatShortDate(latestBest.date)}` : " · Your starting point is set"}</AppText>

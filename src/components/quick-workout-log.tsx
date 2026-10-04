@@ -1,18 +1,27 @@
-import { useRef, useState } from "react";
-import { View } from "react-native";
-import { AppText, Card, Field, Input, PrimaryButton, SecondaryButton, SectionLabel, SelectField } from "./ui";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppText, Card, Field, Input, PrimaryButton, SecondaryButton, SectionLabel } from "./ui";
 import { SaveFeedback } from "./save-feedback";
-import { exerciseOptions } from "@/lib/exercise-catalog";
+import { exerciseOptions, loadExerciseCatalog } from "@/lib/exercise-catalog";
 import { validWorkoutExercises, type WorkoutExercise } from "@/lib/workout-session";
-import { daysFromToday, formatShortDate, type SessionLog, useAppData } from "@/state/app-data";
+import { daysFromToday, type SessionLog, useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
 type DraftExercise = { id: string; exercise: string; customName: string; sets: string; reps: string; weight: string; unit: "lb" | "kg" };
 const newId = () => `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: { date?: string; existing?: SessionLog; onSaved: () => void }) {
   const theme = useAppTheme();
-  const { logs, logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback } = useAppData();
+  const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback } = useAppData();
   const options = ["Choose exercise", ...exerciseOptions([], "")];
+  const [names, setNames] = useState<string[]>([]);
+  const [pickingId, setPickingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    let active = true;
+    void loadExerciseCatalog(AsyncStorage).then(catalog => { if (active) setNames(catalog.names); });
+    return () => { active = false; };
+  }, []);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [rows, setRows] = useState<DraftExercise[]>(() => (existing?.exercises ?? []).map(row => ({ id: row.id, exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit })));
@@ -20,11 +29,6 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
   const busyRef = useRef(false);
   const recordId = useRef(`log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [error, setError] = useState<string | null>(null);
-  const savedAt = (log: SessionLog) => {
-    const value = log.loggedAt ? Date.parse(log.loggedAt) : Number(log.id.match(/^log-(\d{13})/)?.[1] ?? 0);
-    return Number.isFinite(value) ? value : 0;
-  };
-  const last = [...logs].filter(log => !log.verified && log.date <= date).sort((a, b) => b.date.localeCompare(a.date) || savedAt(b) - savedAt(a))[0];
   const updateRow = (id: string, changes: Partial<DraftExercise>) => setRows(current => current.map(row => row.id === id ? { ...row, ...changes } : row));
   async function save() {
     if (busyRef.current || !foodJournalReady) return;
@@ -37,15 +41,18 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
   }
   return <Card padding={16} radius={20} gap={12}>
     <SectionLabel>{existing ? "Edit workout" : "Quick workout log"}</SectionLabel>
-    {!existing && last ? <SecondaryButton height={38} fontSize={12} disabled={busy} onPress={() => {
-      setTitle(last.title); setNotes(last.notes ?? "");
-      setRows((last.exercises ?? []).map(row => ({ id: newId(), exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit })));
-      setError(null);
-    }}>Use last workout · {formatShortDate(last.date)}</SecondaryButton> : null}
     <Input bordered placeholder="Workout name, e.g. Push Day" value={title} onChangeText={setTitle} editable={!busy} maxLength={100} />
     {rows.map((row, index) => <View key={row.id} style={{ backgroundColor: theme.colors.surfaceRaised, padding: 12, borderRadius: 12, gap: 10 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}><AppText size={12} weight="bold">Exercise {index + 1}</AppText><SecondaryButton height={30} fontSize={11} disabled={busy} onPress={() => setRows(current => current.filter(item => item.id !== row.id))}>Remove</SecondaryButton></View>
-      <SelectField value={row.exercise} options={options} onChange={exercise => { if (!busy) updateRow(row.id, { exercise }); }} renderLabel={value => value === "Other" ? "Other — your own exercise" : value} />
+      <Pressable accessibilityRole="button" accessibilityLabel={row.exercise} accessibilityState={{ expanded: pickingId === row.id, disabled: busy }} disabled={busy} onPress={() => { setPickingId(pickingId === row.id ? null : row.id); setSearch(""); }} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <AppText style={{ flex: 1 }}>{row.exercise === "Other" ? "Other — custom exercise" : row.exercise}</AppText><AppText muted>{pickingId === row.id ? "⌃" : "⌄"}</AppText>
+      </Pressable>
+      {pickingId === row.id ? <View style={{ gap: 8 }}>
+        <Input bordered autoFocus placeholder="Search exercises" accessibilityLabel={`Search exercises for exercise ${index + 1}`} value={search} onChangeText={setSearch} />
+        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="none">
+          {exerciseOptions(names, search).map(exercise => <Pressable key={exercise} accessibilityRole="button" accessibilityLabel={`Select ${exercise}`} onPress={() => { updateRow(row.id, { exercise }); setPickingId(null); setSearch(""); }} style={{ paddingVertical: 14, paddingHorizontal: 12, borderBottomWidth: 1, borderColor: theme.colors.border }}><AppText>{exercise === "Other" ? "Other — custom exercise" : exercise}</AppText></Pressable>)}
+        </ScrollView>
+      </View> : null}
       {row.exercise === "Other" ? <Input bordered placeholder="Exercise name" value={row.customName} onChangeText={customName => updateRow(row.id, { customName })} editable={!busy} maxLength={100} /> : null}
       <View style={{ flexDirection: "row", gap: 8 }}>
         <Field label="Sets" style={{ flex: 1 }}><Input bordered value={row.sets} onChangeText={sets => updateRow(row.id, { sets })} keyboardType="number-pad" editable={!busy} accessibilityLabel={`Exercise ${index + 1} sets`} /></Field>
@@ -60,7 +67,6 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
     </View>)}
     <SecondaryButton height={38} fontSize={12} disabled={busy || rows.length >= 30} onPress={() => setRows(current => [...current, { id: newId(), exercise: "Choose exercise", customName: "", sets: "3", reps: "8", weight: "", unit: "lb" }])}>Add exercise</SecondaryButton>
     <Input bordered multiline placeholder="Workout notes (optional)" value={notes} onChangeText={setNotes} editable={!busy} />
-    <AppText size={12} muted>Use your last session as a starting point, then adjust weights and reps before saving.</AppText>
     {error ? <AppText color={theme.colors.danger}>{error}</AppText> : null}
     <SaveFeedback area="workouts" onRetried={onSaved} />
     <PrimaryButton height={46} disabled={busy || !foodJournalReady || saveFeedback.workouts?.phase === "saving"} onPress={save}>{busy ? "Saving…" : "Save workout"}</PrimaryButton>

@@ -1,9 +1,10 @@
 import { createDurableList, type ListStorage } from "./durable-list";
+import { validItemArtwork, type ItemArtwork } from "./item-artwork";
 
 export type LiftEntry = { date: string; weight: number; minReps: number; maxReps: number };
 export type TrackedLift = {
   id: string; name: string; unit: "lb" | "kg"; currentWeight: number;
-  minReps: number; maxReps: number; goalWeight: number; history: LiftEntry[];
+  minReps: number; maxReps: number; goalWeight: number; history: LiftEntry[]; artwork?: ItemArtwork;
 };
 export type LiftDetails = Omit<TrackedLift, "id" | "history">;
 export function validLiftDetails(value: LiftDetails) {
@@ -12,7 +13,8 @@ export function validLiftDetails(value: LiftDetails) {
     && Number.isFinite(value.currentWeight) && value.currentWeight >= 0
     && Number.isFinite(value.goalWeight) && value.goalWeight > 0
     && Number.isInteger(value.minReps) && value.minReps >= 1
-    && Number.isInteger(value.maxReps) && value.maxReps >= value.minReps && value.maxReps <= 100;
+    && Number.isInteger(value.maxReps) && value.maxReps >= value.minReps && value.maxReps <= 100
+    && validItemArtwork(value.artwork);
 }
 export function isLift(value: unknown): value is TrackedLift {
   if (!value || typeof value !== "object") return false;

@@ -749,7 +749,7 @@ export function ProgressBar({ progress }: { progress: number }) {
   const theme = useAppTheme();
 
   return (
-    <View style={[styles.progressTrack, { backgroundColor: theme.colors.surfaceRaised }]}>
+    <View style={[styles.progressTrack, { backgroundColor: theme.colors.summaryProgressTrack }]}>
       <View
         style={[
           styles.progressFill,

@@ -7,7 +7,7 @@ export function foodChoices(entries: FoodLogEntry[], recipes: SavedMeal[], query
   const seen = new Set<string>();
   // Same-day entries retain insertion order from the saved journal; prefer the latest.
   const recent = entries.map((food, index) => ({ food, index }))
-    .sort((a, b) => b.food.date.localeCompare(a.food.date) || b.index - a.index)
+    .sort((a, b) => b.food.date.localeCompare(a.food.date) || a.index - b.index)
     .filter(({ food }) => {
       const signature = JSON.stringify([normalize(food.name), food.calories, food.protein, food.carbs, food.fats]);
       if (seen.has(signature)) return false;
