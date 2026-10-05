@@ -1,0 +1,28 @@
+server:
+  port: ${NUTRIDISH_PORT:8080}
+  address: ${NUTRIDISH_HOST:127.0.0.1}
+
+spring:
+  application:
+    name: nutridish
+  main:
+    banner-mode: off
+
+  datasource:
+    url: jdbc:h2:file:${NUTRIDISH_DATA_DIR:~/.nutridish}/nutridish;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password: ""
+  jackson:
+    deserialization:
+      fail-on-null-for-primitives: false
+
+nutridish:
+  demo-user-id: 00000000-0000-0000-0000-000000000001
+
+  cors:
+    allowed-origins: ${NUTRIDISH_ALLOWED_ORIGINS:}
+
+logging:
+  level:
+    root: warn
+    com.swolemates.nutridish: info

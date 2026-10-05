@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { isFoodEntry, sumFoodEntries } from "@/lib/food-journal";
 import { mergeVerifiedLogs, workoutLogKey } from "@/lib/workout-log-sync";
 import { goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
-import { createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
+import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { type WorkoutExercise } from "@/lib/workout-session";
@@ -126,6 +126,7 @@ type AppData = {
   deletedWorkoutIds: string[];
   streak: number;
   weeklyWorkoutGoal: number;
+  workspaceSettings: AccountSetting[];
   nutrition: NutritionTotals | null;
   foodEntries: FoodLogEntry[];
   savedMeals: SavedMeal[];
@@ -136,6 +137,8 @@ type AppData = {
 type AppDataContextValue = AppData & {
   saveFeedback: Partial<Record<SaveArea, SaveFeedback>>;
   retrySave: (area: SaveArea) => Promise<boolean>;
+  accountUserId: string | null;
+  saveWorkspaceSetting: (id: string, content: string, owner: string, updatedAt: number) => Promise<boolean>;
   review: (partnerId: string, interested: boolean) => void;
   clearReview: (partnerId: string) => void;
   respondToInvite: (partnerId: string, accept: boolean) => void;
@@ -178,7 +181,7 @@ type AppDataContextValue = AppData & {
 };
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
-export type SaveArea = "food" | "recipes" | "plan" | "lifts" | "workouts";
+export type SaveArea = "food" | "recipes" | "plan" | "lifts" | "workouts" | "drafts";
 export type SaveFeedback = { phase: "saving" | "saved" | "error"; message?: string };
 const weeklyWorkoutGoalKey = "swolemates.weekly-workout-goal";
 const dashboardStateKey = "swolemates.dashboard-state";
@@ -312,7 +315,7 @@ function seedData(): AppData {
     logs: [],
     deletedWorkoutIds: [],
     streak: 0,
-    weeklyWorkoutGoal: 3,
+    weeklyWorkoutGoal: 3, workspaceSettings: [],
     nutrition: defaultNutrition,
     foodEntries: [],
     savedMeals: [],
@@ -339,6 +342,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   const accountQueue = useRef<Promise<unknown>>(Promise.resolve());
   const accountGeneration = useRef(0);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [draftStorageError, setDraftStorageError] = useState<string | null>(null);
   const [liftStorageError, setLiftStorageError] = useState<string | null>(null);
   const [retrySync, setRetrySync] = useState(0);
   const [nutritionPlanError, setNutritionPlanError] = useState<string | null>(null);
@@ -375,7 +379,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile,
         logs: mergeVerifiedLogs(snapshot.logs, current.logs.filter((log) => log.checkedIn && log.plannedWorkoutId), snapshot.deletedWorkoutIds),
         deletedWorkoutIds: snapshot.deletedWorkoutIds, weeklyWorkoutGoal: snapshot.weeklyWorkoutGoal,
-        trackedLifts: snapshot.lifts,
+        trackedLifts: snapshot.lifts, workspaceSettings: snapshot.workspaceSettings,
       }));
     }
     const refresh = async (owner: string | null, force = false) => {
@@ -496,7 +500,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   const value = useMemo<AppDataContextValue>(() => {
     const update = (fn: (current: AppData) => AppData) => setData(fn);
     const persistAccount = (operation: (stores: ReturnType<typeof createAccountStores>) => Promise<Partial<AppData>>, setError: (error: string | null) => void) => {
-      const area: SaveArea = setError === setRecipeStorageError ? "recipes" : setError === setFoodJournalError ? "food" : setError === setNutritionPlanError ? "plan" : setError === setLiftStorageError ? "lifts" : "workouts";
+      const area: SaveArea = setError === setDraftStorageError ? "drafts" : setError === setRecipeStorageError ? "recipes" : setError === setFoodJournalError ? "food" : setError === setNutritionPlanError ? "plan" : setError === setLiftStorageError ? "lifts" : "workouts";
       const feedback = (value: SaveFeedback) => setSaveFeedback(current => ({ ...current, [area]: value }));
       const stores = accountStores.current;
       const generation = accountGeneration.current;
@@ -744,11 +748,23 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       deleteTrackedLift(id) {
         return persistAccount(async (stores) => ({ trackedLifts: await stores.lifts.change((current) => current.filter((lift) => lift.id !== id)) }), setLiftStorageError);
       },
+      accountUserId: accountStores.current?.userId ?? null,
+      saveWorkspaceSetting(id, content, owner, updatedAt) {
+        if (accountStores.current?.userId !== owner) return Promise.resolve(false);
+        return persistAccount(async stores => {
+          const settings = await stores.settings.change(current => {
+            const previous = current.find(item => item.id === id);
+            if (typeof previous?.value === "object" && previous.value.updatedAt > updatedAt) return current;
+            return [...current.filter(item => item.id !== id), { id, value: { content, updatedAt } }];
+          });
+          return { workspaceSettings: settings.filter(item => item.id !== "weekly-workout-goal") };
+        }, setDraftStorageError);
+      },
       updateWeeklyWorkoutGoal(goal) {
         const normalized = Math.max(1, Math.min(7, Math.round(goal)));
         return persistAccount(async (stores) => {
-          const settings = await stores.settings.change(() => [{ id: "weekly-workout-goal", value: normalized }]);
-          return { weeklyWorkoutGoal: settings[0].value };
+          const settings = await stores.settings.change(current => [...current.filter(item => item.id !== "weekly-workout-goal"), { id: "weekly-workout-goal", value: normalized }]);
+          return { weeklyWorkoutGoal: Number(settings.find(item => item.id === "weekly-workout-goal")?.value ?? normalized) };
         }, setWorkoutStorageError);
       },
       logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}, recordId) {
