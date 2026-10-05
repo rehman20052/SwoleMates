@@ -220,7 +220,17 @@ test('moving profile photos preserves video types and captions in both direction
   assert.equal(moveProfileMedia(media, 0, 3), media);
 });
 
-const { avatarCrop } = loadModule('src/lib/avatar-crop.ts');
+const { avatarCrop, photoCrop } = loadModule('src/lib/avatar-crop.ts');
+test('photo crop keeps a 4:5 shape inside portrait, landscape and zoomed photos', () => {
+  for (const [width, height] of [[3000, 4000], [4000, 2000], [1080, 1350], [512, 512]]) {
+    for (const zoom of [1, 1.5, 4]) for (const [x, y] of [[0, 0], [99999, -99999], [-99999, 99999]]) {
+      const crop = photoCrop(width, height, 4 / 5, zoom, x, y);
+      assert.ok(Math.abs(crop.width / crop.height - 0.8) < 0.01, `${width}x${height} zoom ${zoom}: ${crop.width}x${crop.height}`);
+      assert.ok(crop.originX >= 0 && crop.originY >= 0);
+      assert.ok(crop.originX + crop.width <= width && crop.originY + crop.height <= height);
+    }
+  }
+});
 test('avatar crop remains square and inside portrait, landscape and zoomed photos', () => {
   for (const [width, height] of [[3000, 4000], [4000, 2000], [512, 512]]) {
     for (const zoom of [1, 1.5, 4]) for (const [x,y] of [[0,0], [99999,-99999], [-99999,99999]]) {
