@@ -1,0 +1,1828 @@
+[
+  {
+    "id": "quinoa-cooked",
+    "name": "Quinoa, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 120,
+      "protein": 4.4,
+      "carbs": 21.3,
+      "fats": 1.9
+    }
+  },
+  {
+    "id": "white-rice-cooked",
+    "name": "White rice, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 130,
+      "protein": 2.7,
+      "carbs": 28.2,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "brown-rice-cooked",
+    "name": "Brown rice, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 123,
+      "protein": 2.7,
+      "carbs": 25.6,
+      "fats": 1
+    }
+  },
+  {
+    "id": "pita-bread",
+    "name": "Pita bread",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 275,
+      "protein": 9.1,
+      "carbs": 55.7,
+      "fats": 1.2
+    }
+  },
+  {
+    "id": "corn-tortilla",
+    "name": "Corn tortillas",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 218,
+      "protein": 5.7,
+      "carbs": 44.6,
+      "fats": 2.9
+    }
+  },
+  {
+    "id": "rye-bread",
+    "name": "Rye bread",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 259,
+      "protein": 8.5,
+      "carbs": 48.3,
+      "fats": 3.3
+    }
+  },
+  {
+    "id": "whole-wheat-bread",
+    "name": "Whole-wheat bread",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 252,
+      "protein": 12.5,
+      "carbs": 42.7,
+      "fats": 3.5
+    }
+  },
+  {
+    "id": "rolled-oats",
+    "name": "Rolled oats",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 379,
+      "protein": 13.2,
+      "carbs": 67.7,
+      "fats": 6.5
+    }
+  },
+  {
+    "id": "pearl-barley-cooked",
+    "name": "Pearl barley, cooked",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 123,
+      "protein": 2.3,
+      "carbs": 28.2,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "pasta-cooked",
+    "name": "Wheat pasta, cooked",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 158,
+      "protein": 5.8,
+      "carbs": 30.9,
+      "fats": 0.9
+    }
+  },
+  {
+    "id": "soba-noodles-cooked",
+    "name": "Soba noodles, cooked",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 99,
+      "protein": 5.1,
+      "carbs": 21.4,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "rice-noodles-cooked",
+    "name": "Rice noodles, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 108,
+      "protein": 1.8,
+      "carbs": 24,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "couscous-cooked",
+    "name": "Couscous, cooked",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 112,
+      "protein": 3.8,
+      "carbs": 23.2,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "sweet-potato",
+    "name": "Sweet potato",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 86,
+      "protein": 1.6,
+      "carbs": 20.1,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "plantain-ripe",
+    "name": "Ripe plantain",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 122,
+      "protein": 1.3,
+      "carbs": 31.9,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "cornstarch",
+    "name": "Cornstarch",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 381,
+      "protein": 0.3,
+      "carbs": 91.3,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "chickpeas-cooked",
+    "name": "Chickpeas, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 164,
+      "protein": 8.9,
+      "carbs": 27.4,
+      "fats": 2.6
+    }
+  },
+  {
+    "id": "black-beans-cooked",
+    "name": "Black beans, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 132,
+      "protein": 8.9,
+      "carbs": 23.7,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "lentils-cooked",
+    "name": "Lentils, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 116,
+      "protein": 9,
+      "carbs": 20.1,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "white-beans-cooked",
+    "name": "White beans, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 139,
+      "protein": 9.7,
+      "carbs": 25.1,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "black-eyed-peas-cooked",
+    "name": "Black-eyed peas, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 116,
+      "protein": 7.7,
+      "carbs": 20.8,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "edamame",
+    "name": "Edamame, shelled",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 121,
+      "protein": 11.9,
+      "carbs": 8.9,
+      "fats": 5.2
+    }
+  },
+  {
+    "id": "firm-tofu",
+    "name": "Firm tofu",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 144,
+      "protein": 17.3,
+      "carbs": 2.8,
+      "fats": 8.7
+    }
+  },
+  {
+    "id": "tempeh",
+    "name": "Tempeh",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 192,
+      "protein": 20.3,
+      "carbs": 7.6,
+      "fats": 10.8
+    }
+  },
+  {
+    "id": "peanut-butter",
+    "name": "Peanut butter, smooth",
+    "traits": [],
+    "allergens": [
+      "Peanuts"
+    ],
+    "per100g": {
+      "calories": 598,
+      "protein": 22.2,
+      "carbs": 22.3,
+      "fats": 51.4
+    }
+  },
+  {
+    "id": "peanuts",
+    "name": "Roasted peanuts",
+    "traits": [],
+    "allergens": [
+      "Peanuts"
+    ],
+    "per100g": {
+      "calories": 587,
+      "protein": 24.4,
+      "carbs": 21.3,
+      "fats": 49.7
+    }
+  },
+  {
+    "id": "chicken-breast",
+    "name": "Chicken breast, skinless",
+    "traits": [
+      "poultry"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 120,
+      "protein": 22.5,
+      "carbs": 0,
+      "fats": 2.6
+    }
+  },
+  {
+    "id": "chicken-thigh",
+    "name": "Chicken thigh, skinless",
+    "traits": [
+      "poultry"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 121,
+      "protein": 19.7,
+      "carbs": 0,
+      "fats": 4.1
+    }
+  },
+  {
+    "id": "ground-turkey",
+    "name": "Ground turkey",
+    "traits": [
+      "poultry"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 148,
+      "protein": 19.7,
+      "carbs": 0,
+      "fats": 7.7
+    }
+  },
+  {
+    "id": "lean-ground-beef",
+    "name": "Lean ground beef (90%)",
+    "traits": [
+      "red-meat"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 176,
+      "protein": 20,
+      "carbs": 0,
+      "fats": 10
+    }
+  },
+  {
+    "id": "beef-flank-steak",
+    "name": "Beef flank steak",
+    "traits": [
+      "red-meat"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 149,
+      "protein": 21.7,
+      "carbs": 0,
+      "fats": 6.3
+    }
+  },
+  {
+    "id": "ground-lamb",
+    "name": "Ground lamb",
+    "traits": [
+      "red-meat"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 282,
+      "protein": 16.6,
+      "carbs": 0,
+      "fats": 23.4
+    }
+  },
+  {
+    "id": "ground-pork",
+    "name": "Ground pork",
+    "traits": [
+      "pork"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 263,
+      "protein": 16.9,
+      "carbs": 0,
+      "fats": 21.2
+    }
+  },
+  {
+    "id": "pork-tenderloin",
+    "name": "Pork tenderloin",
+    "traits": [
+      "pork"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 109,
+      "protein": 21,
+      "carbs": 0,
+      "fats": 2.2
+    }
+  },
+  {
+    "id": "salmon",
+    "name": "Salmon fillet",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 208,
+      "protein": 20.4,
+      "carbs": 0,
+      "fats": 13.4
+    }
+  },
+  {
+    "id": "cod",
+    "name": "Cod fillet",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 82,
+      "protein": 17.8,
+      "carbs": 0,
+      "fats": 0.7
+    }
+  },
+  {
+    "id": "shrimp",
+    "name": "Shrimp, peeled",
+    "traits": [
+      "shellfish"
+    ],
+    "allergens": [
+      "Shellfish"
+    ],
+    "per100g": {
+      "calories": 85,
+      "protein": 20.1,
+      "carbs": 0,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "smoked-salmon",
+    "name": "Cold-smoked salmon (lox)",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 117,
+      "protein": 18.3,
+      "carbs": 0,
+      "fats": 4.3
+    }
+  },
+  {
+    "id": "canned-light-tuna",
+    "name": "Canned light tuna, drained",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 86,
+      "protein": 19.4,
+      "carbs": 0,
+      "fats": 1
+    }
+  },
+  {
+    "id": "egg",
+    "name": "Eggs",
+    "traits": [
+      "egg"
+    ],
+    "allergens": [
+      "Egg"
+    ],
+    "per100g": {
+      "calories": 143,
+      "protein": 12.6,
+      "carbs": 0.7,
+      "fats": 9.5
+    }
+  },
+  {
+    "id": "greek-yogurt",
+    "name": "Greek yogurt, plain nonfat",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 59,
+      "protein": 10.2,
+      "carbs": 3.6,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "whole-milk-yogurt",
+    "name": "Plain whole-milk yogurt",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 61,
+      "protein": 3.5,
+      "carbs": 4.7,
+      "fats": 3.3
+    }
+  },
+  {
+    "id": "soy-yogurt",
+    "name": "Plain soy yogurt",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 66,
+      "protein": 2.6,
+      "carbs": 9.7,
+      "fats": 1.8
+    }
+  },
+  {
+    "id": "milk-2pct",
+    "name": "Milk, 2%",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 50,
+      "protein": 3.3,
+      "carbs": 4.8,
+      "fats": 2
+    }
+  },
+  {
+    "id": "feta",
+    "name": "Feta cheese",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 265,
+      "protein": 14.2,
+      "carbs": 3.9,
+      "fats": 21.5
+    }
+  },
+  {
+    "id": "cheddar",
+    "name": "Cheddar cheese",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 403,
+      "protein": 22.9,
+      "carbs": 3.4,
+      "fats": 33.3
+    }
+  },
+  {
+    "id": "parmesan",
+    "name": "Parmesan cheese",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 392,
+      "protein": 35.8,
+      "carbs": 3.2,
+      "fats": 25
+    }
+  },
+  {
+    "id": "paneer",
+    "name": "Paneer",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 299,
+      "protein": 18.1,
+      "carbs": 3,
+      "fats": 23.8
+    }
+  },
+  {
+    "id": "cream-cheese",
+    "name": "Cream cheese",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 350,
+      "protein": 6.2,
+      "carbs": 5.5,
+      "fats": 34.4
+    }
+  },
+  {
+    "id": "butter",
+    "name": "Butter, unsalted",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 717,
+      "protein": 0.9,
+      "carbs": 0.1,
+      "fats": 81.1
+    }
+  },
+  {
+    "id": "ghee",
+    "name": "Ghee",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 876,
+      "protein": 0.3,
+      "carbs": 0,
+      "fats": 99.5
+    }
+  },
+  {
+    "id": "soy-milk",
+    "name": "Soy milk, unsweetened",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 54,
+      "protein": 3.3,
+      "carbs": 6.3,
+      "fats": 1.8
+    }
+  },
+  {
+    "id": "almond-milk",
+    "name": "Almond milk, unsweetened",
+    "traits": [],
+    "allergens": [
+      "Tree nuts"
+    ],
+    "per100g": {
+      "calories": 15,
+      "protein": 0.4,
+      "carbs": 1.3,
+      "fats": 1
+    }
+  },
+  {
+    "id": "coconut-milk",
+    "name": "Coconut milk, canned",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 197,
+      "protein": 2,
+      "carbs": 2.8,
+      "fats": 21.3
+    }
+  },
+  {
+    "id": "cucumber",
+    "name": "Cucumber",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 15,
+      "protein": 0.7,
+      "carbs": 3.6,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "tomato",
+    "name": "Tomatoes",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 18,
+      "protein": 0.9,
+      "carbs": 3.9,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "canned-tomatoes",
+    "name": "Canned tomatoes",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 16,
+      "protein": 0.8,
+      "carbs": 3.5,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "tomato-paste",
+    "name": "Tomato paste",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 82,
+      "protein": 4.3,
+      "carbs": 18.9,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "onion",
+    "name": "Onion",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 40,
+      "protein": 1.1,
+      "carbs": 9.3,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "garlic",
+    "name": "Garlic",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 149,
+      "protein": 6.4,
+      "carbs": 33.1,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "ginger",
+    "name": "Fresh ginger",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 80,
+      "protein": 1.8,
+      "carbs": 17.8,
+      "fats": 0.8
+    }
+  },
+  {
+    "id": "red-bell-pepper",
+    "name": "Red bell pepper",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 26,
+      "protein": 1,
+      "carbs": 6,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "spinach",
+    "name": "Spinach",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 23,
+      "protein": 2.9,
+      "carbs": 3.6,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "kale",
+    "name": "Kale",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 35,
+      "protein": 2.9,
+      "carbs": 4.4,
+      "fats": 1.5
+    }
+  },
+  {
+    "id": "broccoli",
+    "name": "Broccoli",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 34,
+      "protein": 2.8,
+      "carbs": 6.6,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "cauliflower",
+    "name": "Cauliflower",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 25,
+      "protein": 1.9,
+      "carbs": 5,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "carrot",
+    "name": "Carrots",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 41,
+      "protein": 0.9,
+      "carbs": 9.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "celery",
+    "name": "Celery",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 14,
+      "protein": 0.7,
+      "carbs": 3,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "mushrooms",
+    "name": "Mushrooms",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 22,
+      "protein": 3.1,
+      "carbs": 3.3,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "zucchini",
+    "name": "Zucchini",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 17,
+      "protein": 1.2,
+      "carbs": 3.1,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "eggplant",
+    "name": "Eggplant",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 25,
+      "protein": 1,
+      "carbs": 5.9,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "cabbage",
+    "name": "Cabbage",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 25,
+      "protein": 1.3,
+      "carbs": 5.8,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "bok-choy",
+    "name": "Bok choy",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 13,
+      "protein": 1.5,
+      "carbs": 2.2,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "romaine",
+    "name": "Romaine lettuce",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 17,
+      "protein": 1.2,
+      "carbs": 3.3,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "avocado",
+    "name": "Avocado",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 160,
+      "protein": 2,
+      "carbs": 8.5,
+      "fats": 14.7
+    }
+  },
+  {
+    "id": "green-peas",
+    "name": "Green peas",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 77,
+      "protein": 5.2,
+      "carbs": 13.6,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "bitter-melon",
+    "name": "Bitter melon (goya)",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 17,
+      "protein": 1,
+      "carbs": 3.7,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "mung-bean-sprouts",
+    "name": "Mung bean sprouts, raw",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 30,
+      "protein": 3,
+      "carbs": 5.9,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "olives",
+    "name": "Black olives",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 116,
+      "protein": 0.8,
+      "carbs": 6,
+      "fats": 10.9
+    }
+  },
+  {
+    "id": "capers",
+    "name": "Capers",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 23,
+      "protein": 2.4,
+      "carbs": 4.9,
+      "fats": 0.9
+    }
+  },
+  {
+    "id": "lemon-juice",
+    "name": "Lemon juice",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 22,
+      "protein": 0.4,
+      "carbs": 6.9,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "lime-juice",
+    "name": "Lime juice",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 25,
+      "protein": 0.4,
+      "carbs": 8.4,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "blueberries",
+    "name": "Blueberries",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 57,
+      "protein": 0.7,
+      "carbs": 14.5,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "banana",
+    "name": "Banana",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 89,
+      "protein": 1.1,
+      "carbs": 22.8,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "dried-apricots",
+    "name": "Dried apricots",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 241,
+      "protein": 3.4,
+      "carbs": 62.6,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "parsley",
+    "name": "Fresh parsley",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 36,
+      "protein": 3,
+      "carbs": 6.3,
+      "fats": 0.8
+    }
+  },
+  {
+    "id": "cilantro",
+    "name": "Fresh cilantro",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 23,
+      "protein": 2.1,
+      "carbs": 3.7,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "dill",
+    "name": "Fresh dill",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 43,
+      "protein": 3.5,
+      "carbs": 7,
+      "fats": 1.1
+    }
+  },
+  {
+    "id": "basil",
+    "name": "Fresh basil",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 23,
+      "protein": 3.2,
+      "carbs": 2.7,
+      "fats": 0.6
+    }
+  },
+  {
+    "id": "mint",
+    "name": "Fresh mint",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 44,
+      "protein": 3.3,
+      "carbs": 8.4,
+      "fats": 0.7
+    }
+  },
+  {
+    "id": "oregano",
+    "name": "Dried oregano",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 265,
+      "protein": 9,
+      "carbs": 68.9,
+      "fats": 4.3
+    }
+  },
+  {
+    "id": "thyme",
+    "name": "Dried thyme",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 276,
+      "protein": 9.1,
+      "carbs": 63.9,
+      "fats": 7.4
+    }
+  },
+  {
+    "id": "cumin",
+    "name": "Ground cumin",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 375,
+      "protein": 17.8,
+      "carbs": 44.2,
+      "fats": 22.3
+    }
+  },
+  {
+    "id": "paprika",
+    "name": "Paprika",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 282,
+      "protein": 14.1,
+      "carbs": 54,
+      "fats": 12.9
+    }
+  },
+  {
+    "id": "turmeric",
+    "name": "Ground turmeric",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 312,
+      "protein": 9.7,
+      "carbs": 67.1,
+      "fats": 3.3
+    }
+  },
+  {
+    "id": "curry-powder",
+    "name": "Curry powder or garam masala",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 325,
+      "protein": 14.3,
+      "carbs": 55.8,
+      "fats": 14
+    }
+  },
+  {
+    "id": "chili-powder",
+    "name": "Chili powder",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 282,
+      "protein": 13.5,
+      "carbs": 49.7,
+      "fats": 14.3
+    }
+  },
+  {
+    "id": "black-pepper",
+    "name": "Black pepper",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 251,
+      "protein": 10.4,
+      "carbs": 64,
+      "fats": 3.3
+    }
+  },
+  {
+    "id": "cinnamon",
+    "name": "Ground cinnamon",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 247,
+      "protein": 4,
+      "carbs": 80.6,
+      "fats": 1.2
+    }
+  },
+  {
+    "id": "salt",
+    "name": "Salt",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 0
+    }
+  },
+  {
+    "id": "olive-oil",
+    "name": "Olive oil",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 884,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 100
+    }
+  },
+  {
+    "id": "canola-oil",
+    "name": "Canola oil",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 884,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 100
+    }
+  },
+  {
+    "id": "sesame-oil",
+    "name": "Toasted sesame oil",
+    "traits": [],
+    "allergens": [
+      "Sesame"
+    ],
+    "per100g": {
+      "calories": 884,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 100
+    }
+  },
+  {
+    "id": "palm-oil",
+    "name": "Red palm oil",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 884,
+      "protein": 0,
+      "carbs": 0,
+      "fats": 100
+    }
+  },
+  {
+    "id": "soy-sauce",
+    "name": "Soy sauce (shoyu)",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Soy",
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 53,
+      "protein": 8.1,
+      "carbs": 4.9,
+      "fats": 0.6
+    }
+  },
+  {
+    "id": "tamari",
+    "name": "Tamari",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 60,
+      "protein": 10.5,
+      "carbs": 5.6,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "sake",
+    "name": "Sake (rice wine)",
+    "traits": [
+      "alcohol"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 134,
+      "protein": 0.5,
+      "carbs": 5,
+      "fats": 0
+    }
+  },
+  {
+    "id": "white-wine",
+    "name": "Dry white wine",
+    "traits": [
+      "alcohol"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 80,
+      "protein": 0.1,
+      "carbs": 3.3,
+      "fats": 0
+    }
+  },
+  {
+    "id": "rice-vinegar",
+    "name": "Rice or cider vinegar",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 21,
+      "protein": 0,
+      "carbs": 0.9,
+      "fats": 0
+    }
+  },
+  {
+    "id": "honey",
+    "name": "Honey",
+    "traits": [
+      "honey"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 304,
+      "protein": 0.3,
+      "carbs": 82.4,
+      "fats": 0
+    }
+  },
+  {
+    "id": "sugar",
+    "name": "Sugar",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 387,
+      "protein": 0,
+      "carbs": 100,
+      "fats": 0
+    }
+  },
+  {
+    "id": "maple-syrup",
+    "name": "Maple syrup",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 260,
+      "protein": 0,
+      "carbs": 67,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "tahini",
+    "name": "Tahini",
+    "traits": [],
+    "allergens": [
+      "Sesame"
+    ],
+    "per100g": {
+      "calories": 595,
+      "protein": 17,
+      "carbs": 21.2,
+      "fats": 53.8
+    }
+  },
+  {
+    "id": "sesame-seeds",
+    "name": "Sesame seeds",
+    "traits": [],
+    "allergens": [
+      "Sesame"
+    ],
+    "per100g": {
+      "calories": 573,
+      "protein": 17.7,
+      "carbs": 23.5,
+      "fats": 49.7
+    }
+  },
+  {
+    "id": "miso",
+    "name": "Miso paste",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 198,
+      "protein": 12.8,
+      "carbs": 25.4,
+      "fats": 6
+    }
+  },
+  {
+    "id": "salsa",
+    "name": "Tomato salsa",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 29,
+      "protein": 1.5,
+      "carbs": 6.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "mayonnaise",
+    "name": "Mayonnaise",
+    "traits": [
+      "egg"
+    ],
+    "allergens": [
+      "Egg"
+    ],
+    "per100g": {
+      "calories": 680,
+      "protein": 1,
+      "carbs": 0.6,
+      "fats": 74.9
+    }
+  },
+  {
+    "id": "vegetable-broth",
+    "name": "Vegetable broth",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 5,
+      "protein": 0.2,
+      "carbs": 0.9,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "chicken-broth",
+    "name": "Chicken broth",
+    "traits": [
+      "poultry"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 7,
+      "protein": 1.4,
+      "carbs": 0.4,
+      "fats": 0
+    }
+  },
+  {
+    "id": "fish-sauce",
+    "name": "Fish sauce",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 35,
+      "protein": 5.1,
+      "carbs": 3.6,
+      "fats": 0
+    }
+  },
+  {
+    "id": "sriracha",
+    "name": "Chili sauce (sriracha or gochujang)",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 93,
+      "protein": 1.9,
+      "carbs": 19.2,
+      "fats": 0.9
+    }
+  },
+  {
+    "id": "walnuts",
+    "name": "Walnuts",
+    "traits": [],
+    "allergens": [
+      "Tree nuts"
+    ],
+    "per100g": {
+      "calories": 654,
+      "protein": 15.2,
+      "carbs": 13.7,
+      "fats": 65.2
+    }
+  },
+  {
+    "id": "almonds",
+    "name": "Almonds",
+    "traits": [],
+    "allergens": [
+      "Tree nuts"
+    ],
+    "per100g": {
+      "calories": 579,
+      "protein": 21.2,
+      "carbs": 21.6,
+      "fats": 49.9
+    }
+  },
+  {
+    "id": "cashews",
+    "name": "Cashews",
+    "traits": [],
+    "allergens": [
+      "Tree nuts"
+    ],
+    "per100g": {
+      "calories": 553,
+      "protein": 18.2,
+      "carbs": 30.2,
+      "fats": 43.9
+    }
+  },
+  {
+    "id": "short-grain-rice-cooked",
+    "name": "Short-grain rice, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 130,
+      "protein": 2.4,
+      "carbs": 28.7,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "bulgur-cooked",
+    "name": "Bulgur wheat, cooked",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 83,
+      "protein": 3.1,
+      "carbs": 18.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "potato",
+    "name": "Potatoes",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 77,
+      "protein": 2.1,
+      "carbs": 17.5,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "fennel",
+    "name": "Fennel bulb",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 31,
+      "protein": 1.2,
+      "carbs": 7.3,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "green-bell-pepper",
+    "name": "Green bell pepper",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 20,
+      "protein": 0.9,
+      "carbs": 4.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "scallion",
+    "name": "Scallions",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 32,
+      "protein": 1.8,
+      "carbs": 7.3,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "wakame",
+    "name": "Wakame seaweed",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 45,
+      "protein": 3,
+      "carbs": 9.1,
+      "fats": 0.6
+    }
+  },
+  {
+    "id": "kimchi",
+    "name": "Kimchi",
+    "traits": [
+      "fish",
+      "shellfish"
+    ],
+    "allergens": [
+      "Fish",
+      "Shellfish"
+    ],
+    "per100g": {
+      "calories": 15,
+      "protein": 1.1,
+      "carbs": 2.4,
+      "fats": 0.5
+    }
+  },
+  {
+    "id": "soft-tofu",
+    "name": "Soft tofu",
+    "traits": [],
+    "allergens": [
+      "Soy"
+    ],
+    "per100g": {
+      "calories": 61,
+      "protein": 7.2,
+      "carbs": 1.2,
+      "fats": 3.7
+    }
+  },
+  {
+    "id": "hoisin",
+    "name": "Hoisin sauce",
+    "traits": [
+      "gluten"
+    ],
+    "allergens": [
+      "Soy",
+      "Wheat"
+    ],
+    "per100g": {
+      "calories": 220,
+      "protein": 3.3,
+      "carbs": 44.1,
+      "fats": 3.4
+    }
+  },
+  {
+    "id": "pecorino",
+    "name": "Pecorino cheese",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 387,
+      "protein": 31.8,
+      "carbs": 3.6,
+      "fats": 26.9
+    }
+  },
+  {
+    "id": "red-wine",
+    "name": "Dry red wine",
+    "traits": [
+      "alcohol"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 85,
+      "protein": 0.1,
+      "carbs": 2.6,
+      "fats": 0
+    }
+  },
+  {
+    "id": "rosemary",
+    "name": "Fresh rosemary",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 131,
+      "protein": 3.3,
+      "carbs": 20.7,
+      "fats": 5.9
+    }
+  }
+]

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>NutriDish · SwoleMates</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#discover" aria-label="NutriDish home">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span class="brand-text">NutriDish <small>by SwoleMates</small></span>
+      </a>
+      <nav class="tabs" aria-label="Sections">
+        <a href="#discover" data-view="discover">Discover</a>
+        <a href="#saved" data-view="saved">Saved <span class="count" id="saved-count"></span></a>
+        <a href="#today" data-view="today">Today</a>
+        <a href="#profile" data-view="profile">Profile</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <noscript><p class="notice">NutriDish needs JavaScript enabled.</p></noscript>
+    <p class="notice" id="boot-status">Connecting to the NutriDish server…</p>
+  </main>
+
+  <dialog id="detail" aria-labelledby="detail-title"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
