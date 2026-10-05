@@ -116,6 +116,7 @@ export type UserProfile = {
   customLift: string;
   displayLifts?: ProfileLift[];
   photos: string[];
+  avatar?: string;
   photoMedia: ProfileMediaKind[];
   photoCaptions: string[];
   prompts: ProfilePromptAnswer[];
@@ -137,7 +138,8 @@ export function rememberPickedMime(uri: string, mimeType?: string) {
   if (mimeType) pickedMime.set(uri, mimeType);
 }
 
-export function profilePortrait(profile: Pick<UserProfile, "photos" | "photoMedia">): string | null {
+export function profilePortrait(profile: Pick<UserProfile, "photos" | "photoMedia" | "avatar">): string | null {
+  if (profile.avatar) return profile.avatar;
   const index = profile.photos.findIndex((photo, photoIndex) => profileMediaKind(photo, profile.photoMedia[photoIndex]) === "image");
   return index >= 0 ? profile.photos[index] : null;
 }
@@ -263,6 +265,7 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     customLift: typeof profile.customLift === "string" ? profile.customLift : "N/A",
     displayLifts: profileLifts(profile),
     photos,
+    avatar: typeof profile.avatar === "string" ? profile.avatar : undefined,
     photoMedia: photos.map((photo, index) => profileMediaKind(photo, Array.isArray(profile.photoMedia) ? profile.photoMedia[index] : undefined)),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photos.length),
     prompts: normalizePrompts(profile.prompts),
@@ -321,7 +324,7 @@ export function profileFromUser(user: { id: string; user_metadata?: Record<strin
     return shown ? [{ uri: shown, kind: profile.photoMedia[index] ?? "image" }] : [];
   });
   if (remote.length > 0) {
-    return { ...profile, photos: remote.map((item) => item.uri), photoMedia: remote.map((item) => item.kind) };
+    return { ...profile, avatar: profile.avatar ? displayPhoto(profile.avatar, user.id) ?? undefined : undefined, photos: remote.map((item) => item.uri), photoMedia: remote.map((item) => item.kind) };
   }
 
   // Photos picked before Storage was connected still live in this browser.
@@ -338,7 +341,7 @@ function clip(value: string, max: number) {
   return trimmed.slice(0, max);
 }
 
-function accountProfile(profile: UserProfile, photoPaths: string[], location: { latitude: number | null; longitude: number | null }) {
+function accountProfile(profile: UserProfile, photoPaths: string[], location: { latitude: number | null; longitude: number | null }, avatar?: string) {
   return {
     fullName: clip(profile.fullName, 80),
     birthDate: parseBirthDate(profile.birthDate) ? profile.birthDate : "",
@@ -361,6 +364,7 @@ function accountProfile(profile: UserProfile, photoPaths: string[], location: { 
     ...legacyLiftFields(profileLifts(profile)),
     displayLifts: profileLifts(profile),
     photos: photoPaths,
+    avatar,
     photoMedia: photoPaths.map((_, index) => profile.photoMedia[index] ?? "image"),
     photoCaptions: normalizeCaptions(profile.photoCaptions, photoPaths.length),
     prompts: answeredPrompts(profile.prompts),
@@ -372,7 +376,7 @@ function savedPhotoPaths(user: { id: string; user_metadata?: Record<string, unkn
   if (!profile || typeof profile !== "object") return [];
   const photos = (profile as { photos?: unknown }).photos;
   if (!Array.isArray(photos)) return [];
-  return photos
+  return [...photos, (profile as { avatar?: unknown }).avatar]
     .filter((photo): photo is string => typeof photo === "string")
     .map((photo) => storagePath(photo, user.id))
     .filter((photo): photo is string => photo !== null);
@@ -617,6 +621,9 @@ async function sessionForSave() {
 }
 
 export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
+  if (profile.photos[0] && profileMediaKind(profile.photos[0], profile.photoMedia[0]) === "video") {
+    throw new Error("Choose a photo for the first slot. Videos can go in the other slots.");
+  }
   const session = await sessionForSave();
   const birthError = birthDateError(profile.birthDate);
   if (birthError) throw new Error(birthError);
@@ -645,13 +652,20 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
   };
 
   let account: AccountProfile;
+  let avatarPath: string | undefined;
+  const mediaUploads: string[] = [];
   try {
     const chosen = profile.photos.slice(0, 6);
     for (let index = 0; index < chosen.length; index += 1) {
-      uploaded.push(await uploadProfileMedia(userId, chosen[index], profile.photoMedia[index] ?? "image"));
+      const path = await uploadProfileMedia(userId, chosen[index], profile.photoMedia[index] ?? "image");
+      uploaded.push(path); mediaUploads.push(path);
     }
 
-    account = accountProfile(profile, uploaded, location);
+    if (profile.avatar && chosen.length > 0) {
+      avatarPath = await uploadProfileMedia(userId, profile.avatar, "image");
+      mediaUploads.push(avatarPath);
+    }
+    account = accountProfile(profile, uploaded, location, avatarPath);
     const { error } = await supabase.auth.updateUser({
       data: { profile: account },
     });
@@ -660,14 +674,14 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
       throw error;
     }
   } catch (error) {
-    const freshUploads = uploaded.filter((path) => !previous.includes(path));
+    const freshUploads = mediaUploads.filter((path) => !previous.includes(path));
     if (freshUploads.length > 0) {
       await supabase.storage.from(PHOTO_BUCKET).remove(freshUploads);
     }
     throw error;
   }
 
-  const removed = previous.filter((path) => !uploaded.includes(path));
+  const removed = previous.filter((path) => !mediaUploads.includes(path));
   if (removed.length > 0) {
     await supabase.storage.from(PHOTO_BUCKET).remove(removed);
   }
@@ -681,5 +695,5 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
     throw new Error(`Your profile was saved, but not to the user_account tables. ${detail}`.trim());
   }
 
-  return { ...profile, ...location, photos: uploaded.map(publicPhotoUrl) };
+  return { ...profile, ...location, avatar: avatarPath ? publicPhotoUrl(avatarPath) : undefined, photos: uploaded.map(publicPhotoUrl) };
 }

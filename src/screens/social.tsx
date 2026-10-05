@@ -112,6 +112,23 @@ function seekMountedClip(player: VideoPlayer, seconds: number) {
   player.currentTime = seconds;
 }
 
+function playMountedClip(player: VideoPlayer) {
+  // Expo's web player calls HTMLVideoElement.play() without handling its
+  // promise. Safari/Chrome reject it for autoplay restrictions, interrupted
+  // loads and unsupported clips; those rejections otherwise open Expo LogBox.
+  if (Platform.OS === "web") {
+    const mounted = (player as VideoPlayer & { _mountedVideos?: Set<HTMLVideoElement> })._mountedVideos;
+    mounted?.forEach(video => {
+      void video.play().catch(() => {
+        // A later user tap can retry. Source failures remain exposed through
+        // the player's statusChange event instead of an unhandled exception.
+      });
+    });
+    return;
+  }
+  player.play();
+}
+
 let feedAudioReady = false;
 const feedAudioWaiters = new Set<() => void>();
 
@@ -1259,7 +1276,7 @@ function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlayi
     if (queued != null) flushSeek(queued);
     clip.seekTolerance = { toleranceBefore: 0, toleranceAfter: 0 };
     clip.scrubbingModeOptions = { scrubbingModeEnabled: false };
-    if (keepPlayingRef.current) clip.play();
+    if (keepPlayingRef.current) playMountedClip(clip);
   }, [flushSeek]);
 
   useEffect(() => {
@@ -1407,7 +1424,7 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
 
   useEffect(() => {
     player.muted = !soundOn;
-    if (play) player.play();
+    if (play) playMountedClip(player);
     else player.pause();
   }, [play, player, soundOn]);
 
@@ -1495,15 +1512,17 @@ function VideoSoundButton({ muted, onPress }: { muted: boolean; onPress: () => v
 }
 
 function LightboxVideo({ uri }: { uri: string }) {
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const player = useVideoPlayer(uri, (clip) => {
     clip.loop = true;
     clip.muted = false;
   });
   useEffect(() => {
-    player.play();
+    const listener = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
+    playMountedClip(player);
     return () => {
+      listener.remove();
       player.pause();
     };
   }, [player]);
@@ -1524,8 +1543,7 @@ function LightboxVideo({ uri }: { uri: string }) {
         accessibilityLabel={playing ? "Pause clip" : "Play clip"}
         onPress={() => {
           if (playing) player.pause();
-          else player.play();
-          setPlaying(!playing);
+          else playMountedClip(player);
         }}
         style={StyleSheet.absoluteFill}
       />

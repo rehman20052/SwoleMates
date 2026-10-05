@@ -43,6 +43,7 @@ function publicProfile(profile: UserProfile) {
     .slice(0, 6);
   return {
     ...profile,
+    avatar: profile.avatar ? photoUrl(profile.avatar) : undefined,
     photos: kept.map((item) => item.photo),
     photoMedia: kept.map((item) => item.kind),
     photoCaptions: profile.photoCaptions.slice(0, kept.length),

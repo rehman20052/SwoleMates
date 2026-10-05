@@ -22,6 +22,11 @@ const assert = require('node:assert/strict');
     const errors = [];
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
+    const portraitPhoto = Buffer.from(await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 300; canvas.height = 500;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#d1ef57'; ctx.fillRect(0,0,300,250); ctx.fillStyle = '#567234'; ctx.fillRect(0,250,300,250);
+      return canvas.toDataURL('image/png').split(',')[1];
+    }), 'base64');
     async function keyboardViewport(height, top) {
       await page.evaluate(({ height, top }) => {
         for (const [name, value] of Object.entries({ height, offsetTop: top, pageTop: top })) {
@@ -75,7 +80,7 @@ const assert = require('node:assert/strict');
     await context.route('**/*', async route => {
       const url = route.request().url();
       if (url.startsWith(base)) return route.continue();
-      if (url.includes('/storage/v1/object/public/profile-photos/')) return route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=', 'base64') });
+      if (url.includes('/storage/v1/object/public/profile-photos/')) return route.fulfill({ contentType: 'image/png', body: portraitPhoto });
       if (url.startsWith('https://wger.de/api/v2/exerciseinfo/')) return route.fulfill({ json: { results: [{ translations: [{ language: 2, name: 'Catalog cable press' }] }], next: null } });
       // All external traffic is mocked: this check cannot write to a real account.
       if (url.includes('/auth/v1/user')) {
@@ -396,10 +401,13 @@ const assert = require('node:assert/strict');
     const grid = page.locator('.profile-reorder-grid');
     await grid.locator('img').first().waitFor({ state: 'attached' });
     assert.equal(await grid.evaluate(node => getComputedStyle(node.querySelector('img')).pointerEvents), 'none', 'images cannot intercept hold-to-reorder');
+    assert.equal(await grid.locator('img').first().evaluate(img => getComputedStyle(img).objectFit), 'contain', 'edit previews show the full image');
     const secondPhoto = await page.getByRole('button', { name: 'Replace photo or clip 2', exact: true }).locator('img').getAttribute('src');
     await page.getByRole('button', { name: 'Move photo 2 earlier', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: 'Replace photo or clip 1', exact: true }).locator('img').getAttribute('src'), secondPhoto, 'arrow moves the selected photo into the first slot');
-    const firstSlot = page.getByRole('button', { name: 'Replace photo or clip 1', exact: true });
+    await page.getByRole('button', { name: 'Use profile icon', exact: true }).click();
+    await page.getByText('Your profile icon', { exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('button', { name: 'Replace profile photo', exact: true }).locator('img').getAttribute('src'), secondPhoto, 'arrow moves the selected photo into the first slot');
+    const firstSlot = page.getByRole('button', { name: 'Replace profile photo', exact: true });
     const secondSlot = page.getByRole('button', { name: 'Replace photo or clip 2', exact: true });
     const dragFrom = await firstSlot.boundingBox();
     const dragTo = await secondSlot.boundingBox();
@@ -413,9 +421,17 @@ const assert = require('node:assert/strict');
     }
     await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(200);
+    await page.getByRole('button', { name: 'Use profile icon', exact: true }).click();
+    await page.getByText('Your profile icon', { exact: true }).waitFor({ state: 'hidden' });
     assert.equal(await firstSlot.locator('img').getAttribute('src'), restoredFirst, 'holding and dragging reorders photos without opening the replace picker');
     await touch.detach();
     await page.getByRole('tab', { name: 'View profile', exact: true }).click();
+    const fullProfileImage = page.locator('img[src*="/profile-photos/"]').filter({ visible: true }).first();
+    await fullProfileImage.waitFor();
+    await page.waitForTimeout(100);
+    const photoGeometry = await fullProfileImage.evaluate(img => ({ fit: getComputedStyle(img).objectFit, ratio: img.getBoundingClientRect().width / img.getBoundingClientRect().height }));
+    assert.equal(photoGeometry.fit, 'contain');
+    assert.ok(Math.abs(photoGeometry.ratio - 0.6) < 0.01, 'profile frame uses the original portrait aspect ratio: ' + JSON.stringify(photoGeometry));
     await page.getByRole('tab', { name: 'Edit', exact: true }).click();
     await page.getByRole('button', { name: 'Add lift', exact: true }).click();
     const profileLiftPicker = page.locator('[aria-modal="true"]');

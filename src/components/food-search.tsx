@@ -15,7 +15,7 @@ export function FoodSearch({ entries, recipes, ready, onSelect }: {
   const [limit, setLimit] = useState(3);
   const choices = useMemo(() => foodChoices(entries, recipes, query), [entries, recipes, query]);
   return <TrainingCard padding={16} gap={12}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Icon source={icons.zap} size={24} tint={theme.colors.accent} /><View style={{ flex: 1, gap: 3 }}><AppText size={16} weight="bold">Quick log</AppText><AppText size={12} muted>Recent foods & saved recipes</AppText></View></View>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Icon source={icons.zap} size={24} tint={theme.colors.accent} /><View style={{ flex: 1, gap: 3 }}><AppText size={16} weight="bold">Quick log</AppText><AppText size={12} muted>Recent foods & saved recipes</AppText></View>{ready && limit > 3 && choices.length > 3 ? <SecondaryButton height={34} fontSize={12} onPress={() => setLimit(3)}>Show less</SecondaryButton> : null}</View>
     <Input bordered placeholder="Search recent foods and recipes" accessibilityLabel="Search recent foods and recipes" value={query} onChangeText={value => { setQuery(value); setLimit(3); }} />
     {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear food search" onPress={() => { setQuery(""); setLimit(3); }}><AppText size={12} primary>Clear search</AppText></Pressable> : null}
     {!ready ? <AppText size={12} muted>Loading your foods and recipes…</AppText> : choices.length ? <>
