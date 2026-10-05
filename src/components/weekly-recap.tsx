@@ -15,9 +15,9 @@ export function WeeklyRecap() {
   return <TrainingCard padding={16} gap={14}>
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon source={icons.award} size={23} tint={theme.colors.accent} /><AppText size={16} weight="bold">Weekly recap</AppText></View>
-      <SecondaryButton height={32} fontSize={12} onPress={() => setOffset(offset === 0 ? -1 : 0)}>{offset === 0 ? "Last week" : "This week"}</SecondaryButton>
+      <SecondaryButton height={32} fontSize={12} onPress={() => setOffset(offset === 0 ? -1 : 0)}>{offset === 0 ? "View last week" : "View this week"}</SecondaryButton>
     </View>
-    <AppText size={12} muted>{formatShortDate(recap.start)} – {formatShortDate(recap.end)}</AppText>
+    <AppText size={12} muted>{offset === 0 ? "This week" : "Last week"} · {formatShortDate(recap.start)} – {formatShortDate(recap.end)}</AppText>
     {!foodJournalReady ? <AppText muted>Loading your week…</AppText> : <>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {[{ value: `${recap.workoutDays}/${weeklyWorkoutGoal}`, label: "days trained", icon: icons.training }, { value: `${recap.nutritionDays}/7`, label: "food logged", icon: icons.fuel }, { value: `${recap.bests.length}`, label: "lift bests", icon: icons.progress }].map(item => <View key={item.label} style={{ flex: 1, minWidth: 75, padding: 10, gap: 7, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.panelBorder, backgroundColor: theme.colors.insetSurface }}>

@@ -11,6 +11,7 @@ export type PickedProfileMedia = {
 };
 
 export async function pickProfileMedia(options?: {
+  photosOnly?: boolean;
   onCompressProgress?: (progress: number) => void;
 }): Promise<PickedProfileMedia | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -19,7 +20,7 @@ export async function pickProfileMedia(options?: {
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images", "videos"],
+    mediaTypes: options?.photosOnly ? ["images"] : ["images", "videos"],
     quality: 0.8,
     // iPhone photos are HEIC and clips are often HEVC. Compatible asks iOS to hand back JPEG and H.264.
     preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
@@ -29,6 +30,7 @@ export async function pickProfileMedia(options?: {
 
   const asset = result.assets[0];
   const kind: ProfileMediaKind = asset.type === "video" ? "video" : "image";
+  if (options?.photosOnly && kind !== "image") throw new Error("The first slot must be a photo.");
   const knownSize = asset.fileSize || asset.file?.size || (kind === "video" ? localFileSize(asset.uri) : 0);
   if (kind === "image" && knownSize > MAX_PROFILE_MEDIA_BYTES) {
     throw new Error("Photos must be under 50MB.");

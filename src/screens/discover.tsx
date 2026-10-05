@@ -187,7 +187,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
                   review(current.id, false);
                 }}
               >
-                {reviewingSkipped ? "Next" : "Skip"}
+                Skip
               </SecondaryButton>
             </Card>
           }

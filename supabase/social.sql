@@ -289,13 +289,14 @@ as $$
   select
     account.id,
     account.full_name::text,
-    (
-      select photo.storage_path::text
+    coalesce(
+      (select nullif(card.profile ->> 'avatar', '') from public.discover_profiles card where card.id = account.id),
+      (select photo.storage_path::text
       from public.profile_photo photo
       where photo.user_id = account.id
         and photo.storage_path !~* '\.(mp4|mov|m4v|webm)$'
       order by photo.sort_order
-      limit 1
+      limit 1)
     )
   from public.user_account account
   where account.id = any (people)

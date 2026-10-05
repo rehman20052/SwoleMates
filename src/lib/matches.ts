@@ -1,4 +1,4 @@
-import { normalizeProfile, type UserProfile } from "@/lib/profile";
+import { profilePortrait, normalizeProfile, type UserProfile } from "@/lib/profile";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
 import { markAccountRead, readAccountMarkers } from "@/lib/account-markers";
@@ -83,6 +83,7 @@ export async function loadPublicMatchProfile(userId: string) {
   });
   const profile: UserProfile = {
     ...normalized,
+    avatar: normalized.avatar ? photoUrl(normalized.avatar) : undefined,
     photos: shown.map((item) => item.url),
     photoMedia: shown.map((item) => item.kind),
     birthDate: "",
@@ -118,7 +119,7 @@ function personFrom(row: {
     return url ? [{ url, kind: normalized?.photoMedia[index] ?? "image" }] : [];
   });
   const photos = shown.map((item) => item.url);
-  const profile = normalized ? { ...normalized, photos, photoMedia: shown.map((item) => item.kind) } : null;
+  const profile = normalized ? { ...normalized, avatar: normalized.avatar ? photoUrl(normalized.avatar) : undefined, photos, photoMedia: shown.map((item) => item.kind) } : null;
   if (profile) matchProfiles.set(row.other_user_id, profile);
   const person: MatchConnection = {
     requestId: row.id,
@@ -128,7 +129,7 @@ function personFrom(row: {
     name: profile?.fullName?.trim() || "SwoleMate",
     age: profile?.age?.trim() || "",
     gym: profile?.primaryGym?.trim() || "",
-    photo: shown.find((item) => item.kind === "image")?.url ?? null,
+    photo: profile ? profilePortrait(profile) : null,
     lastMessage: row.last_message?.trim() || "",
     lastMessageMine: false,
     lastMessageAt: "",
@@ -532,10 +533,21 @@ export async function unmatch(requestId: string) {
 
 export async function cancelMatchRequest(requestId: string) {
   const me = await currentUserId();
+  const cancelled = await supabase.rpc("cancel_match_request", { request_id: requestId });
+  if (!cancelled.error) {
+    notifyChatAlerts();
+    return;
+  }
+  if (cancelled.error.code !== "PGRST202" && cancelled.error.code !== "42883") {
+    throw new Error(cancelled.error.message || "Could not cancel this request.");
+  }
+  // Older installations can cancel a request with no workout references until
+  // the focused repair installs the transactional cancellation function.
   const { data, error } = await supabase.from("match_requests").delete()
     .eq("id", requestId).eq("from_user_id", me).eq("status", "pending").select("id");
   if (error) {
     if (error.code === "42501") throw new Error("Cancellation permission needs updating in Supabase. Run supabase/cancel-match-requests.sql.");
+    if (error.code === "23503") throw new Error("Cancellation needs a database update to preserve workout history. Run supabase/cancel-match-requests.sql, then try again.");
     // Preserve the actual error; a foreign-key conflict is not a missing script.
     throw new Error(error.message || "Could not cancel this request.");
   }
