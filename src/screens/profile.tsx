@@ -1,3 +1,4 @@
+import Svg, { Path } from "react-native-svg";
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlatList, Modal, PanResponder, Platform, Pressable, StyleSheet, View, type LayoutRectangle, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
@@ -24,7 +25,7 @@ import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
 import { searchGymsByName, searchStreetAddresses, type GymPlace } from "@/lib/gym-location";
-import { AvatarCrop } from "@/components/avatar-crop";
+import { AvatarCrop, ProfilePhotoCrop } from "@/components/avatar-crop";
 import { ProfileLiftsEditor } from "@/components/profile-lifts-editor";
 import { legacyLiftFields, profileLifts } from "@/lib/profile-lifts";
 
@@ -88,6 +89,8 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   const theme = useAppTheme();
   const nav = useNavigation();
   const [crop, setCrop] = useState<{ profile: UserProfile; uri: string } | null>(null);
+  // A photo being framed as a 4:5 portrait. Confirming puts the cropped copy in slot `index` of `profile`.
+  const [frame, setFrame] = useState<{ profile: UserProfile; index: number; uri: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
@@ -308,12 +311,15 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         photoMedia.push(picked.kind);
         photoCaptions.push("");
       }
-      changeMedia({
+      const next = {
         ...profile,
         photos: photos.slice(0, MAX_PHOTOS),
         photoMedia: photoMedia.slice(0, photos.length),
         photoCaptions: photoCaptions.slice(0, photos.length),
-      });
+      };
+      // Photos are framed before they're added. Clips are added as they are.
+      if (picked.kind === "image") setFrame({ profile: next, index: Math.min(index, next.photos.length - 1), uri: picked.uri });
+      else changeMedia(next);
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "Could not add that photo or clip.");
     } finally {
@@ -346,6 +352,19 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
 
   return (
     <Screen>
+      {frame ? (
+        <ProfilePhotoCrop
+          key={frame.uri}
+          uri={frame.uri}
+          onCancel={() => setFrame(null)}
+          onConfirm={(framed) => {
+            const photos = [...frame.profile.photos];
+            photos[frame.index] = framed;
+            setFrame(null);
+            changeMedia({ ...frame.profile, photos });
+          }}
+        />
+      ) : null}
       {crop ? <AvatarCrop key={crop.uri} uri={crop.uri} onCancel={() => setCrop(null)} onConfirm={(avatar) => { onChange({ ...crop.profile, avatar }); setCrop(null); }} /> : null}
       {mode === "view" ? (
         <ProfilePreview profile={profile} mode={mode} onChangeMode={setMode} />
@@ -389,7 +408,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         <Card>
           <SectionLabel>Photos</SectionLabel>
           <AppText size={12} muted>
-            Add up to {MAX_PHOTOS} photos or clips. Hold and drag, or use the arrows to reorder. The first slot is a photo: crop its chat and social icon inside a circle. At least 1 is required.
+            Add up to {MAX_PHOTOS} photos or clips. Tap the crop icon to pinch and drag a photo into frame. Hold and drag, or use the arrows to reorder. The first slot is a photo: crop its chat and social icon inside a circle. At least 1 is required.
           </AppText>
           <View ref={photoGridRef} style={styles.photoGrid} {...photoPan.panHandlers} onTouchEnd={() => finishPhotoDrag(true)} onTouchCancel={() => finishPhotoDrag(false)}>
             {Array.from({ length: MAX_PHOTOS }, (_, index) => {
@@ -458,6 +477,20 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                   {photo && profile.photos.length > 1 ? <View style={{ position: "absolute", bottom: 4, right: 4, flexDirection: "row", gap: 4 }}>
                     {[{ label: "earlier", step: -1, icon: "‹" }, { label: "later", step: 1, icon: "›" }].map(action => <Pressable key={action.label} accessibilityRole="button" accessibilityLabel={`Move photo ${index + 1} ${action.label}`} disabled={saving || compressing || !!photoDrag || index + action.step < 0 || index + action.step >= profile.photos.length} onPress={() => movePhoto(index, index + action.step)} style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: theme.colors.background, opacity: index + action.step < 0 || index + action.step >= profile.photos.length ? 0.4 : 1 }}><AppText size={20} weight="bold">{action.icon}</AppText></Pressable>)}
                   </View> : null}
+                  {photo && kind === "image" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Adjust photo ${index + 1}`}
+                      hitSlop={6}
+                      disabled={!!photoDrag || saving || compressing}
+                      onPress={() => setFrame({ profile, index, uri: photo })}
+                      style={[styles.adjustPhoto, { backgroundColor: theme.colors.background }]}
+                    >
+                      <Svg width={14} height={14} viewBox="0 0 24 24">
+                        <Path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14" stroke={theme.colors.text} strokeWidth={2.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </Pressable>
+                  ) : null}
                   {photo ? (
                     <Pressable
                       accessibilityRole="button"
@@ -1375,6 +1408,17 @@ const styles = StyleSheet.create({
   },
   photoLabel: {
     textAlign: "center",
+  },
+  // Sits in the top row between the photo number and the remove button.
+  adjustPhoto: {
+    alignItems: "center",
+    borderRadius: 8,
+    height: 22,
+    justifyContent: "center",
+    left: 32,
+    position: "absolute",
+    top: 6,
+    width: 22,
   },
   removePhoto: {
     alignItems: "center",
