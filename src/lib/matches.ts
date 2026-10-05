@@ -418,10 +418,20 @@ export async function chatAlertCount() {
   return incoming + unreadChats;
 }
 
-export async function listConnections() {
-  const collapsed = await supabase.rpc("collapse_mutual_requests");
-  if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
+// The Chat badge, Chat tab and Discover often ask at the same moment. They share one
+// request instead of each calling the database. Nothing is kept once it finishes.
+let connectionsInFlight: Promise<MatchConnection[]> | null = null;
 
+// collapse_mutual_requests runs after a request is accepted (respondToMatch), and
+// send_match_request merges mutual requests itself, so loading the list doesn't need it.
+export function listConnections() {
+  connectionsInFlight ??= loadConnections().finally(() => {
+    connectionsInFlight = null;
+  });
+  return connectionsInFlight;
+}
+
+async function loadConnections() {
   const { data, error } = await supabase.rpc("my_connections");
   if (error) throw setupError(error);
   return ((data ?? []) as Parameters<typeof personFrom>[0][])

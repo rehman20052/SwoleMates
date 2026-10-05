@@ -147,3 +147,20 @@ test('hide, show, and hide again intentionally restore only the hidden-chat flag
   const b = createAccountList({ ...options, local: storage() });
   assert.deepEqual(copy(await b.load([])), ['match']);
 });
+
+ test('workout plans and partial drafts share settings without replacing the weekly goal or logging a workout', async () => {
+  const server = backend(); const phone = device(server, 'alice', 'settings');
+  await phone.store.load([{ id: 'weekly-workout-goal', value: 5 }]);
+  const plan = { id: 'workout-plan:push', value: { updatedAt: 1, content: JSON.stringify({ title: 'Push', notes: '', rows: [{ id: 'bench', exercise: 'Bench press', customName: '', sets: '3', reps: '8', weight: '', unit: 'lb' }] }) } };
+  const draft = { id: 'draft:workout:2026-10-05', value: { updatedAt: 2, content: plan.value.content } };
+  await phone.store.change(rows => [...rows, plan, draft]);
+  const tablet = device(server, 'alice', 'settings'); const restored = await tablet.store.load([]);
+  assert.equal(restored.find(row => row.id === plan.id).value.content, plan.value.content);
+  assert.equal(JSON.parse(restored.find(row => row.id === draft.id).value.content).rows[0].weight, '');
+  await tablet.store.change(rows => rows.map(row => row.id === 'weekly-workout-goal' ? { ...row, value: 4 } : row));
+  assert.equal((await phone.store.refresh()).length, 3);
+  await phone.store.change(rows => rows.map(row => row.id === draft.id ? { ...row, value: { updatedAt: 3, content: '' } } : row));
+  assert.equal((await tablet.store.refresh()).find(row => row.id === draft.id).value.content, '');
+  assert.equal((await device(server, 'alice', 'workout_logs').store.load([])).length, 0);
+  assert.equal((await device(server, 'bob', 'settings').store.load([])).length, 0);
+});

@@ -65,6 +65,8 @@ type Social = {
   run: (action: () => Promise<unknown>, reloadAfter?: boolean) => Promise<boolean>;
   updatePost: (postId: string, fn: (post: Post) => Post) => void;
   activeVideoId: string | null;
+  // The video just below the active one. It loads in the background so it starts right away.
+  nextVideoId: string | null;
   registerVideo: (id: string, measure: VideoMeasure) => () => void;
   openMedia: (media: PostMedia) => void;
   focus: NoticeFocus | null;
@@ -110,6 +112,23 @@ function seekMountedClip(player: VideoPlayer, seconds: number) {
     return;
   }
   player.currentTime = seconds;
+}
+
+// Loads a clip without starting it. On web, Expo's replace() calls play() right after
+// load() and doesn't handle the promise, so an interrupted load logs an AbortError and the
+// preloaded next clip briefly starts playing. Set the source on the mounted <video> instead.
+function loadClip(player: VideoPlayer, uri: string) {
+  const source = { uri, useCaching: true };
+  if (Platform.OS === "web") {
+    const web = player as VideoPlayer & { _mountedVideos?: Set<HTMLVideoElement>; src?: unknown };
+    web.src = source;
+    web._mountedVideos?.forEach((video) => {
+      video.setAttribute("src", uri);
+      video.load();
+    });
+    return Promise.resolve();
+  }
+  return player.replaceAsync(source);
 }
 
 function playMountedClip(player: VideoPlayer) {
@@ -190,6 +209,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [nextVideoId, setNextVideoId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<PostMedia | null>(null);
   const measures = useRef(new Map<string, VideoMeasure>());
   const loadingMore = useRef(false);
@@ -228,28 +248,41 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
   const syncVideos = useCallback(() => {
     if (lightbox) {
       setActiveVideoId(null);
+      setNextVideoId(null);
       return;
     }
     const entries = [...measures.current.entries()];
     if (!entries.length) {
       setActiveVideoId(null);
+      setNextVideoId(null);
       return;
     }
     const windowHeight = Dimensions.get("window").height;
+    const visibleBottom = windowHeight - 88;
     let pending = entries.length;
     let bestId: string | null = null;
     let best = 0;
+    const boxes: { id: string; y: number }[] = [];
     for (const [id, measure] of entries) {
       measure((box) => {
         if (box) {
-          const overlap = Math.min(box.y + box.height, windowHeight - 88) - Math.max(box.y, 0);
+          boxes.push({ id, y: box.y });
+          const overlap = Math.min(box.y + box.height, visibleBottom) - Math.max(box.y, 0);
           if (overlap > best) {
             best = overlap;
             bestId = id;
           }
         }
         pending -= 1;
-        if (pending === 0) setActiveVideoId(best > 48 ? bestId : null);
+        if (pending > 0) return;
+        const activeId = best > 48 ? bestId : null;
+        // Only the playing video and the one after it download. Videos further down wait.
+        const activeY = boxes.find((item) => item.id === activeId)?.y;
+        const below = boxes
+          .filter((item) => item.id !== activeId && (activeY != null ? item.y > activeY : item.y >= 0))
+          .sort((left, right) => left.y - right.y);
+        setActiveVideoId(activeId);
+        setNextVideoId(below[0]?.id ?? null);
       });
     }
   }, [lightbox]);
@@ -365,6 +398,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
     toggleFollow,
     ensurePost,
     activeVideoId: lightbox ? null : activeVideoId,
+    nextVideoId: lightbox ? null : nextVideoId,
     registerVideo,
     syncVideos,
     lightbox,
@@ -586,6 +620,7 @@ function SocialBoard({
         run: board.run,
         updatePost: board.updatePost,
         activeVideoId: board.activeVideoId,
+        nextVideoId: board.nextVideoId,
         registerVideo: board.registerVideo,
         openMedia: board.setLightbox,
         focus,
@@ -1190,15 +1225,16 @@ function FeedMedia({ media, postId }: { media: PostMedia; postId: string }) {
   if (media.type === "video") {
     return <PostVideo key={media.uri} postId={postId} uri={media.uri} onOpen={() => openMedia(media)} />;
   }
-  return <FeedPhoto key={media.uri} uri={media.uri} onOpen={() => openMedia(media)} />;
+  return <FeedPhoto key={media.uri} uri={media.uri} cacheKey={media.cacheKey} onOpen={() => openMedia(media)} />;
 }
 
-function FeedPhoto({ uri, onOpen }: { uri: string; onOpen: () => void }) {
+function FeedPhoto({ uri, cacheKey, onOpen }: { uri: string; cacheKey?: string; onOpen: () => void }) {
   const [aspectRatio, setAspectRatio] = useState(1);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen}>
       <Image
-        source={{ uri }}
+        source={{ uri, cacheKey }}
+        cachePolicy="memory-disk"
         style={[styles.postMedia, { aspectRatio }]}
         contentFit="contain"
         onLoad={({ source }) => {
@@ -1361,13 +1397,41 @@ function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlayi
 function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpen: () => void }) {
   const ref = useRef<View>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
-  const { activeVideoId, registerVideo } = useSocial();
+  const { activeVideoId, nextVideoId, registerVideo } = useSocial();
   const source = useRef(uri);
-  const player = useVideoPlayer(source.current, (clip) => {
+  // The player starts empty. A clip downloads only once it is playing or next in line.
+  const player = useVideoPlayer(null, (clip) => {
     clip.loop = true;
     clip.muted = !feedAudioReady;
   });
   const play = activeVideoId === postId;
+  const wanted = play || nextVideoId === postId;
+  const playRef = useRef(play);
+  playRef.current = play;
+  const [loaded, setLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!wanted || loaded) return;
+    setLoaded(true);
+    // useCaching keeps the clip on the phone, so replays and scrolling back don't download it again.
+    loadClip(player, source.current)
+      .then(() => {
+        if (playRef.current) playMountedClip(player);
+      })
+      .catch(() => setLoaded(false));
+  }, [wanted, loaded, player]);
+
+  useEffect(() => {
+    const status = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") setReady(true);
+    });
+    const loadedSource = player.addListener("sourceLoad", () => setReady(true));
+    return () => {
+      status.remove();
+      loadedSource.remove();
+    };
+  }, [player]);
   const [soundOn, setSoundOn] = useState(feedAudioReady);
   const soundTouched = useRef(false);
 
@@ -1424,9 +1488,9 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
 
   useEffect(() => {
     player.muted = !soundOn;
-    if (play) playMountedClip(player);
+    if (play && loaded) playMountedClip(player);
     else player.pause();
-  }, [play, player, soundOn]);
+  }, [play, loaded, player, soundOn]);
 
   return (
     <View ref={ref} collapsable={false} style={styles.videoWrap}>
@@ -1442,6 +1506,13 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
         fullscreenOptions={{ enable: false }}
         onFullscreenEnter={dismissNativeFullscreen}
       />
+      {!ready ? (
+        <View pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.videoPlaceholder]}>
+          <Svg width={40} height={40} viewBox="0 0 24 24">
+            <Path d="M8 5v14l11-7z" fill="rgba(255,255,255,0.85)" />
+          </Svg>
+        </View>
+      ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen} style={StyleSheet.absoluteFill} />
       <VideoScrubber player={player} keepPlaying={play} />
       <VideoSoundButton muted={!soundOn} onPress={() => {
@@ -1480,7 +1551,7 @@ function MediaLightbox({ media, onClose }: { media: PostMedia | null; onClose: (
         <View style={styles.lightboxBody} pointerEvents="box-none">
           <View style={[styles.lightboxStage, fitted]}>
             {media?.type === "image" ? (
-              <Image source={{ uri: media.uri }} style={styles.lightboxMedia} contentFit="contain" />
+              <Image source={{ uri: media.uri, cacheKey: media.cacheKey }} cachePolicy="memory-disk" style={styles.lightboxMedia} contentFit="contain" />
             ) : null}
             {media?.type === "video" ? <LightboxVideo uri={media.uri} /> : null}
           </View>
@@ -1504,17 +1575,20 @@ function VideoSoundButton({ muted, onPress }: { muted: boolean; onPress: () => v
   return <Pressable accessibilityRole="button" accessibilityLabel={muted ? "Unmute video" : "Mute video"}
     accessibilityState={{ selected: muted }} onPress={(event) => { event.stopPropagation(); onPress(); }}
     style={{ position: "absolute", bottom: 28, right: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-    <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}>
-      <Path d="M3 9h4l5-4v14l-5-4H3z" stroke="#fff" strokeWidth={1.8} fill="none" strokeLinejoin="round" />
-      <Path d={muted ? "M16 9l5 6m0-6l-5 6" : "M16 8c2 2 2 6 0 8m3-11c4 4 4 10 0 14"} stroke="#fff" strokeWidth={1.8} fill="none" strokeLinecap="round" />
-    </Svg>
+    <Image
+      source={muted ? require("../../assets/brand/video-sound-off.svg") : require("../../assets/brand/video-sound-on.svg")}
+      style={{ width: 22, height: 22 }}
+      contentFit="contain"
+      accessible={false}
+      pointerEvents="none"
+    />
   </Pressable>;
 }
 
 function LightboxVideo({ uri }: { uri: string }) {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
-  const player = useVideoPlayer(uri, (clip) => {
+  const player = useVideoPlayer({ uri, useCaching: true }, (clip) => {
     clip.loop = true;
     clip.muted = false;
   });
@@ -2163,6 +2237,11 @@ function TextAction({
 }
 
 const styles = StyleSheet.create({
+  videoPlaceholder: {
+    alignItems: "center",
+    backgroundColor: "#111",
+    justifyContent: "center",
+  },
   status: {
     alignItems: "center",
     gap: 12,

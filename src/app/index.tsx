@@ -197,7 +197,15 @@ export default function App() {
     refresh();
     const unsubscribe = subscribeChatAlerts(refresh);
     const unsubscribeMessages = subscribeIncomingMessages();
-    const timer = setInterval(() => notifyChatAlerts(), 3000);
+    // New messages arrive instantly through subscribeIncomingMessages. This slower check is only
+    // a backup, and it skips while the app is in the background or the browser tab is hidden.
+    const timer = setInterval(() => {
+      const hidden =
+        Platform.OS === 'web'
+          ? typeof document !== 'undefined' && document.visibilityState !== 'visible'
+          : AppState.currentState !== 'active';
+      if (!hidden) notifyChatAlerts();
+    }, 30000);
     const appState = AppState.addEventListener('change', (next) => {
       if (next === 'active') notifyChatAlerts();
     });

@@ -1,3 +1,4 @@
+import { useSavedDraft } from "@/lib/use-saved-draft";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type KeyboardEvent } from "react-native";
 import { BlurView } from "expo-blur";
@@ -53,6 +54,8 @@ export function MatchChat({ userId }: { userId: string }) {
   const [editing, setEditing] = useState<MatchMessage | null>(null);
   const inputRef = useRef<TextInput>(null);
   const draftBeforeEdit = useRef("");
+  const savedDraft = useSavedDraft("draft:chat:" + userId, setDraft);
+  const changeDraft = (text: string) => { setDraft(text); if (!editing) savedDraft.save(text); };
   const [caret, setCaret] = useState<{ start: number; end: number } | undefined>(undefined);
 
   useEffect(() => {
@@ -243,8 +246,10 @@ export function MatchChat({ userId }: { userId: string }) {
     setPlansLoaded(true);
   }
 
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   async function send() {
-    if (!person || !draft.trim()) return;
+    if (sendingRef.current || !savedDraft.ready || !person || !draft.trim()) return;
     const text = draft;
     if (editing) {
       if (text.trim() === editing.body) {
@@ -260,6 +265,7 @@ export function MatchChat({ userId }: { userId: string }) {
       try {
         await editMatchMessage(editing.id, text);
         setEditing(null);
+        setDraft(draftBeforeEdit.current);
         draftBeforeEdit.current = "";
         await refreshMessages();
         setError(null);
@@ -269,15 +275,17 @@ export function MatchChat({ userId }: { userId: string }) {
       }
       return;
     }
+    sendingRef.current = true; setSending(true);
     setDraft("");
     try {
       await sendMatchMessage(person.requestId, text);
+      savedDraft.clear();
       await refreshMessages();
       setError(null);
     } catch (err) {
       setDraft(text);
       setError(err instanceof Error ? err.message : "Could not send that message.");
-    }
+    } finally { sendingRef.current = false; setSending(false); }
   }
 
   function closeSafety() {
@@ -470,8 +478,10 @@ export function MatchChat({ userId }: { userId: string }) {
         <View style={[styles.composer, { backgroundColor: theme.colors.surface, borderTopColor: editing ? "transparent" : theme.colors.border }]}>
           <TextInput
             ref={inputRef}
+            editable={!sending && savedDraft.ready}
+            maxLength={5000}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={changeDraft}
             selection={caret}
             onFocus={() => scrollRef.current?.scrollToEnd({ animated: Platform.OS !== "web" })}
             submitBehavior="submit"
@@ -485,7 +495,7 @@ export function MatchChat({ userId }: { userId: string }) {
             accessibilityRole="button"
             accessibilityLabel={editing ? "Save edit" : "Send message"}
             onPress={() => void send()}
-            disabled={!draft.trim() || !person}
+            disabled={sending || !savedDraft.ready || !draft.trim() || !person}
             style={[styles.send, { backgroundColor: theme.colors.primary, opacity: draft.trim() && person ? 1 : 0.45 }]}
           >
             <Icon source={icons.arrowUp} size={16} tint={theme.colors.primaryText} />

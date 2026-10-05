@@ -371,7 +371,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                         <SectionLabel color={theme.colors.photoAccent}>Recipes</SectionLabel>
                         <AppText size={15} weight="extrabold" color={theme.colors.photoText}>Build meals that match your macros</AppText>
                         <AppText size={11} color={theme.colors.photoMuted}>
-                          Open the recipe maker
+                          Browse recipes and save them to your tracker
                         </AppText>
                       </View>
                       <AppText size={26} color={theme.colors.photoAccent} style={{ width: 30, height: 30, lineHeight: 28, textAlign: "center", borderRadius: 15, backgroundColor: theme.colors.photoControl, borderWidth: 1, borderColor: theme.colors.photoAccent }}>
