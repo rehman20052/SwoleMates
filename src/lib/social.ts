@@ -9,12 +9,15 @@ import { markAccountRead, readAccountMarkers } from "@/lib/account-markers";
 const MEDIA_BUCKET = "post-media";
 const PHOTO_BUCKET = "profile-photos";
 const FEED_PAGE = 20;
-// Signed links to post photos and clips last this long; the feed reloads well before then.
-const MEDIA_LINK_SECONDS = 60 * 60;
+// Signed links to post photos and clips last a week and are saved on the device. A link that
+// stays the same lets the phone and browser reuse their cached copy instead of downloading again.
+const MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
 export const POST_LIMIT = 1000;
 export const COMMENT_LIMIT = 500;
 
-export type PostMedia = { type: "image" | "video"; uri: string; mimeType?: string };
+// cacheKey is the storage path. Caching by path instead of the signed URL means a refreshed
+// link doesn't force a fresh download.
+export type PostMedia = { type: "image" | "video"; uri: string; mimeType?: string; cacheKey?: string };
 
 // authorId is "me" for the signed-in user, so screens don't need to know their own ID.
 export type Comment = {
@@ -125,16 +128,39 @@ function profilePhotoUrl(path: string | null | undefined) {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-// A new signed link is a new video address, so the player restarts and buffers.
-// Reuse a link until it is close to expiring.
-const signedMediaCache = new Map<string, { url: string; expiresAt: number }>();
-const REFRESH_MEDIA_BEFORE_MS = 5 * 60 * 1000;
+// A new signed link is a new address, so the player restarts and everything downloads again.
+// Reuse a link until it has less than a day left, across app launches.
+type SignedLink = { url: string; expiresAt: number };
+const signedMediaCache = new Map<string, SignedLink>();
+const REFRESH_MEDIA_BEFORE_MS = 24 * 60 * 60 * 1000;
+const MEDIA_LINKS_KEY = "swolemates.media-links.v1";
+let savedLinksLoaded: Promise<void> | null = null;
+
+function loadSavedLinks() {
+  savedLinksLoaded ??= AsyncStorage.getItem(MEDIA_LINKS_KEY)
+    .then((raw) => {
+      const saved = raw ? (JSON.parse(raw) as Record<string, SignedLink>) : {};
+      const now = Date.now();
+      for (const [path, link] of Object.entries(saved)) {
+        if (link?.url && link.expiresAt > now && !signedMediaCache.has(path)) signedMediaCache.set(path, link);
+      }
+    })
+    .catch(() => undefined);
+  return savedLinksLoaded;
+}
+
+function saveLinks() {
+  const now = Date.now();
+  const live = Object.fromEntries([...signedMediaCache].filter(([, link]) => link.expiresAt > now));
+  void AsyncStorage.setItem(MEDIA_LINKS_KEY, JSON.stringify(live)).catch(() => undefined);
+}
 
 function isHeicPath(path: string) {
   return /\.(heic|heif)$/i.test(path);
 }
 
 async function signedMediaUrls(paths: string[]) {
+  await loadSavedLinks();
   const urls = new Map<string, string>();
   const now = Date.now();
   const missing: string[] = [];
@@ -166,6 +192,7 @@ async function signedMediaUrls(paths: string[]) {
       urls.set(path, data.signedUrl);
     }),
   );
+  saveLinks();
   return urls;
 }
 
@@ -228,7 +255,7 @@ async function toPosts(rows: PostRow[], me: string) {
       createdAt: row.created_at,
       text: row.body,
       edited: !!row.edited_at,
-      media: mediaUrl && row.media_type ? { type: row.media_type, uri: mediaUrl } : undefined,
+      media: mediaUrl && row.media_type ? { type: row.media_type, uri: mediaUrl, cacheKey: row.media_path ?? undefined } : undefined,
       mediaPath: row.media_path ?? undefined,
       likes: likers.length,
       likedByMe: likers.includes(me),
@@ -438,7 +465,7 @@ export async function loadSocialNotices(): Promise<{ notices: SocialNotice[]; se
   const postMedia = new Map<string, PostMedia>();
   for (const row of mediaRows) {
     const uri = row.media_path ? mediaUrls.get(row.media_path) : undefined;
-    if (uri && row.media_type) postMedia.set(row.id, { uri, type: row.media_type });
+    if (uri && row.media_type && row.media_path) postMedia.set(row.id, { uri, type: row.media_type, cacheKey: row.media_path });
   }
   return {
     seenAt,
