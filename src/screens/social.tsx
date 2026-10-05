@@ -1575,10 +1575,13 @@ function VideoSoundButton({ muted, onPress }: { muted: boolean; onPress: () => v
   return <Pressable accessibilityRole="button" accessibilityLabel={muted ? "Unmute video" : "Mute video"}
     accessibilityState={{ selected: muted }} onPress={(event) => { event.stopPropagation(); onPress(); }}
     style={{ position: "absolute", bottom: 28, right: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-    <Svg width={22} height={22} viewBox="0 0 24 24">
-      <Path d="M3 9h4l5-4v14l-5-4H3z" stroke="#fff" strokeWidth={1.8} fill="none" strokeLinejoin="round" />
-      <Path d={muted ? "M16 9l5 6m0-6l-5 6" : "M16 8c2 2 2 6 0 8m3-11c4 4 4 10 0 14"} stroke="#fff" strokeWidth={1.8} fill="none" strokeLinecap="round" />
-    </Svg>
+    <Image
+      source={muted ? require("../../assets/brand/video-sound-off.svg") : require("../../assets/brand/video-sound-on.svg")}
+      style={{ width: 22, height: 22 }}
+      contentFit="contain"
+      accessible={false}
+      pointerEvents="none"
+    />
   </Pressable>;
 }
 

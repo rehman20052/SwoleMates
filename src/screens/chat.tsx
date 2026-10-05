@@ -1,3 +1,4 @@
+import { useSavedDraft } from "@/lib/use-saved-draft";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
@@ -22,6 +23,7 @@ function Conversation({ partner }: { partner: Partner }) {
   const nav = useNavigation();
   const { conversations, workouts, sendMessage, markRead, block, review } = useAppData();
   const [draft, setDraft] = useState("");
+  const savedDraft = useSavedDraft("draft:chat:demo:" + partner.id, setDraft);
   const scrollRef = useRef<ScrollView>(null);
   const messages = conversations.find((c) => c.partnerId === partner.id)?.messages ?? [];
   const nextSession = workouts.find((w) => w.partnerId === partner.id && w.date >= daysFromToday(0));
@@ -35,6 +37,7 @@ function Conversation({ partner }: { partner: Partner }) {
   function handleSend() {
     sendMessage(partner.id, draft);
     setDraft("");
+    savedDraft.clear();
   }
 
   function scheduleWorkout() {
@@ -145,7 +148,7 @@ function Conversation({ partner }: { partner: Partner }) {
           </Pressable>
           <TextInput
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={text => { setDraft(text); savedDraft.save(text); }}
             onSubmitEditing={handleSend}
             returnKeyType="send"
             placeholder="Type your workout plan..."

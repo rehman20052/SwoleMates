@@ -241,3 +241,14 @@ test('avatar crop remains square and inside portrait, landscape and zoomed photo
     }
   }
 });
+
+const { parseWorkoutDraft, starterWorkoutPlans } = loadModule('src/lib/workout-drafts.ts');
+test('partial workout drafts allow unfinished numeric fields but reject damaged or oversized forms', () => {
+  const draft = { title: '', notes: 'Between sets', recordId: 'log-stable', rows: [{ id: 'one', exercise: 'Bench press', customName: '', sets: '', reps: '8', weight: '', unit: 'lb' }] };
+  assert.deepEqual(plain(parseWorkoutDraft(JSON.stringify(draft))), draft);
+  assert.equal(parseWorkoutDraft('{'), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, rows: [...draft.rows, ...draft.rows] })), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, rows: [{ ...draft.rows[0], unit: 'stones' }] })), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, title: 'x'.repeat(101) })), null);
+  assert.equal(starterWorkoutPlans.length, 3);
+});

@@ -1,0 +1,1771 @@
+{
+  "chicken-breast": [
+    {
+      "to": "chicken-thigh",
+      "ratio": 1,
+      "note": "Juicier, with a little more fat."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Press well and brown before adding sauce."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Add near the end so they hold their shape."
+    },
+    {
+      "to": "ground-turkey",
+      "ratio": 1,
+      "note": "Crumble and brown; works best in saucy dishes."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Steam for 5 minutes first to soften the bitterness."
+    },
+    {
+      "to": "shrimp",
+      "ratio": 1,
+      "note": "Cooks in 2–3 minutes; add at the end."
+    }
+  ],
+  "chicken-thigh": [
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Leaner; watch the cooking time so it stays juicy."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Press, marinate and sear hard for colour."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Roast with the same spices until crisp."
+    },
+    {
+      "to": "ground-lamb",
+      "ratio": 0.9,
+      "note": "Richer; shape into small patties or kofta."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Slice thin and marinate for at least 15 minutes."
+    }
+  ],
+  "ground-turkey": [
+    {
+      "to": "lean-ground-beef",
+      "ratio": 1,
+      "note": "Similar texture, richer flavour."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1.3,
+      "note": "Season the same way and simmer briefly."
+    },
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Dice finely or pulse in a food processor."
+    }
+  ],
+  "lean-ground-beef": [
+    {
+      "to": "ground-turkey",
+      "ratio": 1,
+      "note": "Leaner; add a splash of oil when browning."
+    },
+    {
+      "to": "ground-lamb",
+      "ratio": 1,
+      "note": "Richer, with more fat."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1.3,
+      "note": "Plant-based; season generously."
+    },
+    {
+      "to": "black-beans-cooked",
+      "ratio": 1.2,
+      "note": "Mash lightly for a meaty texture."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Crumble and brown well."
+    }
+  ],
+  "beef-flank-steak": [
+    {
+      "to": "chicken-thigh",
+      "ratio": 1,
+      "note": "Slice thin and marinate the same way."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.3,
+      "note": "Press, slice and sear until crisp."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Slice thin; takes marinade well."
+    },
+    {
+      "to": "mushrooms",
+      "ratio": 1.5,
+      "note": "Meaty texture but much less protein."
+    }
+  ],
+  "ground-lamb": [
+    {
+      "to": "lean-ground-beef",
+      "ratio": 1,
+      "note": "Leaner; keep the same spices."
+    },
+    {
+      "to": "ground-turkey",
+      "ratio": 1,
+      "note": "Much leaner; add grated onion for moisture."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1.3,
+      "note": "Mash with a little breadcrumb or chickpea flour to shape."
+    }
+  ],
+  "ground-pork": [
+    {
+      "to": "ground-turkey",
+      "ratio": 1,
+      "note": "Leaner; season a little more."
+    },
+    {
+      "to": "chicken-thigh",
+      "ratio": 1,
+      "note": "Mince or dice finely."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Crumble and brown well."
+    },
+    {
+      "to": "lean-ground-beef",
+      "ratio": 1,
+      "note": "Similar richness."
+    }
+  ],
+  "pork-tenderloin": [
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Slice thin; cooks just as fast."
+    },
+    {
+      "to": "chicken-thigh",
+      "ratio": 1,
+      "note": "Juicier alternative."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1,
+      "note": "Adds even more tofu; brown it well."
+    },
+    {
+      "to": "beef-flank-steak",
+      "ratio": 1,
+      "note": "Slice thinly against the grain."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Slice thin and fry until golden."
+    }
+  ],
+  "salmon": [
+    {
+      "to": "cod",
+      "ratio": 1,
+      "note": "Leaner and milder; cooks a little faster."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Glaze and sear; plant-based."
+    },
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Cook to 74 °C (165 °F)."
+    },
+    {
+      "to": "smoked-salmon",
+      "ratio": 0.6,
+      "note": "No cooking needed; add just before serving."
+    }
+  ],
+  "cod": [
+    {
+      "to": "salmon",
+      "ratio": 1,
+      "note": "Richer, with more omega-3 fat."
+    },
+    {
+      "to": "shrimp",
+      "ratio": 1,
+      "note": "Cooks in 2–3 minutes."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Press and sear; plant-based."
+    },
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Slice thin and cook to 74 °C (165 °F)."
+    }
+  ],
+  "shrimp": [
+    {
+      "to": "chicken-breast",
+      "ratio": 1,
+      "note": "Dice and stir-fry until cooked through."
+    },
+    {
+      "to": "cod",
+      "ratio": 1,
+      "note": "Cut into chunks and cook gently."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1.2,
+      "note": "Cube and fry until crisp."
+    },
+    {
+      "to": "edamame",
+      "ratio": 0.8,
+      "note": "Plant-based; add at the end."
+    }
+  ],
+  "smoked-salmon": [
+    {
+      "to": "salmon",
+      "ratio": 1,
+      "note": "Bake, chill and flake. Fully cooked fish avoids the risk from refrigerated smoked fish."
+    },
+    {
+      "to": "canned-light-tuna",
+      "ratio": 1,
+      "note": "Shelf-stable and cooked; mix with a little lemon."
+    },
+    {
+      "to": "egg",
+      "ratio": 1,
+      "note": "Slice hard-boiled eggs over the top."
+    },
+    {
+      "to": "avocado",
+      "ratio": 0.8,
+      "note": "Mash with lemon and dill; plant-based."
+    }
+  ],
+  "canned-light-tuna": [
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Mash with lemon for a smashed-chickpea filling."
+    },
+    {
+      "to": "salmon",
+      "ratio": 1,
+      "note": "Bake and flake."
+    },
+    {
+      "to": "egg",
+      "ratio": 1,
+      "note": "Hard-boiled and chopped."
+    }
+  ],
+  "egg": [
+    {
+      "to": "firm-tofu",
+      "ratio": 1,
+      "note": "Crumble and scramble with a pinch of turmeric."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out; the dish still works."
+    }
+  ],
+  "greek-yogurt": [
+    {
+      "to": "soy-yogurt",
+      "ratio": 1,
+      "note": "Dairy-free; thinner, so strain if you can."
+    },
+    {
+      "to": "whole-milk-yogurt",
+      "ratio": 1,
+      "note": "Creamier and a bit thinner."
+    },
+    {
+      "to": "tahini",
+      "ratio": 0.3,
+      "note": "Whisk with lemon and water into a sauce."
+    },
+    {
+      "to": "avocado",
+      "ratio": 0.8,
+      "note": "Blend with lemon and garlic for a creamy sauce."
+    }
+  ],
+  "whole-milk-yogurt": [
+    {
+      "to": "soy-yogurt",
+      "ratio": 1,
+      "note": "Dairy-free; use plain and unsweetened."
+    },
+    {
+      "to": "greek-yogurt",
+      "ratio": 1,
+      "note": "Thicker, with more protein."
+    },
+    {
+      "to": "coconut-milk",
+      "ratio": 0.6,
+      "note": "Dairy-free and rich; add a squeeze of lemon."
+    },
+    {
+      "to": "tahini",
+      "ratio": 0.3,
+      "note": "Thin with lemon and water."
+    }
+  ],
+  "milk-2pct": [
+    {
+      "to": "soy-milk",
+      "ratio": 1,
+      "note": "Closest protein match among plant milks."
+    },
+    {
+      "to": "almond-milk",
+      "ratio": 1,
+      "note": "Lighter and lower in protein."
+    }
+  ],
+  "soy-milk": [
+    {
+      "to": "almond-milk",
+      "ratio": 1,
+      "note": "Lighter, lower protein."
+    },
+    {
+      "to": "milk-2pct",
+      "ratio": 1,
+      "note": "Dairy option."
+    }
+  ],
+  "almond-milk": [
+    {
+      "to": "soy-milk",
+      "ratio": 1,
+      "note": "More protein."
+    },
+    {
+      "to": "milk-2pct",
+      "ratio": 1,
+      "note": "Dairy option."
+    }
+  ],
+  "feta": [
+    {
+      "to": "paneer",
+      "ratio": 1,
+      "note": "Milder; crumble and add salt."
+    },
+    {
+      "to": "olives",
+      "ratio": 0.8,
+      "note": "Brings the same salty note without dairy."
+    },
+    {
+      "to": "avocado",
+      "ratio": 1,
+      "note": "Creamy, dairy-free topping."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out and season a little more."
+    }
+  ],
+  "cheddar": [
+    {
+      "to": "avocado",
+      "ratio": 1.2,
+      "note": "Creamy, dairy-free topping."
+    },
+    {
+      "to": "paneer",
+      "ratio": 1,
+      "note": "Milder; crumble over the top."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out; add extra salsa."
+    }
+  ],
+  "parmesan": [
+    {
+      "to": "walnuts",
+      "ratio": 0.6,
+      "note": "Toast and chop finely for a savoury crumb."
+    },
+    {
+      "to": "feta",
+      "ratio": 1,
+      "note": "Salty and tangy."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out; add a little extra salt."
+    }
+  ],
+  "paneer": [
+    {
+      "to": "firm-tofu",
+      "ratio": 1,
+      "note": "Press well and cut into the same cubes."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Stir in with the spinach."
+    },
+    {
+      "to": "feta",
+      "ratio": 0.7,
+      "note": "Saltier; add at the end."
+    }
+  ],
+  "cream-cheese": [
+    {
+      "to": "greek-yogurt",
+      "ratio": 1,
+      "note": "Thick strained yogurt; tangier."
+    },
+    {
+      "to": "avocado",
+      "ratio": 1,
+      "note": "Mashed with lemon; dairy-free."
+    },
+    {
+      "to": "white-beans-cooked",
+      "ratio": 1,
+      "note": "Blend with lemon into a smooth spread."
+    }
+  ],
+  "butter": [
+    {
+      "to": "olive-oil",
+      "ratio": 0.8,
+      "note": "Use a little less."
+    },
+    {
+      "to": "canola-oil",
+      "ratio": 0.8,
+      "note": "Neutral flavour."
+    }
+  ],
+  "ghee": [
+    {
+      "to": "canola-oil",
+      "ratio": 1,
+      "note": "Neutral, dairy-free."
+    },
+    {
+      "to": "olive-oil",
+      "ratio": 1,
+      "note": "Dairy-free."
+    },
+    {
+      "to": "butter",
+      "ratio": 1.1,
+      "note": "Watch the heat; butter burns faster."
+    }
+  ],
+  "honey": [
+    {
+      "to": "maple-syrup",
+      "ratio": 1,
+      "note": "Plant-based sweetener."
+    },
+    {
+      "to": "sugar",
+      "ratio": 0.8,
+      "note": "Dissolve in a splash of water."
+    }
+  ],
+  "sugar": [
+    {
+      "to": "maple-syrup",
+      "ratio": 1.2,
+      "note": "Adds a light caramel note."
+    },
+    {
+      "to": "honey",
+      "ratio": 0.8,
+      "note": "Sweeter by weight."
+    }
+  ],
+  "maple-syrup": [
+    {
+      "to": "honey",
+      "ratio": 1,
+      "note": "Similar sweetness."
+    },
+    {
+      "to": "sugar",
+      "ratio": 0.8,
+      "note": "Dissolve in a splash of water."
+    }
+  ],
+  "sake": [
+    {
+      "to": "vegetable-broth",
+      "ratio": 1,
+      "note": "Add ½ tsp of vinegar for brightness. Alcohol-free."
+    },
+    {
+      "to": "rice-vinegar",
+      "ratio": 0.5,
+      "note": "Plus a little extra honey or sugar to balance."
+    }
+  ],
+  "white-wine": [
+    {
+      "to": "vegetable-broth",
+      "ratio": 1,
+      "note": "Add a squeeze of lemon. Alcohol-free."
+    },
+    {
+      "to": "lemon-juice",
+      "ratio": 0.3,
+      "note": "Top up with water."
+    }
+  ],
+  "soy-sauce": [
+    {
+      "to": "tamari",
+      "ratio": 1,
+      "note": "Usually wheat-free. Check the label says gluten-free."
+    },
+    {
+      "to": "miso",
+      "ratio": 0.5,
+      "note": "Thin with water."
+    },
+    {
+      "to": "fish-sauce",
+      "ratio": 0.6,
+      "note": "Saltier and funkier; use less."
+    }
+  ],
+  "tamari": [
+    {
+      "to": "soy-sauce",
+      "ratio": 1,
+      "note": "Contains wheat."
+    }
+  ],
+  "fish-sauce": [
+    {
+      "to": "soy-sauce",
+      "ratio": 1,
+      "note": "Adds umami and salt."
+    },
+    {
+      "to": "tamari",
+      "ratio": 1,
+      "note": "Gluten-free option."
+    }
+  ],
+  "pita-bread": [
+    {
+      "to": "corn-tortilla",
+      "ratio": 1,
+      "note": "Warm well so they fold."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1.5,
+      "note": "Serve as a bowl instead."
+    },
+    {
+      "to": "romaine",
+      "ratio": 1,
+      "note": "Crisp lettuce wraps."
+    },
+    {
+      "to": "whole-wheat-bread",
+      "ratio": 1,
+      "note": "Toast and serve on the side."
+    }
+  ],
+  "corn-tortilla": [
+    {
+      "to": "romaine",
+      "ratio": 0.6,
+      "note": "Lettuce cups."
+    },
+    {
+      "to": "pita-bread",
+      "ratio": 1,
+      "note": "Cut into halves and fill."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1.5,
+      "note": "Make it a bowl."
+    }
+  ],
+  "rye-bread": [
+    {
+      "to": "whole-wheat-bread",
+      "ratio": 1,
+      "note": "Toast well."
+    },
+    {
+      "to": "sweet-potato",
+      "ratio": 1.2,
+      "note": "Thin slices toasted until tender make gluten-free 'toasts'."
+    }
+  ],
+  "whole-wheat-bread": [
+    {
+      "to": "rye-bread",
+      "ratio": 1,
+      "note": "Denser and tangier."
+    },
+    {
+      "to": "corn-tortilla",
+      "ratio": 1,
+      "note": "Gluten-free option."
+    }
+  ],
+  "pasta-cooked": [
+    {
+      "to": "rice-noodles-cooked",
+      "ratio": 1,
+      "note": "Gluten-free; add at the very end."
+    },
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "Gluten-free and higher in fibre."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "Gluten-free."
+    }
+  ],
+  "soba-noodles-cooked": [
+    {
+      "to": "rice-noodles-cooked",
+      "ratio": 1,
+      "note": "Gluten-free; rinse cold the same way."
+    },
+    {
+      "to": "pasta-cooked",
+      "ratio": 1,
+      "note": "Use thin spaghetti."
+    }
+  ],
+  "rice-noodles-cooked": [
+    {
+      "to": "soba-noodles-cooked",
+      "ratio": 1,
+      "note": "Nuttier; usually contains wheat."
+    }
+  ],
+  "couscous-cooked": [
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "Gluten-free with a similar texture."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "Gluten-free."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Riced cauliflower; much lower in carbs."
+    }
+  ],
+  "pearl-barley-cooked": [
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "Gluten-free; similar chew."
+    },
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "Gluten-free."
+    }
+  ],
+  "white-rice-cooked": [
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "More fibre, nuttier."
+    },
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "More protein and fibre."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Riced cauliflower; much lower in carbs and calories."
+    }
+  ],
+  "brown-rice-cooked": [
+    {
+      "to": "white-rice-cooked",
+      "ratio": 1,
+      "note": "Softer, less fibre."
+    },
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "More protein."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Riced cauliflower; much lower in carbs."
+    }
+  ],
+  "quinoa-cooked": [
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "Similar bowl base."
+    },
+    {
+      "to": "couscous-cooked",
+      "ratio": 1,
+      "note": "Quicker; contains wheat."
+    }
+  ],
+  "peanuts": [
+    {
+      "to": "cashews",
+      "ratio": 1,
+      "note": "Classic in many stir-fries."
+    },
+    {
+      "to": "sesame-seeds",
+      "ratio": 0.4,
+      "note": "Toast for crunch."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "peanut-butter": [
+    {
+      "to": "tahini",
+      "ratio": 1,
+      "note": "Sesame-based; similar body."
+    },
+    {
+      "to": "cashews",
+      "ratio": 1,
+      "note": "Blend soaked cashews into the sauce."
+    }
+  ],
+  "walnuts": [
+    {
+      "to": "almonds",
+      "ratio": 1,
+      "note": "Chop and toast."
+    },
+    {
+      "to": "sesame-seeds",
+      "ratio": 0.5,
+      "note": "Toasted for crunch."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "almonds": [
+    {
+      "to": "walnuts",
+      "ratio": 1,
+      "note": "Softer crunch."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "cashews": [
+    {
+      "to": "peanuts",
+      "ratio": 1,
+      "note": "Crunchier."
+    },
+    {
+      "to": "almonds",
+      "ratio": 1,
+      "note": "Toast first."
+    }
+  ],
+  "tahini": [
+    {
+      "to": "greek-yogurt",
+      "ratio": 2,
+      "note": "Garlicky yogurt sauce instead."
+    },
+    {
+      "to": "peanut-butter",
+      "ratio": 1,
+      "note": "Thin with lemon and water."
+    },
+    {
+      "to": "avocado",
+      "ratio": 1.5,
+      "note": "Blend with lemon for a creamy sauce."
+    }
+  ],
+  "sesame-seeds": [
+    {
+      "to": "peanuts",
+      "ratio": 1,
+      "note": "Chopped, for crunch."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "sesame-oil": [
+    {
+      "to": "canola-oil",
+      "ratio": 1,
+      "note": "Loses the toasted flavour."
+    },
+    {
+      "to": "olive-oil",
+      "ratio": 1,
+      "note": "Loses the toasted flavour."
+    }
+  ],
+  "mayonnaise": [
+    {
+      "to": "greek-yogurt",
+      "ratio": 1,
+      "note": "Tangier, lighter slaw dressing."
+    },
+    {
+      "to": "avocado",
+      "ratio": 1,
+      "note": "Mash with lime."
+    },
+    {
+      "to": "soy-yogurt",
+      "ratio": 1,
+      "note": "Egg- and dairy-free."
+    }
+  ],
+  "firm-tofu": [
+    {
+      "to": "chicken-breast",
+      "ratio": 0.8,
+      "note": "Dice and cook through."
+    },
+    {
+      "to": "tempeh",
+      "ratio": 0.9,
+      "note": "Firmer and nuttier."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Soy-free plant protein."
+    },
+    {
+      "to": "paneer",
+      "ratio": 0.8,
+      "note": "Similar cubes; contains dairy."
+    }
+  ],
+  "tempeh": [
+    {
+      "to": "firm-tofu",
+      "ratio": 1.1,
+      "note": "Milder."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1.1,
+      "note": "Soy-free."
+    }
+  ],
+  "edamame": [
+    {
+      "to": "green-peas",
+      "ratio": 1,
+      "note": "Soy-free and sweet."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Soy-free, heartier."
+    }
+  ],
+  "chickpeas-cooked": [
+    {
+      "to": "white-beans-cooked",
+      "ratio": 1,
+      "note": "Creamier."
+    },
+    {
+      "to": "black-beans-cooked",
+      "ratio": 1,
+      "note": "Earthier."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1,
+      "note": "Softer; add at the end."
+    },
+    {
+      "to": "firm-tofu",
+      "ratio": 1,
+      "note": "More protein."
+    }
+  ],
+  "black-beans-cooked": [
+    {
+      "to": "black-eyed-peas-cooked",
+      "ratio": 1,
+      "note": "Milder."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Nuttier."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1,
+      "note": "Softer."
+    }
+  ],
+  "lentils-cooked": [
+    {
+      "to": "black-beans-cooked",
+      "ratio": 1,
+      "note": "Holds shape better."
+    },
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Firmer bite."
+    }
+  ],
+  "white-beans-cooked": [
+    {
+      "to": "chickpeas-cooked",
+      "ratio": 1,
+      "note": "Firmer."
+    },
+    {
+      "to": "lentils-cooked",
+      "ratio": 1,
+      "note": "Softer, thicker soup."
+    }
+  ],
+  "black-eyed-peas-cooked": [
+    {
+      "to": "black-beans-cooked",
+      "ratio": 1,
+      "note": "Earthier."
+    },
+    {
+      "to": "white-beans-cooked",
+      "ratio": 1,
+      "note": "Creamier."
+    }
+  ],
+  "cilantro": [
+    {
+      "to": "parsley",
+      "ratio": 1,
+      "note": "Fresh and green without cilantro's soapy note."
+    },
+    {
+      "to": "basil",
+      "ratio": 1,
+      "note": "Sweeter and aromatic."
+    },
+    {
+      "to": "mint",
+      "ratio": 0.5,
+      "note": "Use sparingly."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "parsley": [
+    {
+      "to": "cilantro",
+      "ratio": 1,
+      "note": "More citrusy."
+    },
+    {
+      "to": "basil",
+      "ratio": 1,
+      "note": "Sweeter."
+    },
+    {
+      "to": "dill",
+      "ratio": 0.5,
+      "note": "Stronger; use less."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "dill": [
+    {
+      "to": "parsley",
+      "ratio": 1,
+      "note": "Milder."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "basil": [
+    {
+      "to": "parsley",
+      "ratio": 1,
+      "note": "Milder."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "mint": [
+    {
+      "to": "parsley",
+      "ratio": 1,
+      "note": "Less cooling."
+    },
+    {
+      "to": "dill",
+      "ratio": 0.7,
+      "note": "Pairs well with cucumber."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "mushrooms": [
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Cut into chunks; cooks in the same time."
+    },
+    {
+      "to": "eggplant",
+      "ratio": 1,
+      "note": "Meaty texture."
+    },
+    {
+      "to": "carrot",
+      "ratio": 0.7,
+      "note": "Sweeter; dice small."
+    }
+  ],
+  "bitter-melon": [
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Much milder; skip the salting step."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Add stems first, then leaves."
+    },
+    {
+      "to": "broccoli",
+      "ratio": 1,
+      "note": "Cut small."
+    }
+  ],
+  "mung-bean-sprouts": [
+    {
+      "to": "cucumber",
+      "ratio": 1,
+      "note": "Julienned; crunchy and safe raw."
+    },
+    {
+      "to": "cabbage",
+      "ratio": 1,
+      "note": "Finely shredded."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Blanched and seasoned the same way."
+    }
+  ],
+  "spinach": [
+    {
+      "to": "kale",
+      "ratio": 1,
+      "note": "Remove stems; cook a bit longer."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Milder."
+    }
+  ],
+  "kale": [
+    {
+      "to": "spinach",
+      "ratio": 1,
+      "note": "Wilts in seconds."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Milder."
+    }
+  ],
+  "onion": [
+    {
+      "to": "celery",
+      "ratio": 0.8,
+      "note": "Adds aromatic crunch without the onion."
+    },
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweet and soft when cooked."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out; add extra herbs."
+    }
+  ],
+  "garlic": [
+    {
+      "to": "ginger",
+      "ratio": 1,
+      "note": "Different, but just as aromatic."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "tomato": [
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweet and juicy."
+    },
+    {
+      "to": "cucumber",
+      "ratio": 1,
+      "note": "Crunchy and fresh."
+    }
+  ],
+  "canned-tomatoes": [
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Blend roasted peppers into a sauce."
+    },
+    {
+      "to": "vegetable-broth",
+      "ratio": 0.5,
+      "note": "Plus a spoon of tomato paste if tolerated."
+    }
+  ],
+  "tomato-paste": [
+    {
+      "to": "red-bell-pepper",
+      "ratio": 2,
+      "note": "Roast and blend until thick."
+    }
+  ],
+  "red-bell-pepper": [
+    {
+      "to": "green-bell-pepper",
+      "ratio": 1,
+      "note": "Less sweet."
+    },
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Milder."
+    },
+    {
+      "to": "carrot",
+      "ratio": 0.8,
+      "note": "Sweet; slice thin."
+    }
+  ],
+  "eggplant": [
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Softer; cooks faster."
+    },
+    {
+      "to": "mushrooms",
+      "ratio": 1,
+      "note": "Meaty."
+    }
+  ],
+  "zucchini": [
+    {
+      "to": "broccoli",
+      "ratio": 1,
+      "note": "Crunchier."
+    },
+    {
+      "to": "eggplant",
+      "ratio": 1,
+      "note": "Silkier."
+    },
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweeter."
+    }
+  ],
+  "broccoli": [
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Milder."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Quicker to cook."
+    },
+    {
+      "to": "green-peas",
+      "ratio": 0.7,
+      "note": "Sweet."
+    }
+  ],
+  "cauliflower": [
+    {
+      "to": "broccoli",
+      "ratio": 1,
+      "note": "Greener flavour."
+    }
+  ],
+  "carrot": [
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweet and crisp."
+    },
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Softer."
+    }
+  ],
+  "celery": [
+    {
+      "to": "carrot",
+      "ratio": 1,
+      "note": "Sweeter."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "cabbage": [
+    {
+      "to": "romaine",
+      "ratio": 1,
+      "note": "Softer crunch."
+    },
+    {
+      "to": "bok-choy",
+      "ratio": 1,
+      "note": "Shred finely."
+    }
+  ],
+  "romaine": [
+    {
+      "to": "cabbage",
+      "ratio": 1,
+      "note": "Crunchier."
+    },
+    {
+      "to": "spinach",
+      "ratio": 1,
+      "note": "Tender."
+    }
+  ],
+  "cucumber": [
+    {
+      "to": "celery",
+      "ratio": 1,
+      "note": "Similar crunch."
+    },
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweeter."
+    }
+  ],
+  "green-peas": [
+    {
+      "to": "edamame",
+      "ratio": 1,
+      "note": "More protein."
+    },
+    {
+      "to": "broccoli",
+      "ratio": 1,
+      "note": "Cut small."
+    }
+  ],
+  "avocado": [
+    {
+      "to": "cucumber",
+      "ratio": 1,
+      "note": "Fresh crunch instead of creaminess."
+    },
+    {
+      "to": "greek-yogurt",
+      "ratio": 0.6,
+      "note": "A spoon of yogurt for creaminess."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "olives": [
+    {
+      "to": "capers",
+      "ratio": 0.3,
+      "note": "Same briny note."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "capers": [
+    {
+      "to": "olives",
+      "ratio": 2,
+      "note": "Chop finely."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave them out."
+    }
+  ],
+  "sweet-potato": [
+    {
+      "to": "plantain-ripe",
+      "ratio": 1,
+      "note": "Sweet and caramelises well."
+    },
+    {
+      "to": "carrot",
+      "ratio": 1,
+      "note": "Lower in carbs."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Much lower in carbs."
+    }
+  ],
+  "plantain-ripe": [
+    {
+      "to": "sweet-potato",
+      "ratio": 1,
+      "note": "Roast or pan-fry in wedges."
+    },
+    {
+      "to": "banana",
+      "ratio": 1,
+      "note": "Sweeter and softer; fry briefly."
+    }
+  ],
+  "blueberries": [
+    {
+      "to": "banana",
+      "ratio": 1,
+      "note": "Sliced."
+    },
+    {
+      "to": "dried-apricots",
+      "ratio": 0.3,
+      "note": "Chopped; much sweeter per gram."
+    }
+  ],
+  "banana": [
+    {
+      "to": "blueberries",
+      "ratio": 1,
+      "note": "Fresh and tart."
+    }
+  ],
+  "coconut-milk": [
+    {
+      "to": "soy-milk",
+      "ratio": 1,
+      "note": "Lighter."
+    },
+    {
+      "to": "milk-2pct",
+      "ratio": 1,
+      "note": "Lighter; don't boil hard."
+    }
+  ],
+  "chicken-broth": [
+    {
+      "to": "vegetable-broth",
+      "ratio": 1,
+      "note": "Plant-based."
+    }
+  ],
+  "vegetable-broth": [
+    {
+      "to": "chicken-broth",
+      "ratio": 1,
+      "note": "Richer."
+    }
+  ],
+  "sriracha": [
+    {
+      "to": "chili-powder",
+      "ratio": 0.1,
+      "note": "Mix with a little water and sugar."
+    },
+    {
+      "to": "paprika",
+      "ratio": 0.1,
+      "note": "Smoky, not spicy."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out for a mild version."
+    }
+  ],
+  "chili-powder": [
+    {
+      "to": "paprika",
+      "ratio": 1,
+      "note": "Smoky, not spicy."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out for a mild version."
+    }
+  ],
+  "palm-oil": [
+    {
+      "to": "canola-oil",
+      "ratio": 1,
+      "note": "Add ½ tsp paprika for colour."
+    },
+    {
+      "to": "olive-oil",
+      "ratio": 1,
+      "note": "Add ½ tsp paprika for colour."
+    }
+  ],
+  "olive-oil": [
+    {
+      "to": "canola-oil",
+      "ratio": 1,
+      "note": "Neutral flavour."
+    }
+  ],
+  "canola-oil": [
+    {
+      "to": "olive-oil",
+      "ratio": 1,
+      "note": "Fruitier flavour."
+    }
+  ],
+  "lemon-juice": [
+    {
+      "to": "lime-juice",
+      "ratio": 1,
+      "note": "Similar acidity."
+    },
+    {
+      "to": "rice-vinegar",
+      "ratio": 0.7,
+      "note": "Sharper."
+    }
+  ],
+  "lime-juice": [
+    {
+      "to": "lemon-juice",
+      "ratio": 1,
+      "note": "Similar acidity."
+    }
+  ],
+  "rice-vinegar": [
+    {
+      "to": "lemon-juice",
+      "ratio": 1,
+      "note": "Brighter."
+    }
+  ],
+  "miso": [
+    {
+      "to": "soy-sauce",
+      "ratio": 1,
+      "note": "Thinner, saltier."
+    },
+    {
+      "to": "tamari",
+      "ratio": 1,
+      "note": "Gluten-free option."
+    }
+  ],
+  "rolled-oats": [
+    {
+      "to": "quinoa-cooked",
+      "ratio": 2.5,
+      "note": "Use cooked, chilled quinoa for a gluten-free 'overnight' bowl."
+    }
+  ],
+  "kimchi": [
+    {
+      "to": "cabbage",
+      "ratio": 1,
+      "note": "Quick-pickled cabbage with chili flakes and vinegar; or buy a kimchi labeled vegan or fish-free."
+    }
+  ],
+  "soft-tofu": [
+    {
+      "to": "firm-tofu",
+      "ratio": 1,
+      "note": "Firmer, holds its shape."
+    },
+    {
+      "to": "egg",
+      "ratio": 0.5,
+      "note": "Silky egg custard texture."
+    },
+    {
+      "to": "white-beans-cooked",
+      "ratio": 0.8,
+      "note": "Soy-free; creamy when simmered."
+    }
+  ],
+  "pecorino": [
+    {
+      "to": "parmesan",
+      "ratio": 1,
+      "note": "Milder and nuttier."
+    },
+    {
+      "to": "walnuts",
+      "ratio": 0.6,
+      "note": "Toasted walnut crumb, dairy-free."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out and add a pinch more salt."
+    }
+  ],
+  "red-wine": [
+    {
+      "to": "vegetable-broth",
+      "ratio": 1,
+      "note": "Add 1 tsp vinegar for depth. Alcohol-free."
+    },
+    {
+      "to": "canned-tomatoes",
+      "ratio": 0.7,
+      "note": "Extra tomato brings acidity."
+    }
+  ],
+  "bulgur-cooked": [
+    {
+      "to": "quinoa-cooked",
+      "ratio": 1,
+      "note": "Gluten-free, similar texture."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "Gluten-free."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Riced cauliflower; much lower in carbs."
+    }
+  ],
+  "short-grain-rice-cooked": [
+    {
+      "to": "white-rice-cooked",
+      "ratio": 1,
+      "note": "Less sticky."
+    },
+    {
+      "to": "brown-rice-cooked",
+      "ratio": 1,
+      "note": "More fibre."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Riced cauliflower; much lower in carbs."
+    }
+  ],
+  "potato": [
+    {
+      "to": "sweet-potato",
+      "ratio": 1,
+      "note": "Sweeter; more fibre."
+    },
+    {
+      "to": "cauliflower",
+      "ratio": 1,
+      "note": "Lower in carbs."
+    }
+  ],
+  "fennel": [
+    {
+      "to": "celery",
+      "ratio": 1,
+      "note": "Same crunch, no anise flavour."
+    },
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Milder."
+    }
+  ],
+  "green-bell-pepper": [
+    {
+      "to": "red-bell-pepper",
+      "ratio": 1,
+      "note": "Sweeter."
+    },
+    {
+      "to": "zucchini",
+      "ratio": 1,
+      "note": "Milder."
+    }
+  ],
+  "scallion": [
+    {
+      "to": "onion",
+      "ratio": 0.5,
+      "note": "Use finely sliced onion."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "wakame": [
+    {
+      "to": "spinach",
+      "ratio": 2,
+      "note": "Add at the very end."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "rosemary": [
+    {
+      "to": "thyme",
+      "ratio": 0.3,
+      "note": "Dried thyme; use less."
+    },
+    {
+      "to": null,
+      "ratio": 1,
+      "note": "Leave it out."
+    }
+  ],
+  "hoisin": [
+    {
+      "to": "tamari",
+      "ratio": 0.6,
+      "note": "Plus a little maple syrup; gluten-free if labeled."
+    }
+  ]
+}
