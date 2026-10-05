@@ -1,0 +1,3437 @@
+[
+  {
+    "id": "pasta-e-fagioli",
+    "name": "Pasta e fagioli",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "description": "A thick, rustic tomato soup of small pasta and creamy white beans.",
+    "minutes": 40,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "onion",
+        "grams": 110,
+        "amount": "1 onion, diced"
+      },
+      {
+        "id": "carrot",
+        "grams": 80,
+        "amount": "1 carrot, diced"
+      },
+      {
+        "id": "celery",
+        "grams": 60,
+        "amount": "1 stalk, diced"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves, sliced"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "white-beans-cooked",
+        "grams": 360,
+        "amount": "2¼ cups, drained"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 500,
+        "amount": "2 cups"
+      },
+      {
+        "id": "pasta-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked ditalini"
+      },
+      {
+        "id": "parmesan",
+        "grams": 30,
+        "amount": "⅓ cup, grated",
+        "optional": true
+      },
+      {
+        "id": "basil",
+        "grams": 5,
+        "amount": "a handful of leaves",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Soften the onion, carrot and celery in the olive oil for 8 minutes. Add the garlic for 1 minute.",
+      "Add the tomatoes, broth and beans. Simmer for 15 minutes, then mash a few beans to thicken.",
+      "Stir in the cooked pasta and heat through.",
+      "Serve topped with parmesan and basil."
+    ]
+  },
+  {
+    "id": "baked-cod-tomatoes-olives",
+    "name": "Baked cod with tomatoes & olives",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "description": "Flaky cod roasted on burst tomatoes, olives and capers, served with couscous.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "cod",
+        "grams": 340,
+        "amount": "2 fillets"
+      },
+      {
+        "id": "tomato",
+        "grams": 250,
+        "amount": "1⅔ cups cherry tomatoes"
+      },
+      {
+        "id": "olives",
+        "grams": 50,
+        "amount": "⅓ cup, halved"
+      },
+      {
+        "id": "capers",
+        "grams": 10,
+        "amount": "1 tbsp",
+        "optional": true
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves, sliced"
+      },
+      {
+        "id": "white-wine",
+        "grams": 60,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "parsley",
+        "grams": 8,
+        "amount": "2 tbsp, chopped",
+        "optional": true
+      },
+      {
+        "id": "couscous-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Heat the oven to 200 °C (400 °F). Toss the tomatoes, olives, capers and garlic with the oil and wine in a baking dish.",
+      "Roast for 10 minutes, then nestle in the cod.",
+      "Roast for 10–12 minutes more, until the fish flakes and reaches 63 °C (145 °F).",
+      "Scatter over the parsley and serve with couscous."
+    ]
+  },
+  {
+    "id": "spaghetti-al-pomodoro",
+    "name": "Spaghetti al pomodoro",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "description": "The Italian classic: spaghetti in a quick garlic, tomato and basil sauce.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "pasta-cooked",
+        "grams": 400,
+        "amount": "about 160 g dry spaghetti"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves, sliced"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 25,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "basil",
+        "grams": 10,
+        "amount": "a big handful"
+      },
+      {
+        "id": "parmesan",
+        "grams": 20,
+        "amount": "¼ cup, grated",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Warm the garlic in the oil until fragrant. Add the tomatoes and simmer for 12 minutes.",
+      "Toss with the cooked spaghetti and a splash of pasta water.",
+      "Finish with torn basil and parmesan."
+    ]
+  },
+  {
+    "id": "risotto-ai-funghi",
+    "name": "Risotto ai funghi",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "description": "Creamy mushroom risotto finished with parmesan and butter.",
+    "minutes": 40,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 550,
+        "amount": "about 250 g arborio rice"
+      },
+      {
+        "id": "mushrooms",
+        "grams": 350,
+        "amount": "4½ cups, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, finely chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "white-wine",
+        "grams": 100,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 600,
+        "amount": "2½ cups, hot"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "butter",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "parmesan",
+        "grams": 40,
+        "amount": "½ cup, grated"
+      },
+      {
+        "id": "parsley",
+        "grams": 10,
+        "amount": "3 tbsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Brown the mushrooms in the oil and set aside.",
+      "Soften the onion and garlic, add the rice and toast for 1 minute. Add the wine and let it bubble away.",
+      "Add the hot broth a ladle at a time, stirring, for about 18 minutes until creamy.",
+      "Stir in the mushrooms, butter and parmesan. Rest for 2 minutes and serve with parsley."
+    ]
+  },
+  {
+    "id": "chicken-cacciatore",
+    "name": "Chicken cacciatore",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "description": "Hunter-style chicken braised with peppers, mushrooms, olives, rosemary and wine.",
+    "minutes": 55,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 500,
+        "amount": "6 boneless thighs"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 150,
+        "amount": "1 pepper, sliced"
+      },
+      {
+        "id": "mushrooms",
+        "grams": 150,
+        "amount": "2 cups, sliced"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "red-wine",
+        "grams": 100,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "olives",
+        "grams": 50,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "rosemary",
+        "grams": 3,
+        "amount": "1 sprig"
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 150,
+        "amount": "crusty bread, to serve",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Brown the chicken in the oil and set aside.",
+      "Cook the onion, pepper, mushrooms and garlic for 6 minutes. Add the wine and reduce by half.",
+      "Add the tomatoes, olives, rosemary and chicken. Cover and simmer for 25 minutes, until the chicken reaches 74 °C (165 °F)."
+    ]
+  },
+  {
+    "id": "sardinian-minestrone",
+    "name": "Sardinian longevity minestrone",
+    "cuisine": "Italian",
+    "region": "Mediterranean",
+    "blueZone": "Sardinia, Italy",
+    "description": "The bean-rich vegetable soup eaten daily in Sardinia's Blue Zone, with fregola-style pasta and pecorino.",
+    "minutes": 60,
+    "servings": 4,
+    "ingredients": [
+      {
+        "id": "white-beans-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "chickpeas-cooked",
+        "grams": 200,
+        "amount": "1¼ cups cooked"
+      },
+      {
+        "id": "potato",
+        "grams": 300,
+        "amount": "2 potatoes, diced"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion"
+      },
+      {
+        "id": "carrot",
+        "grams": 150,
+        "amount": "2 carrots"
+      },
+      {
+        "id": "celery",
+        "grams": 100,
+        "amount": "2 stalks"
+      },
+      {
+        "id": "fennel",
+        "grams": 150,
+        "amount": "½ fennel bulb"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 1000,
+        "amount": "4 cups"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "pasta-cooked",
+        "grams": 300,
+        "amount": "about 120 g dry fregola or small pasta"
+      },
+      {
+        "id": "pecorino",
+        "grams": 30,
+        "amount": "⅓ cup, grated",
+        "optional": true
+      },
+      {
+        "id": "parsley",
+        "grams": 15,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "basil",
+        "grams": 10,
+        "amount": "a handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Soften the onion, carrot, celery and fennel in the oil for 10 minutes.",
+      "Add the potatoes, tomatoes, broth, beans and chickpeas. Simmer for 30 minutes.",
+      "Stir in the cooked pasta and herbs. Serve with pecorino."
+    ]
+  },
+  {
+    "id": "espinacas-con-garbanzos",
+    "name": "Espinacas con garbanzos",
+    "cuisine": "Spanish",
+    "region": "Mediterranean",
+    "description": "Seville's smoky spinach and chickpea tapa, thickened with garlicky fried bread.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chickpeas-cooked",
+        "grams": 400,
+        "amount": "2½ cups, drained"
+      },
+      {
+        "id": "spinach",
+        "grams": 300,
+        "amount": "1 large bag"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "¾ tsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp smoked paprika"
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 60,
+        "amount": "2 slices"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 10,
+        "amount": "2 tsp sherry vinegar"
+      }
+    ],
+    "steps": [
+      "Fry the bread and garlic in the oil until golden, then pound with the spices and vinegar to a paste.",
+      "Wilt the spinach, add the chickpeas and the paste with a splash of water.",
+      "Simmer for 5 minutes until thick."
+    ]
+  },
+  {
+    "id": "tortilla-espanola",
+    "name": "Tortilla española",
+    "cuisine": "Spanish",
+    "region": "Mediterranean",
+    "description": "Thick Spanish potato and onion omelette, golden outside and tender inside.",
+    "minutes": 45,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "potato",
+        "grams": 500,
+        "amount": "3 medium potatoes, thinly sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion, sliced"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 45,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "egg",
+        "grams": 300,
+        "amount": "6 eggs"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      }
+    ],
+    "steps": [
+      "Cook the potatoes and onion slowly in the oil for 20 minutes until soft but not browned.",
+      "Beat the eggs with the salt, fold in the potatoes and rest for 5 minutes.",
+      "Cook in a non-stick pan over low heat for 8 minutes, flip onto a plate and cook the other side until set in the middle."
+    ]
+  },
+  {
+    "id": "paella-de-verduras",
+    "name": "Vegetable paella with chickpeas",
+    "cuisine": "Spanish",
+    "region": "Mediterranean",
+    "description": "Saffron-yellow rice with peppers, peas, tomato and chickpeas, cooked in one wide pan.",
+    "minutes": 45,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "olive-oil",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, diced"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 150,
+        "amount": "1 pepper, sliced"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "tomato",
+        "grams": 200,
+        "amount": "2 tomatoes, grated"
+      },
+      {
+        "id": "paprika",
+        "grams": 4,
+        "amount": "1 tsp smoked paprika"
+      },
+      {
+        "id": "turmeric",
+        "grams": 1,
+        "amount": "a pinch of saffron or turmeric"
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 550,
+        "amount": "about 250 g bomba rice"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 300,
+        "amount": "1¼ cups"
+      },
+      {
+        "id": "chickpeas-cooked",
+        "grams": 240,
+        "amount": "1½ cups, drained"
+      },
+      {
+        "id": "green-peas",
+        "grams": 150,
+        "amount": "1 cup"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 20,
+        "amount": "lemon wedges"
+      }
+    ],
+    "steps": [
+      "Soften the onion, pepper and garlic in the oil. Add the tomato, paprika and saffron and cook for 5 minutes.",
+      "Stir in the rice and broth, spread it out evenly and don't stir again. Simmer for 15 minutes.",
+      "Scatter over the chickpeas and peas, cover and cook 5 minutes more. Serve with lemon."
+    ]
+  },
+  {
+    "id": "gambas-al-ajillo",
+    "name": "Gambas al ajillo",
+    "cuisine": "Spanish",
+    "region": "Mediterranean",
+    "description": "Sizzling garlic shrimp in olive oil with a little chili, served with bread for dipping.",
+    "minutes": 15,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "shrimp",
+        "grams": 350,
+        "amount": "12 oz, peeled"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 40,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 18,
+        "amount": "6 cloves, sliced"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 2,
+        "amount": "1 dried chili"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "parsley",
+        "grams": 10,
+        "amount": "3 tbsp, chopped",
+        "optional": true
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 150,
+        "amount": "crusty bread"
+      }
+    ],
+    "steps": [
+      "Warm the oil with the garlic and chili until the garlic is just golden.",
+      "Add the shrimp and cook for 2–3 minutes until pink and opaque.",
+      "Finish with lemon and parsley. Serve straight from the pan with bread."
+    ]
+  },
+  {
+    "id": "mercimek-corbasi",
+    "name": "Mercimek çorbası (red lentil soup)",
+    "cuisine": "Turkish",
+    "region": "Mediterranean",
+    "description": "Velvety Turkish lentil soup with cumin, paprika butter-style oil and a squeeze of lemon.",
+    "minutes": 35,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "lentils-cooked",
+        "grams": 450,
+        "amount": "2¼ cups cooked red lentils"
+      },
+      {
+        "id": "onion",
+        "grams": 110,
+        "amount": "1 onion, chopped"
+      },
+      {
+        "id": "carrot",
+        "grams": 80,
+        "amount": "1 carrot, chopped"
+      },
+      {
+        "id": "tomato-paste",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 25,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 700,
+        "amount": "3 cups"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 90,
+        "amount": "3 slices, to serve",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Soften the onion and carrot in half the oil for 8 minutes. Stir in the tomato paste and cumin.",
+      "Add the lentils and broth and simmer for 15 minutes, then blend until smooth.",
+      "Warm the paprika in the remaining oil and drizzle over. Serve with lemon and bread."
+    ]
+  },
+  {
+    "id": "menemen",
+    "name": "Menemen",
+    "cuisine": "Turkish",
+    "region": "Mediterranean",
+    "description": "Soft-scrambled eggs cooked into sweet peppers and juicy tomatoes, Istanbul-breakfast style.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "egg",
+        "grams": 200,
+        "amount": "4 eggs"
+      },
+      {
+        "id": "tomato",
+        "grams": 300,
+        "amount": "3 tomatoes, grated"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 150,
+        "amount": "2 long green peppers, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 60,
+        "amount": "½ onion, diced",
+        "optional": true
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 2,
+        "amount": "½ tsp pul biber"
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 100,
+        "amount": "crusty bread, to serve"
+      }
+    ],
+    "steps": [
+      "Cook the peppers (and onion) in the oil until soft, about 6 minutes.",
+      "Add the tomatoes and simmer until most of the liquid has gone.",
+      "Stir in the beaten eggs and cook gently until set but still soft; cook fully if you prefer firm eggs. Sprinkle with pepper flakes and serve with bread."
+    ]
+  },
+  {
+    "id": "tavuk-sis-bulgur",
+    "name": "Tavuk şiş with bulgur pilaf",
+    "cuisine": "Turkish",
+    "region": "Mediterranean",
+    "description": "Yogurt-and-pepper-paste chicken skewers with nutty bulgur pilaf and a crisp shepherd's salad.",
+    "minutes": 40,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-breast",
+        "grams": 300,
+        "amount": "2 small breasts, cubed"
+      },
+      {
+        "id": "whole-milk-yogurt",
+        "grams": 80,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "tomato-paste",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "bulgur-cooked",
+        "grams": 350,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "onion",
+        "grams": 60,
+        "amount": "½ onion"
+      },
+      {
+        "id": "tomato",
+        "grams": 100,
+        "amount": "1 tomato, diced"
+      },
+      {
+        "id": "cucumber",
+        "grams": 100,
+        "amount": "½ cucumber, diced"
+      },
+      {
+        "id": "parsley",
+        "grams": 10,
+        "amount": "3 tbsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Mix the yogurt, tomato paste, paprika, garlic, lemon and half the oil. Marinate the chicken for at least 30 minutes, chilled.",
+      "Thread onto skewers and grill for 10–12 minutes, turning, until 74 °C (165 °F) inside.",
+      "Fry the onion in the remaining oil and fold through the bulgur.",
+      "Toss the tomato, cucumber and parsley and serve alongside."
+    ]
+  },
+  {
+    "id": "imam-bayildi",
+    "name": "İmam bayıldı",
+    "cuisine": "Turkish",
+    "region": "Mediterranean",
+    "description": "Olive-oil-braised eggplants stuffed with slow-cooked onion, garlic and tomato.",
+    "minutes": 60,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "eggplant",
+        "grams": 600,
+        "amount": "2 medium eggplants"
+      },
+      {
+        "id": "onion",
+        "grams": 200,
+        "amount": "2 onions, sliced"
+      },
+      {
+        "id": "tomato",
+        "grams": 250,
+        "amount": "2 tomatoes, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 12,
+        "amount": "4 cloves"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 45,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 5,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "parsley",
+        "grams": 15,
+        "amount": "¼ cup",
+        "optional": true
+      },
+      {
+        "id": "bulgur-cooked",
+        "grams": 250,
+        "amount": "1½ cups cooked, to serve",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Halve the eggplants lengthways, score the flesh and roast at 200 °C (400 °F) for 20 minutes.",
+      "Slowly cook the onions and garlic in the oil for 15 minutes, then add the tomatoes, sugar and parsley.",
+      "Press the eggplant flesh open, pile in the filling and bake for 20 minutes more. Serve warm or at room temperature."
+    ]
+  },
+  {
+    "id": "kisir",
+    "name": "Kısır with chickpeas",
+    "cuisine": "Turkish",
+    "region": "Mediterranean",
+    "description": "Herby, tangy bulgur salad with tomato paste, lemon, mint and chickpeas.",
+    "minutes": 20,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "bulgur-cooked",
+        "grams": 500,
+        "amount": "3 cups cooked, cooled"
+      },
+      {
+        "id": "tomato-paste",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "parsley",
+        "grams": 40,
+        "amount": "1 bunch, chopped"
+      },
+      {
+        "id": "mint",
+        "grams": 10,
+        "amount": "a handful"
+      },
+      {
+        "id": "scallion",
+        "grams": 40,
+        "amount": "4 scallions"
+      },
+      {
+        "id": "tomato",
+        "grams": 200,
+        "amount": "2 tomatoes, diced"
+      },
+      {
+        "id": "cucumber",
+        "grams": 150,
+        "amount": "1 small cucumber"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 80,
+        "amount": "1 green pepper"
+      },
+      {
+        "id": "chickpeas-cooked",
+        "grams": 240,
+        "amount": "1½ cups, drained"
+      }
+    ],
+    "steps": [
+      "Rub the tomato paste, oil and lemon juice into the bulgur.",
+      "Fold in everything else and season to taste. Rest for 10 minutes before serving."
+    ]
+  },
+  {
+    "id": "ratatouille",
+    "name": "Ratatouille",
+    "cuisine": "French",
+    "region": "Europe",
+    "description": "Provençal summer vegetables slowly stewed with garlic, thyme and olive oil.",
+    "minutes": 60,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "eggplant",
+        "grams": 300,
+        "amount": "1 eggplant, cubed"
+      },
+      {
+        "id": "zucchini",
+        "grams": 300,
+        "amount": "2 zucchini"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 150,
+        "amount": "1 red pepper"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 100,
+        "amount": "1 green pepper"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 45,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "thyme",
+        "grams": 1,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "basil",
+        "grams": 10,
+        "amount": "a handful",
+        "optional": true
+      },
+      {
+        "id": "whole-wheat-bread",
+        "grams": 150,
+        "amount": "crusty bread, to serve",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Brown the eggplant and zucchini in batches in two thirds of the oil.",
+      "Soften the onion, peppers and garlic in the rest, then add the tomatoes and thyme.",
+      "Return the vegetables and simmer gently for 30 minutes. Finish with basil."
+    ]
+  },
+  {
+    "id": "salade-nicoise",
+    "name": "Salade niçoise",
+    "cuisine": "French",
+    "region": "Europe",
+    "description": "The Riviera classic: tuna, potatoes, egg, tomatoes and olives with a sharp vinaigrette.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "potato",
+        "grams": 250,
+        "amount": "2 small potatoes, boiled"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs, hard-boiled"
+      },
+      {
+        "id": "canned-light-tuna",
+        "grams": 200,
+        "amount": "2 cans, drained"
+      },
+      {
+        "id": "romaine",
+        "grams": 150,
+        "amount": "1 head, torn"
+      },
+      {
+        "id": "tomato",
+        "grams": 200,
+        "amount": "2 tomatoes, quartered"
+      },
+      {
+        "id": "olives",
+        "grams": 40,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "capers",
+        "grams": 10,
+        "amount": "1 tbsp",
+        "optional": true
+      },
+      {
+        "id": "olive-oil",
+        "grams": 25,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 10,
+        "amount": "2 tsp red wine vinegar"
+      }
+    ],
+    "steps": [
+      "Boil the potatoes until tender and the eggs for 10 minutes, then cool.",
+      "Whisk the oil and vinegar with a pinch of salt.",
+      "Arrange everything on a platter and spoon over the dressing."
+    ]
+  },
+  {
+    "id": "poulet-provencal",
+    "name": "Poulet à la provençale",
+    "cuisine": "French",
+    "region": "Europe",
+    "description": "Chicken thighs baked with potatoes, tomatoes, olives, garlic and Provençal herbs.",
+    "minutes": 55,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 500,
+        "amount": "6 boneless thighs"
+      },
+      {
+        "id": "potato",
+        "grams": 450,
+        "amount": "3 potatoes, in wedges"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "olives",
+        "grams": 50,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "white-wine",
+        "grams": 80,
+        "amount": "⅓ cup"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "thyme",
+        "grams": 1,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "rosemary",
+        "grams": 2,
+        "amount": "1 sprig"
+      }
+    ],
+    "steps": [
+      "Heat the oven to 200 °C (400 °F). Toss the potatoes with half the oil and roast for 15 minutes.",
+      "Add the chicken, tomatoes, olives, garlic, wine and herbs, drizzle with the rest of the oil.",
+      "Roast for 30 minutes, until the chicken reaches 74 °C (165 °F)."
+    ]
+  },
+  {
+    "id": "french-lentil-salad",
+    "name": "Warm French lentil salad",
+    "cuisine": "French",
+    "region": "Europe",
+    "description": "Puy-style lentils with carrot, celery and shallot in a mustardy vinaigrette, topped with feta.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "lentils-cooked",
+        "grams": 400,
+        "amount": "2 cups cooked green lentils"
+      },
+      {
+        "id": "carrot",
+        "grams": 100,
+        "amount": "1 carrot, diced"
+      },
+      {
+        "id": "celery",
+        "grams": 60,
+        "amount": "1 stalk, diced"
+      },
+      {
+        "id": "onion",
+        "grams": 40,
+        "amount": "1 shallot, minced"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 25,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 15,
+        "amount": "1 tbsp red wine vinegar"
+      },
+      {
+        "id": "parsley",
+        "grams": 15,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "feta",
+        "grams": 50,
+        "amount": "⅓ cup, crumbled",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Soften the carrot and celery in a little of the oil for 5 minutes.",
+      "Whisk the rest of the oil with the vinegar and shallot.",
+      "Toss the warm lentils with the vegetables, dressing and parsley. Top with feta."
+    ]
+  },
+  {
+    "id": "smoked-salmon-rye",
+    "name": "Smoked salmon & dill on rye",
+    "cuisine": "Nordic",
+    "region": "Europe",
+    "description": "Open-faced rye toasts with cream cheese, cold-smoked salmon, cucumber and dill.",
+    "minutes": 10,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "rye-bread",
+        "grams": 128,
+        "amount": "4 slices"
+      },
+      {
+        "id": "cream-cheese",
+        "grams": 60,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "smoked-salmon",
+        "grams": 120,
+        "amount": "4 oz"
+      },
+      {
+        "id": "cucumber",
+        "grams": 80,
+        "amount": "⅓ cucumber, thinly sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 20,
+        "amount": "a few rings of red onion",
+        "optional": true
+      },
+      {
+        "id": "dill",
+        "grams": 3,
+        "amount": "1 tbsp",
+        "optional": true
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 5,
+        "amount": "1 tsp"
+      }
+    ],
+    "steps": [
+      "Toast the rye bread and spread with cream cheese.",
+      "Layer the cucumber and smoked salmon on top.",
+      "Finish with onion, dill and a squeeze of lemon."
+    ]
+  },
+  {
+    "id": "blueberry-overnight-oats",
+    "name": "Blueberry & walnut overnight oats",
+    "cuisine": "Nordic",
+    "region": "Europe",
+    "description": "Creamy oats soaked overnight with yogurt, blueberries, walnuts and cinnamon.",
+    "minutes": 5,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "rolled-oats",
+        "grams": 90,
+        "amount": "1 cup"
+      },
+      {
+        "id": "milk-2pct",
+        "grams": 250,
+        "amount": "1 cup"
+      },
+      {
+        "id": "greek-yogurt",
+        "grams": 150,
+        "amount": "⅔ cup"
+      },
+      {
+        "id": "blueberries",
+        "grams": 150,
+        "amount": "1 cup"
+      },
+      {
+        "id": "walnuts",
+        "grams": 28,
+        "amount": "¼ cup, chopped"
+      },
+      {
+        "id": "honey",
+        "grams": 14,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "cinnamon",
+        "grams": 1,
+        "amount": "½ tsp"
+      }
+    ],
+    "steps": [
+      "Stir the oats, milk, yogurt, honey and cinnamon together in two jars.",
+      "Refrigerate overnight (at least 6 hours).",
+      "Top with blueberries and walnuts before eating."
+    ]
+  },
+  {
+    "id": "barley-mushroom-stew",
+    "name": "Barley & mushroom stew",
+    "cuisine": "Nordic",
+    "region": "Europe",
+    "description": "A hearty, thyme-scented stew of pearl barley, mushrooms, root vegetables and peas.",
+    "minutes": 50,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion, diced"
+      },
+      {
+        "id": "carrot",
+        "grams": 150,
+        "amount": "2 carrots, diced"
+      },
+      {
+        "id": "celery",
+        "grams": 80,
+        "amount": "1 large stalk, diced"
+      },
+      {
+        "id": "mushrooms",
+        "grams": 300,
+        "amount": "4 cups, quartered"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "pearl-barley-cooked",
+        "grams": 450,
+        "amount": "3 cups cooked"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 700,
+        "amount": "3 cups"
+      },
+      {
+        "id": "green-peas",
+        "grams": 150,
+        "amount": "1 cup"
+      },
+      {
+        "id": "thyme",
+        "grams": 1,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "dill",
+        "grams": 5,
+        "amount": "2 tbsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Soften the onion, carrot and celery in the oil for 8 minutes.",
+      "Add the mushrooms, garlic and thyme and cook until the mushrooms release their liquid.",
+      "Add the broth and barley and simmer for 15 minutes. Stir in the peas for the last 3 minutes.",
+      "Serve scattered with dill."
+    ]
+  },
+  {
+    "id": "nordic-salmon-dill-potatoes",
+    "name": "Salmon with dill potatoes & cucumber salad",
+    "cuisine": "Nordic",
+    "region": "Europe",
+    "description": "Oven-baked salmon, buttery dill new potatoes and a quick pickled cucumber salad.",
+    "minutes": 35,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "salmon",
+        "grams": 300,
+        "amount": "2 fillets"
+      },
+      {
+        "id": "potato",
+        "grams": 400,
+        "amount": "new potatoes"
+      },
+      {
+        "id": "butter",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "dill",
+        "grams": 10,
+        "amount": "a bunch"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cucumber",
+        "grams": 150,
+        "amount": "½ cucumber, thinly sliced"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 10,
+        "amount": "2 tsp vinegar"
+      },
+      {
+        "id": "greek-yogurt",
+        "grams": 80,
+        "amount": "⅓ cup, for the sauce"
+      }
+    ],
+    "steps": [
+      "Boil the potatoes for 15 minutes, then toss with the butter and half the dill.",
+      "Bake the salmon at 200 °C (400 °F) for 12–14 minutes, until it reaches 63 °C (145 °F).",
+      "Toss the cucumber with the vinegar. Stir the rest of the dill and the lemon into the yogurt and serve."
+    ]
+  },
+  {
+    "id": "kung-pao-chicken",
+    "name": "Kung pao chicken",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "Sichuan-style chicken with peanuts, peppers and a sweet-sour, chili-flecked glaze.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-breast",
+        "grams": 300,
+        "amount": "2 small breasts, diced"
+      },
+      {
+        "id": "cornstarch",
+        "grams": 8,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 150,
+        "amount": "1 pepper, diced"
+      },
+      {
+        "id": "zucchini",
+        "grams": 150,
+        "amount": "1 zucchini, diced"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 6,
+        "amount": "2 tsp, grated"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 1,
+        "amount": "a few dried chilies"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 8,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "peanuts",
+        "grams": 40,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Toss the chicken with half the cornstarch. Mix the soy sauce, vinegar, sugar, remaining cornstarch and 3 tbsp water.",
+      "Stir-fry the chicken in the oil until cooked through to 74 °C (165 °F). Remove.",
+      "Stir-fry the pepper, zucchini, garlic, ginger and chilies for 3 minutes.",
+      "Return the chicken, add the sauce and bubble until glossy. Toss in the peanuts and serve with rice."
+    ]
+  },
+  {
+    "id": "garlic-shrimp-broccoli",
+    "name": "Garlic shrimp & broccoli stir-fry",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "Juicy shrimp and crisp broccoli in a light garlic-ginger sauce.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "shrimp",
+        "grams": 300,
+        "amount": "10 oz, peeled"
+      },
+      {
+        "id": "broccoli",
+        "grams": 300,
+        "amount": "3 cups florets"
+      },
+      {
+        "id": "garlic",
+        "grams": 12,
+        "amount": "4 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 6,
+        "amount": "2 tsp, grated"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 16,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cornstarch",
+        "grams": 6,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "brown-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Stir-fry the broccoli in half the oil with a splash of water for 3 minutes.",
+      "Add the remaining oil, garlic, ginger and shrimp. Cook for 2–3 minutes until the shrimp are pink and opaque.",
+      "Mix the soy sauce and cornstarch with 3 tbsp water, pour in and toss until glossy. Serve with rice."
+    ]
+  },
+  {
+    "id": "crispy-tofu-broccoli",
+    "name": "Crispy tofu & broccoli stir-fry",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "Golden tofu and broccoli in a sticky maple-soy glaze.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "firm-tofu",
+        "grams": 400,
+        "amount": "14 oz, pressed and cubed"
+      },
+      {
+        "id": "cornstarch",
+        "grams": 10,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "broccoli",
+        "grams": 250,
+        "amount": "2½ cups florets"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 100,
+        "amount": "⅔ pepper, sliced"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 6,
+        "amount": "2 tsp, grated"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "maple-syrup",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "brown-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Toss the tofu in the cornstarch and fry in the oil until crisp on all sides.",
+      "Add the broccoli, pepper, garlic and ginger with a splash of water. Cook for 4 minutes.",
+      "Add the soy sauce and maple syrup and toss until glazed. Serve with rice."
+    ]
+  },
+  {
+    "id": "mapo-tofu",
+    "name": "Mapo tofu",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "Sichuan soft tofu in a fiery, numbing chili-bean sauce with a little minced pork.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "soft-tofu",
+        "grams": 400,
+        "amount": "14 oz, cubed"
+      },
+      {
+        "id": "ground-pork",
+        "grams": 120,
+        "amount": "4 oz"
+      },
+      {
+        "id": "sriracha",
+        "grams": 30,
+        "amount": "2 tbsp doubanjiang (chili bean paste)"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 6,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 16,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cornstarch",
+        "grams": 6,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "black-pepper",
+        "grams": 1,
+        "amount": "½ tsp Sichuan pepper"
+      },
+      {
+        "id": "scallion",
+        "grams": 15,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Brown the pork in the oil until no pink remains. Add the chili paste, garlic and ginger.",
+      "Add ¾ cup water and the soy sauce, then slide in the tofu and simmer for 5 minutes.",
+      "Thicken with the cornstarch mixed in water. Finish with Sichuan pepper and scallions. Serve with rice."
+    ]
+  },
+  {
+    "id": "tomato-egg-stir-fry",
+    "name": "Tomato & egg stir-fry",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "China's beloved home dish: fluffy eggs in a sweet-savoury tomato sauce over rice.",
+    "minutes": 15,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "egg",
+        "grams": 250,
+        "amount": "5 eggs"
+      },
+      {
+        "id": "tomato",
+        "grams": 400,
+        "amount": "4 tomatoes, wedged"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 6,
+        "amount": "1½ tsp"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Scramble the eggs in half the oil until just set, then remove.",
+      "Cook the tomatoes with the sugar and salt until saucy.",
+      "Return the eggs, fold through and cook until the eggs are fully set. Top with scallions and serve over rice."
+    ]
+  },
+  {
+    "id": "steamed-ginger-fish",
+    "name": "Cantonese steamed fish with ginger & scallion",
+    "cuisine": "Chinese",
+    "region": "East Asia",
+    "description": "Delicate steamed white fish finished with sizzling ginger-scallion oil and soy.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "cod",
+        "grams": 340,
+        "amount": "2 fillets"
+      },
+      {
+        "id": "ginger",
+        "grams": 15,
+        "amount": "a thumb, julienned"
+      },
+      {
+        "id": "scallion",
+        "grams": 30,
+        "amount": "3 scallions, shredded"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 8,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "bok-choy",
+        "grams": 300,
+        "amount": "4 heads"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Steam the fish on a plate with half the ginger for 8–10 minutes, until it flakes and reaches 63 °C (145 °F).",
+      "Steam the bok choy alongside for the last 3 minutes.",
+      "Top the fish with the scallions and remaining ginger, pour over smoking-hot oil, then the soy sauce and sesame oil."
+    ]
+  },
+  {
+    "id": "salmon-teriyaki",
+    "name": "Salmon teriyaki with rice & broccoli",
+    "cuisine": "Japanese",
+    "region": "East Asia",
+    "description": "Glossy soy-ginger glazed salmon with steamed rice and broccoli.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "salmon",
+        "grams": 300,
+        "amount": "2 fillets"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 32,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "sake",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "honey",
+        "grams": 21,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "ginger",
+        "grams": 5,
+        "amount": "1 tsp, grated"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 5,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "broccoli",
+        "grams": 200,
+        "amount": "2 cups florets"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 5,
+        "amount": "2 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Stir the soy sauce, sake, honey and ginger together.",
+      "Sear the salmon in the oil for 3 minutes per side.",
+      "Pour in the sauce and bubble until glossy and the salmon reaches 63 °C (145 °F).",
+      "Serve with rice and steamed broccoli, sprinkled with sesame seeds."
+    ]
+  },
+  {
+    "id": "salmon-avocado-rice-bowl",
+    "name": "Salmon, avocado & edamame rice bowl",
+    "cuisine": "Japanese",
+    "region": "East Asia",
+    "description": "Flaked roasted salmon with edamame, cucumber and avocado over rice.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "salmon",
+        "grams": 250,
+        "amount": "2 small fillets"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "edamame",
+        "grams": 120,
+        "amount": "¾ cup, shelled"
+      },
+      {
+        "id": "cucumber",
+        "grams": 120,
+        "amount": "½ cucumber, sliced"
+      },
+      {
+        "id": "avocado",
+        "grams": 100,
+        "amount": "½ large avocado"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 5,
+        "amount": "2 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Roast the salmon at 200 °C (400 °F) for 12–14 minutes, until it reaches 63 °C (145 °F). Flake into large pieces.",
+      "Season the rice with the vinegar.",
+      "Top the rice with salmon, edamame, cucumber and avocado. Drizzle with soy sauce and sprinkle with sesame."
+    ]
+  },
+  {
+    "id": "soba-edamame-bowl",
+    "name": "Sesame soba & edamame bowl",
+    "cuisine": "Japanese",
+    "region": "East Asia",
+    "description": "Chilled soba noodles tossed with edamame, crunchy vegetables and sesame dressing.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "soba-noodles-cooked",
+        "grams": 400,
+        "amount": "about 150 g dry"
+      },
+      {
+        "id": "edamame",
+        "grams": 150,
+        "amount": "1 cup, shelled"
+      },
+      {
+        "id": "carrot",
+        "grams": 100,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "cucumber",
+        "grams": 120,
+        "amount": "½ cucumber, julienned"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "rice-vinegar",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 5,
+        "amount": "2 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Cook the soba according to the pack, rinse under cold water and drain well.",
+      "Whisk the soy sauce, vinegar and sesame oil.",
+      "Toss the noodles with the edamame, carrot, cucumber and dressing. Top with sesame."
+    ]
+  },
+  {
+    "id": "oyakodon",
+    "name": "Oyakodon",
+    "cuisine": "Japanese",
+    "region": "East Asia",
+    "description": "Chicken and egg gently simmered in a sweet soy broth over short-grain rice.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 250,
+        "amount": "2 thighs, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 120,
+        "amount": "1 onion, sliced"
+      },
+      {
+        "id": "chicken-broth",
+        "grams": 150,
+        "amount": "⅔ cup dashi or broth"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "sake",
+        "grams": 30,
+        "amount": "2 tbsp mirin"
+      },
+      {
+        "id": "sugar",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "egg",
+        "grams": 150,
+        "amount": "3 eggs, beaten"
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 400,
+        "amount": "2½ cups cooked"
+      },
+      {
+        "id": "scallion",
+        "grams": 15,
+        "amount": "2 scallions",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Simmer the broth, soy sauce, mirin and sugar with the onion for 3 minutes.",
+      "Add the chicken and cook until it reaches 74 °C (165 °F).",
+      "Pour over the eggs, cover and cook until set to your liking (fully set if you need firm eggs). Slide over the rice and top with scallions."
+    ]
+  },
+  {
+    "id": "miso-soup-set",
+    "name": "Miso soup set with tofu, rice & edamame",
+    "cuisine": "Japanese",
+    "region": "East Asia",
+    "description": "A Japanese home-style set: tofu and wakame miso soup, a bowl of rice and salted edamame.",
+    "minutes": 15,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "vegetable-broth",
+        "grams": 700,
+        "amount": "3 cups dashi or broth"
+      },
+      {
+        "id": "miso",
+        "grams": 50,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "soft-tofu",
+        "grams": 200,
+        "amount": "7 oz, cubed"
+      },
+      {
+        "id": "wakame",
+        "grams": 20,
+        "amount": "2 tbsp dried, rehydrated"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "edamame",
+        "grams": 150,
+        "amount": "1 cup, shelled"
+      }
+    ],
+    "steps": [
+      "Heat the broth without boiling. Whisk in the miso.",
+      "Add the tofu and wakame and warm through.",
+      "Serve topped with scallions, with rice and edamame on the side."
+    ]
+  },
+  {
+    "id": "bibimbap",
+    "name": "Beef bibimbap",
+    "cuisine": "Korean",
+    "region": "East Asia",
+    "description": "Rice topped with seasoned beef, vegetables, a fried egg and chili sauce.",
+    "minutes": 40,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "white-rice-cooked",
+        "grams": 400,
+        "amount": "2½ cups cooked"
+      },
+      {
+        "id": "beef-flank-steak",
+        "grams": 200,
+        "amount": "7 oz, thinly sliced"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 24,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 12,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "sugar",
+        "grams": 6,
+        "amount": "1½ tsp"
+      },
+      {
+        "id": "spinach",
+        "grams": 150,
+        "amount": "3 cups"
+      },
+      {
+        "id": "carrot",
+        "grams": 100,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "mung-bean-sprouts",
+        "grams": 100,
+        "amount": "1 cup"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs"
+      },
+      {
+        "id": "sriracha",
+        "grams": 15,
+        "amount": "1 tbsp gochujang"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 4,
+        "amount": "1 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Marinate the beef in the soy sauce, half the sesame oil, the garlic and sugar for 15 minutes.",
+      "Blanch the spinach and bean sprouts separately until steaming hot. Season with the remaining sesame oil.",
+      "Stir-fry the carrot for 2 minutes, then the beef for 3–4 minutes until browned.",
+      "Fry the eggs. Arrange everything over the rice and top with chili sauce and sesame."
+    ]
+  },
+  {
+    "id": "bulgogi",
+    "name": "Beef bulgogi with lettuce wraps",
+    "cuisine": "Korean",
+    "region": "East Asia",
+    "description": "Sweet, garlicky grilled beef with rice and crisp lettuce to wrap it in.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "beef-flank-steak",
+        "grams": 300,
+        "amount": "10 oz, thinly sliced"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 32,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 12,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "onion",
+        "grams": 80,
+        "amount": "½ onion, sliced"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 4,
+        "amount": "1 tsp",
+        "optional": true
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 350,
+        "amount": "2¼ cups cooked"
+      },
+      {
+        "id": "romaine",
+        "grams": 80,
+        "amount": "leaves for wrapping"
+      }
+    ],
+    "steps": [
+      "Marinate the beef with the soy sauce, sugar, garlic and sesame oil for 20 minutes.",
+      "Sear with the onion in a very hot pan for 3–4 minutes.",
+      "Top with scallions and sesame and serve with rice and lettuce leaves."
+    ]
+  },
+  {
+    "id": "sundubu-jjigae",
+    "name": "Sundubu jjigae (soft tofu stew)",
+    "cuisine": "Korean",
+    "region": "East Asia",
+    "description": "Bubbling, spicy soft tofu stew with kimchi and zucchini, finished with an egg.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "soft-tofu",
+        "grams": 400,
+        "amount": "14 oz"
+      },
+      {
+        "id": "kimchi",
+        "grams": 150,
+        "amount": "1 cup, chopped"
+      },
+      {
+        "id": "onion",
+        "grams": 80,
+        "amount": "½ onion"
+      },
+      {
+        "id": "zucchini",
+        "grams": 100,
+        "amount": "½ zucchini"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 5,
+        "amount": "2 tsp gochugaru"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 8,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 400,
+        "amount": "1⅔ cups"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs"
+      },
+      {
+        "id": "scallion",
+        "grams": 15,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Fry the kimchi, onion, garlic and chili in the sesame oil for 3 minutes.",
+      "Add the broth and zucchini and simmer for 5 minutes. Spoon in the tofu in large pieces.",
+      "Crack in the eggs and simmer until set. Top with scallions and serve with rice."
+    ]
+  },
+  {
+    "id": "kimchi-fried-rice",
+    "name": "Kimchi fried rice",
+    "cuisine": "Korean",
+    "region": "East Asia",
+    "description": "Tangy, spicy kimchi fried rice topped with a fried egg and sesame.",
+    "minutes": 15,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 450,
+        "amount": "3 cups cooked, day-old"
+      },
+      {
+        "id": "kimchi",
+        "grams": 200,
+        "amount": "1⅓ cups, chopped"
+      },
+      {
+        "id": "onion",
+        "grams": 60,
+        "amount": "½ small onion"
+      },
+      {
+        "id": "sriracha",
+        "grams": 15,
+        "amount": "1 tbsp gochujang"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs"
+      },
+      {
+        "id": "scallion",
+        "grams": 15,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "sesame-seeds",
+        "grams": 4,
+        "amount": "1 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Fry the onion and kimchi in the canola oil for 4 minutes.",
+      "Add the rice, gochujang and soy sauce and stir-fry until hot and lightly crisp.",
+      "Finish with sesame oil. Top with fried eggs, scallions and sesame."
+    ]
+  },
+  {
+    "id": "goya-champuru",
+    "name": "Goya champuru",
+    "cuisine": "Okinawan",
+    "region": "East Asia",
+    "blueZone": "Okinawa, Japan",
+    "description": "Okinawa's signature stir-fry of bitter melon, tofu, egg and pork.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "bitter-melon",
+        "grams": 250,
+        "amount": "1 goya, seeded and sliced"
+      },
+      {
+        "id": "firm-tofu",
+        "grams": 300,
+        "amount": "10 oz, pressed"
+      },
+      {
+        "id": "pork-tenderloin",
+        "grams": 120,
+        "amount": "4 oz, thinly sliced"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs, beaten"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 16,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "salt",
+        "grams": 1,
+        "amount": "a pinch"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Salt the sliced bitter melon for 10 minutes, then rinse to soften the bitterness.",
+      "Brown the tofu in half the oil and set aside. Stir-fry the pork until cooked through (no pink remains).",
+      "Add the bitter melon for 3 minutes, return the tofu and add the soy sauce.",
+      "Pour in the eggs and fold until set. Serve with rice."
+    ]
+  },
+  {
+    "id": "okinawan-tofu-champuru",
+    "name": "Okinawan tofu champuru with sweet potato",
+    "cuisine": "Okinawan",
+    "region": "East Asia",
+    "blueZone": "Okinawa, Japan",
+    "description": "Okinawa's everyday tofu and vegetable stir-fry, served with steamed sweet potato, a traditional staple.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "firm-tofu",
+        "grams": 350,
+        "amount": "12 oz, pressed"
+      },
+      {
+        "id": "cabbage",
+        "grams": 200,
+        "amount": "3 cups, shredded"
+      },
+      {
+        "id": "carrot",
+        "grams": 80,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "mung-bean-sprouts",
+        "grams": 100,
+        "amount": "1 cup"
+      },
+      {
+        "id": "scallion",
+        "grams": 30,
+        "amount": "3 scallions"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 16,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "sweet-potato",
+        "grams": 300,
+        "amount": "1 large, steamed"
+      }
+    ],
+    "steps": [
+      "Steam the sweet potato for 20 minutes until tender.",
+      "Tear the tofu into chunks and brown in the oil.",
+      "Add the cabbage, carrot and sprouts and stir-fry until the sprouts are hot throughout. Season with soy sauce and scallions."
+    ]
+  },
+  {
+    "id": "okinawan-miso-soup-sweet-potato",
+    "name": "Okinawan sweet potato & tofu miso soup",
+    "cuisine": "Okinawan",
+    "region": "East Asia",
+    "blueZone": "Okinawa, Japan",
+    "description": "A hearty Okinawan-style miso soup with sweet potato, tofu, greens and seaweed, served with rice.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "vegetable-broth",
+        "grams": 800,
+        "amount": "3⅓ cups dashi or broth"
+      },
+      {
+        "id": "sweet-potato",
+        "grams": 300,
+        "amount": "1 large, cubed"
+      },
+      {
+        "id": "firm-tofu",
+        "grams": 250,
+        "amount": "9 oz, cubed"
+      },
+      {
+        "id": "bok-choy",
+        "grams": 150,
+        "amount": "2 heads"
+      },
+      {
+        "id": "wakame",
+        "grams": 10,
+        "amount": "1 tbsp dried, rehydrated"
+      },
+      {
+        "id": "miso",
+        "grams": 50,
+        "amount": "3 tbsp"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 250,
+        "amount": "1½ cups cooked"
+      }
+    ],
+    "steps": [
+      "Simmer the sweet potato in the broth for 10 minutes.",
+      "Add the tofu, bok choy and wakame and warm through.",
+      "Take off the heat, whisk in the miso and top with scallions. Serve with rice."
+    ]
+  },
+  {
+    "id": "kufa-jushi",
+    "name": "Kufa jūshī (Okinawan mixed rice)",
+    "cuisine": "Okinawan",
+    "region": "East Asia",
+    "blueZone": "Okinawa, Japan",
+    "description": "Okinawan seasoned rice cooked with mushrooms, carrot and seaweed. This version skips the usual pork and adds edamame.",
+    "minutes": 40,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "short-grain-rice-cooked",
+        "grams": 600,
+        "amount": "about 270 g rice"
+      },
+      {
+        "id": "mushrooms",
+        "grams": 150,
+        "amount": "2 cups shiitake, sliced"
+      },
+      {
+        "id": "carrot",
+        "grams": 100,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "wakame",
+        "grams": 10,
+        "amount": "1 tbsp dried hijiki or wakame"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "sesame-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "edamame",
+        "grams": 150,
+        "amount": "1 cup, shelled"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      }
+    ],
+    "steps": [
+      "Stir-fry the mushrooms and carrot in the sesame oil for 3 minutes. Add the soy sauce and seaweed.",
+      "Fold the vegetables and edamame through the hot rice, cover and let it steam for 5 minutes.",
+      "Top with scallions."
+    ]
+  },
+  {
+    "id": "pad-kra-pao",
+    "name": "Pad kra pao (Thai basil chicken)",
+    "cuisine": "Thai",
+    "region": "Southeast Asia",
+    "description": "Fiery minced chicken with garlic, chili and holy basil over rice, with a crispy fried egg.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 300,
+        "amount": "10 oz, minced"
+      },
+      {
+        "id": "garlic",
+        "grams": 12,
+        "amount": "4 cloves"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 2,
+        "amount": "2–4 bird's eye chilies"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 80,
+        "amount": "½ pepper, sliced"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "soy-sauce",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 6,
+        "amount": "1½ tsp"
+      },
+      {
+        "id": "basil",
+        "grams": 20,
+        "amount": "a big handful holy basil"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs",
+        "optional": true
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 350,
+        "amount": "2¼ cups jasmine rice"
+      }
+    ],
+    "steps": [
+      "Pound the garlic and chilies. Fry in the oil for 30 seconds.",
+      "Add the chicken and pepper and stir-fry until the chicken reaches 74 °C (165 °F). Season with the sauces and sugar.",
+      "Toss in the basil. Serve over rice with fried eggs, cooked until the yolks are firm if needed."
+    ]
+  },
+  {
+    "id": "thai-green-curry",
+    "name": "Thai green curry with chicken",
+    "cuisine": "Thai",
+    "region": "Southeast Asia",
+    "description": "Creamy coconut green curry with chicken, eggplant, peppers and Thai basil over jasmine rice.",
+    "minutes": 30,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 400,
+        "amount": "5 thighs, sliced"
+      },
+      {
+        "id": "curry-powder",
+        "grams": 15,
+        "amount": "3 tbsp green curry paste"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "coconut-milk",
+        "grams": 400,
+        "amount": "1 can (14 oz)"
+      },
+      {
+        "id": "eggplant",
+        "grams": 200,
+        "amount": "1 small eggplant, cubed"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 100,
+        "amount": "1 pepper, sliced"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 8,
+        "amount": "2 tsp palm sugar"
+      },
+      {
+        "id": "basil",
+        "grams": 10,
+        "amount": "Thai basil"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 450,
+        "amount": "3 cups jasmine rice"
+      }
+    ],
+    "steps": [
+      "Fry the curry paste in the oil for 1 minute, then add half the coconut milk and bubble until fragrant.",
+      "Add the chicken, the rest of the coconut milk and the eggplant. Simmer for 12 minutes, until the chicken reaches 74 °C (165 °F).",
+      "Add the pepper, fish sauce and sugar for 2 minutes. Stir in the basil and serve with rice."
+    ]
+  },
+  {
+    "id": "pad-thai-tofu",
+    "name": "Pad thai with tofu",
+    "cuisine": "Thai",
+    "region": "Southeast Asia",
+    "description": "Stir-fried rice noodles with tofu, egg, bean sprouts and peanuts in a sweet-sour sauce.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "rice-noodles-cooked",
+        "grams": 400,
+        "amount": "about 150 g dry"
+      },
+      {
+        "id": "firm-tofu",
+        "grams": 200,
+        "amount": "7 oz, cubed"
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "lime-juice",
+        "grams": 20,
+        "amount": "1½ tbsp (or tamarind paste)"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "mung-bean-sprouts",
+        "grams": 100,
+        "amount": "1 cup"
+      },
+      {
+        "id": "scallion",
+        "grams": 30,
+        "amount": "3 scallions"
+      },
+      {
+        "id": "peanuts",
+        "grams": 30,
+        "amount": "3 tbsp, crushed"
+      }
+    ],
+    "steps": [
+      "Fry the tofu in the oil until golden. Push aside and scramble the eggs with the garlic.",
+      "Add the noodles with the fish sauce, sugar and lime and toss until coated.",
+      "Add the sprouts and scallions and stir-fry until hot. Top with peanuts."
+    ]
+  },
+  {
+    "id": "tom-yum-goong",
+    "name": "Tom yum goong",
+    "cuisine": "Thai",
+    "region": "Southeast Asia",
+    "description": "Hot and sour Thai shrimp soup with mushrooms, tomato, lime and chili, with jasmine rice.",
+    "minutes": 25,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-broth",
+        "grams": 800,
+        "amount": "3⅓ cups"
+      },
+      {
+        "id": "ginger",
+        "grams": 15,
+        "amount": "galangal or ginger, sliced"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 2,
+        "amount": "2 bird's eye chilies"
+      },
+      {
+        "id": "shrimp",
+        "grams": 250,
+        "amount": "9 oz, peeled"
+      },
+      {
+        "id": "mushrooms",
+        "grams": 150,
+        "amount": "2 cups"
+      },
+      {
+        "id": "tomato",
+        "grams": 150,
+        "amount": "1 tomato, wedged"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "lime-juice",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "cilantro",
+        "grams": 10,
+        "amount": "a handful",
+        "optional": true
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups jasmine rice"
+      }
+    ],
+    "steps": [
+      "Simmer the broth with the galangal and chilies for 10 minutes.",
+      "Add the mushrooms and tomato for 3 minutes, then the shrimp until pink.",
+      "Season with fish sauce and lime off the heat. Top with cilantro and serve with rice."
+    ]
+  },
+  {
+    "id": "chicken-pho",
+    "name": "Phở gà (chicken noodle soup)",
+    "cuisine": "Vietnamese",
+    "region": "Southeast Asia",
+    "description": "Clear, fragrant chicken broth with rice noodles, charred ginger, cinnamon and fresh herbs.",
+    "minutes": 45,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-broth",
+        "grams": 1000,
+        "amount": "4 cups"
+      },
+      {
+        "id": "chicken-breast",
+        "grams": 250,
+        "amount": "1 large breast"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, halved and charred"
+      },
+      {
+        "id": "ginger",
+        "grams": 20,
+        "amount": "a thumb, charred"
+      },
+      {
+        "id": "cinnamon",
+        "grams": 1,
+        "amount": "1 stick"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "rice-noodles-cooked",
+        "grams": 400,
+        "amount": "about 150 g dry"
+      },
+      {
+        "id": "mung-bean-sprouts",
+        "grams": 80,
+        "amount": "1 cup",
+        "optional": true
+      },
+      {
+        "id": "basil",
+        "grams": 10,
+        "amount": "Thai basil"
+      },
+      {
+        "id": "cilantro",
+        "grams": 10,
+        "amount": "a handful",
+        "optional": true
+      },
+      {
+        "id": "lime-juice",
+        "grams": 20,
+        "amount": "wedges"
+      },
+      {
+        "id": "scallion",
+        "grams": 15,
+        "amount": "2 scallions"
+      }
+    ],
+    "steps": [
+      "Simmer the broth with the charred onion, ginger and cinnamon for 25 minutes. Season with fish sauce.",
+      "Poach the chicken in the broth until it reaches 74 °C (165 °F), then shred.",
+      "Pour the boiling broth over noodles and chicken. Top with herbs, sprouts, scallions and lime."
+    ]
+  },
+  {
+    "id": "bun-ga-nuong",
+    "name": "Bún gà nướng (lemongrass-style chicken noodle salad)",
+    "cuisine": "Vietnamese",
+    "region": "Southeast Asia",
+    "description": "Grilled caramelised chicken over cool rice noodles, crunchy vegetables, herbs and peanuts with nước chấm.",
+    "minutes": 35,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 280,
+        "amount": "3 thighs"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 20,
+        "amount": "1½ tbsp, divided"
+      },
+      {
+        "id": "sugar",
+        "grams": 15,
+        "amount": "1 tbsp, divided"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "rice-noodles-cooked",
+        "grams": 300,
+        "amount": "about 110 g dry vermicelli"
+      },
+      {
+        "id": "romaine",
+        "grams": 80,
+        "amount": "2 cups, shredded"
+      },
+      {
+        "id": "cucumber",
+        "grams": 100,
+        "amount": "½ cucumber"
+      },
+      {
+        "id": "carrot",
+        "grams": 80,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "mint",
+        "grams": 8,
+        "amount": "a handful"
+      },
+      {
+        "id": "cilantro",
+        "grams": 8,
+        "amount": "a handful",
+        "optional": true
+      },
+      {
+        "id": "lime-juice",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "peanuts",
+        "grams": 25,
+        "amount": "2 tbsp, crushed",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Marinate the chicken with half the fish sauce and sugar, the garlic and oil. Grill until charred and 74 °C (165 °F) inside.",
+      "Whisk the rest of the fish sauce and sugar with the lime juice and 3 tbsp water for the dressing.",
+      "Build bowls of noodles, vegetables and herbs, top with sliced chicken and peanuts, and spoon over the dressing."
+    ]
+  },
+  {
+    "id": "ca-kho-to",
+    "name": "Cá kho tộ (caramelised fish)",
+    "cuisine": "Vietnamese",
+    "region": "Southeast Asia",
+    "description": "Fish braised in a sticky caramel and fish-sauce glaze with black pepper, served with rice and greens.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "cod",
+        "grams": 350,
+        "amount": "2 thick fillets"
+      },
+      {
+        "id": "sugar",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 25,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "black-pepper",
+        "grams": 1,
+        "amount": "lots of black pepper"
+      },
+      {
+        "id": "scallion",
+        "grams": 20,
+        "amount": "2 scallions"
+      },
+      {
+        "id": "bok-choy",
+        "grams": 200,
+        "amount": "3 heads, steamed"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Melt the sugar in a small pot until dark amber, then add the oil, garlic and ⅓ cup water.",
+      "Add the fish sauce and fish and simmer gently for 15 minutes, spooning the sauce over, until the fish reaches 63 °C (145 °F).",
+      "Finish with pepper and scallions. Serve with rice and bok choy."
+    ]
+  },
+  {
+    "id": "goi-ga",
+    "name": "Gỏi gà (Vietnamese chicken salad)",
+    "cuisine": "Vietnamese",
+    "region": "Southeast Asia",
+    "description": "Shredded chicken with cabbage, carrot, herbs and peanuts in a lime and fish sauce dressing.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-breast",
+        "grams": 300,
+        "amount": "2 small breasts"
+      },
+      {
+        "id": "cabbage",
+        "grams": 250,
+        "amount": "3 cups, shredded"
+      },
+      {
+        "id": "carrot",
+        "grams": 100,
+        "amount": "1 carrot, julienned"
+      },
+      {
+        "id": "onion",
+        "grams": 50,
+        "amount": "½ small red onion"
+      },
+      {
+        "id": "mint",
+        "grams": 10,
+        "amount": "a handful"
+      },
+      {
+        "id": "cilantro",
+        "grams": 10,
+        "amount": "a handful",
+        "optional": true
+      },
+      {
+        "id": "lime-juice",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "fish-sauce",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "sugar",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "peanuts",
+        "grams": 30,
+        "amount": "3 tbsp, crushed"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Poach the chicken for 15 minutes, until it reaches 74 °C (165 °F). Cool and shred.",
+      "Mix the lime juice, fish sauce and sugar until dissolved.",
+      "Toss the chicken, vegetables and herbs with the dressing. Top with peanuts and serve with rice."
+    ]
+  },
+  {
+    "id": "gallo-pinto",
+    "name": "Gallo pinto",
+    "cuisine": "Costa Rican",
+    "region": "Latin America",
+    "blueZone": "Nicoya, Costa Rica",
+    "description": "Costa Rica's rice-and-black-bean breakfast, a staple of the Nicoya Blue Zone, with peppers and cilantro.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "black-beans-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked, day-old"
+      },
+      {
+        "id": "onion",
+        "grams": 80,
+        "amount": "½ onion"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 80,
+        "amount": "½ pepper"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "cilantro",
+        "grams": 10,
+        "amount": "3 tbsp",
+        "optional": true
+      },
+      {
+        "id": "egg",
+        "grams": 100,
+        "amount": "2 eggs, to serve",
+        "optional": true
+      },
+      {
+        "id": "corn-tortilla",
+        "grams": 50,
+        "amount": "2 tortillas",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Cook the onion and pepper in the oil until soft.",
+      "Add the beans with a little of their liquid, then fold in the rice until hot and speckled.",
+      "Finish with cilantro. Serve with eggs cooked until firm and warm tortillas."
+    ]
+  },
+  {
+    "id": "sopa-negra",
+    "name": "Sopa negra (Costa Rican black bean soup)",
+    "cuisine": "Costa Rican",
+    "region": "Latin America",
+    "blueZone": "Nicoya, Costa Rica",
+    "description": "A simple, comforting black bean soup from Costa Rica, served with a sliced hard-boiled egg and rice.",
+    "minutes": 35,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "black-beans-cooked",
+        "grams": 500,
+        "amount": "3 cups cooked"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "onion",
+        "grams": 120,
+        "amount": "1 onion"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 100,
+        "amount": "½ pepper"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 600,
+        "amount": "2½ cups"
+      },
+      {
+        "id": "cilantro",
+        "grams": 15,
+        "amount": "¼ cup",
+        "optional": true
+      },
+      {
+        "id": "egg",
+        "grams": 150,
+        "amount": "3 eggs, hard-boiled"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked"
+      }
+    ],
+    "steps": [
+      "Soften the onion, pepper and garlic in the oil.",
+      "Add the beans and broth and simmer for 15 minutes. Blend a third of the soup to thicken it.",
+      "Serve with sliced egg, cilantro and rice."
+    ]
+  },
+  {
+    "id": "loma-linda-bean-toast",
+    "name": "Avocado & white bean toast with walnuts",
+    "cuisine": "Californian",
+    "region": "North America",
+    "blueZone": "Loma Linda, California",
+    "description": "A plant-forward breakfast in the spirit of Loma Linda's Adventist Blue Zone: beans, avocado, greens and nuts.",
+    "minutes": 10,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "whole-wheat-bread",
+        "grams": 128,
+        "amount": "4 slices"
+      },
+      {
+        "id": "white-beans-cooked",
+        "grams": 200,
+        "amount": "1¼ cups cooked"
+      },
+      {
+        "id": "avocado",
+        "grams": 150,
+        "amount": "1 avocado"
+      },
+      {
+        "id": "tomato",
+        "grams": 100,
+        "amount": "1 tomato, sliced"
+      },
+      {
+        "id": "spinach",
+        "grams": 40,
+        "amount": "a handful"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "walnuts",
+        "grams": 20,
+        "amount": "2 tbsp, chopped"
+      }
+    ],
+    "steps": [
+      "Toast the bread. Mash the beans and avocado with the lemon juice.",
+      "Spread on the toast and top with spinach, tomato and walnuts."
+    ]
+  },
+  {
+    "id": "loma-linda-lentil-salad",
+    "name": "Lentil, quinoa & walnut salad",
+    "cuisine": "Californian",
+    "region": "North America",
+    "blueZone": "Loma Linda, California",
+    "description": "A plant-based lunch in the spirit of Loma Linda's Adventist Blue Zone: lentils, quinoa, greens and walnuts.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "lentils-cooked",
+        "grams": 300,
+        "amount": "1½ cups cooked"
+      },
+      {
+        "id": "quinoa-cooked",
+        "grams": 200,
+        "amount": "1¼ cups cooked"
+      },
+      {
+        "id": "spinach",
+        "grams": 80,
+        "amount": "2 handfuls"
+      },
+      {
+        "id": "tomato",
+        "grams": 150,
+        "amount": "1 cup cherry tomatoes"
+      },
+      {
+        "id": "cucumber",
+        "grams": 120,
+        "amount": "½ cucumber"
+      },
+      {
+        "id": "walnuts",
+        "grams": 30,
+        "amount": "¼ cup, toasted"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 25,
+        "amount": "2 tbsp"
+      }
+    ],
+    "steps": [
+      "Whisk the olive oil and lemon juice with a pinch of salt.",
+      "Toss the lentils, quinoa, spinach, tomatoes and cucumber with the dressing.",
+      "Top with toasted walnuts."
+    ]
+  }
+]
