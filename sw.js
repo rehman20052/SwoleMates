@@ -1,4 +1,4 @@
-// v17: refreshed Fuel journal, search, recipes, and bundled thumbnail artwork.
+// v18: automatic label scanning, routines, set logging, navigation, and native render fixes.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
