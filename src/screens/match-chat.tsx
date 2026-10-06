@@ -161,7 +161,7 @@ export function MatchChat({ userId }: { userId: string }) {
           setMessages((current) => {
             const same =
               current.length === items.length &&
-              current.every((item, index) => item.id === items[index]?.id && item.body === items[index]?.body && item.editedAt === items[index]?.editedAt);
+              current.every((item, index) => item.id === items[index]?.id && item.body === items[index]?.body && item.editedAt === items[index]?.editedAt && item.heartCount === items[index]?.heartCount && item.heartedByMe === items[index]?.heartedByMe);
             return same ? current : items;
           });
           setPlans((current) => {
@@ -186,6 +186,7 @@ export function MatchChat({ userId }: { userId: string }) {
     const channel = supabase
       .channel(`match-messages-${person.requestId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, pull)
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, pull)
       .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, pull)
       .subscribe();
     return () => {

@@ -52,6 +52,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [showAddFood, setShowAddFood] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scannedIngredients, setScannedIngredients] = useState<ScanIngredient[]>([]);
+  const [buildFromIngredients, setBuildFromIngredients] = useState(false);
   const [savingNewRecipe, setSavingNewRecipe] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<SavedMeal | null>(null);
   const [editingFood, setEditingFood] = useState<FoodLogEntry | null>(null);
@@ -87,6 +88,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
   function resetForm() {
     setScannedIngredients([]);
+    setBuildFromIngredients(false);
     setArtwork(undefined);
     setMeal("Breakfast");
     setName("");
@@ -106,7 +108,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
   function openScanner() {
     // Adding an ingredient to an existing meal must preserve its previous nutrition.
-    if (!scannedIngredients.length && [calories, protein, carbs, fats].some(value => value.trim())) {
+    if (!buildFromIngredients && !scannedIngredients.length && [calories, protein, carbs, fats].some(value => value.trim())) {
       const read = (value: string) => value.trim() && Number.isFinite(Number(value.replace(",", "."))) && Number(value.replace(",", ".")) >= 0 ? Number(value.replace(",", ".")) : null;
       setScannedIngredients([scannedIngredient({ name: name.trim() || "Existing food", basis: "1 portion of your existing food or recipe", source: "manual",
         calories: read(calories), protein: read(protein), carbs: read(carbs), fats: read(fats) })]);
@@ -114,11 +116,50 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setShowScanner(true);
   }
 
+  function updateIngredients(items: ScanIngredient[]) {
+    setScannedIngredients(items);
+    const total = ingredientTotals(items);
+    setCalories(items.length && total.calories !== null ? String(total.calories) : "");
+    setProtein(items.length && total.protein !== null ? String(total.protein) : "");
+    setCarbs(items.length && total.carbs !== null ? String(total.carbs) : "");
+    setFats(items.length && total.fats !== null ? String(total.fats) : "");
+  }
+
+  function addManualIngredient() {
+    updateIngredients([...scannedIngredients, scannedIngredient({
+      name: "",
+      basis: "1 portion",
+      source: "manual",
+      calories: null,
+      protein: null,
+      carbs: null,
+      fats: null,
+    })]);
+  }
+
+  function editManualIngredient(id: string, patch: Partial<ScanIngredient>) {
+    updateIngredients(scannedIngredients.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  function ingredientValidationError() {
+    const hasScannedIngredient = scannedIngredients.some(item => item.source !== "manual");
+    if (buildFromIngredients && !hasScannedIngredient) {
+      return "Complete each ingredient's name, calories, protein, carbs, and fat. Enter 0 for any macro the ingredient doesn't contain.";
+    }
+    if (buildFromIngredients) {
+      return "Complete the missing name or nutrition values for each ingredient. Enter 0 for any macro the ingredient doesn't contain.";
+    }
+    return "Open the ingredient list and complete the missing nutrition values and servings.";
+  }
+
   async function saveFood(recipeOnly = false) {
     if (savingRecipe || (recipeOnly ? !recipesReady : !foodJournalReady)) return;
     const trimmedName = name.trim();
+    if (buildFromIngredients && !recipeOnly && !editingFood && !scannedIngredients.length) {
+      setFormError("Add at least one ingredient to calculate this meal."); return;
+    }
     if (scannedIngredients.length && !ingredientTotals(scannedIngredients).complete) {
-      setFormError("Open your scanned ingredients and fill missing nutrition values and servings first."); return;
+      setFormError(ingredientValidationError()); return;
     }
     const calorieValue = Number(calories.trim().replace(",", "."));
     if (!trimmedName || !calories.trim() || !Number.isFinite(calorieValue) || calorieValue < 0) {
@@ -196,7 +237,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   async function saveRecipeEdits() {
     if (!editingRecipe || savingRecipe || !recipesReady) return;
     if (scannedIngredients.length && !ingredientTotals(scannedIngredients).complete) {
-      setFormError("Open your scanned ingredients and fill missing nutrition values and servings first."); return;
+      setFormError(ingredientValidationError()); return;
     }
     const trimmedName = name.trim();
     const calorieValue = numberFrom(calories);
@@ -423,12 +464,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     <>
       <Modal animationType="slide" visible={showScanner} onRequestClose={() => setShowScanner(false)}>
         <View style={{ flex: 1, backgroundColor: theme.colors.background, paddingTop: 16 }}>
-          {showScanner ? <FoodScanner initialIngredients={scannedIngredients} onChange={items => {
-            setScannedIngredients(items);
-            const total = ingredientTotals(items);
-            setCalories(items.length ? String(total.calories ?? "") : ""); setProtein(items.length ? String(total.protein ?? "") : "");
-            setCarbs(items.length ? String(total.carbs ?? "") : ""); setFats(items.length ? String(total.fats ?? "") : "");
-          }} onClose={() => setShowScanner(false)} onUse={food => {
+          {showScanner ? <FoodScanner initialIngredients={scannedIngredients} onChange={updateIngredients} onClose={() => setShowScanner(false)} onUse={food => {
             if (!name.trim()) setName(food.name); setCalories(String(food.calories ?? "")); setProtein(String(food.protein ?? ""));
             setCarbs(String(food.carbs ?? "")); setFats(String(food.fats ?? "")); setFormError(null); setShowScanner(false);
           }} /> : null}
@@ -443,18 +479,69 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <View><SectionLabel>{savingNewRecipe ? "Saved recipes" : dayLabel}</SectionLabel><AppText size={23} weight="black">{savingNewRecipe ? "Save recipe" : editingFood ? "Edit food" : "Add food"}</AppText></View>
                   <Pressable accessibilityRole="button" accessibilityLabel={savingNewRecipe ? "Close recipe form" : "Close add food"} onPress={() => setShowAddFood(false)}><AppText size={25} muted>×</AppText></Pressable>
                 </View>
-                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or photograph label"}</SecondaryButton> : null}
-                {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
+                {!savingNewRecipe && !editingFood ? <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: buildFromIngredients }}
+                  accessibilityLabel="Build macros from ingredients"
+                  onPress={() => {
+                    const next = !buildFromIngredients;
+                    setBuildFromIngredients(next);
+                    if (next && !scannedIngredients.length) addManualIngredient();
+                  }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: buildFromIngredients ? theme.colors.primary : theme.colors.border, backgroundColor: buildFromIngredients ? theme.colors.primaryTint : theme.colors.surfaceRaised }}
+                >
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <AppText size={14} weight="bold">Build macros from ingredients</AppText>
+                    <AppText size={11} muted>{scannedIngredients.length ? `${scannedIngredients.length} ${scannedIngredients.length === 1 ? "ingredient" : "ingredients"} included in this one meal.` : "Enter each ingredient and we’ll calculate one meal total."}</AppText>
+                  </View>
+                  <View style={{ width: 46, height: 27, borderRadius: 14, padding: 3, justifyContent: "center", backgroundColor: buildFromIngredients ? theme.colors.primary : theme.colors.border }}>
+                    <View style={{ width: 21, height: 21, borderRadius: 11, backgroundColor: buildFromIngredients ? theme.colors.primaryText : theme.colors.surface, transform: [{ translateX: buildFromIngredients ? 19 : 0 }] }} />
+                  </View>
+                </Pressable> : null}
+                {buildFromIngredients && !savingNewRecipe && !editingFood ? <View style={{ gap: 12 }}>
+                  <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito" bordered /></Field>
+                  {scannedIngredients.map((item, index) => <View key={item.id} style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <AppText size={14} weight="bold">Ingredient {index + 1}</AppText>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`Remove ingredient ${index + 1}`} onPress={() => updateIngredients(scannedIngredients.filter((entry) => entry.id !== item.id))}>
+                        <AppText size={12} weight="bold" color={theme.colors.danger}>Remove</AppText>
+                      </Pressable>
+                    </View>
+                    <Field label="Food name"><Input bordered value={item.name} placeholder="e.g. Chicken breast" onChangeText={(value) => editManualIngredient(item.id, { name: value })} /></Field>
+                    <View style={styles.inputRow}>
+                      <Field label="Calories" style={styles.inputHalf}><Input bordered value={item.calories} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { calories: value })} /></Field>
+                      <Field label="Protein (g)" style={styles.inputHalf}><Input bordered value={item.protein} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { protein: value })} /></Field>
+                    </View>
+                    <View style={styles.inputRow}>
+                      <Field label="Carbs (g)" style={styles.inputHalf}><Input bordered value={item.carbs} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { carbs: value })} /></Field>
+                      <Field label="Fat (g)" style={styles.inputHalf}><Input bordered value={item.fats} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { fats: value })} /></Field>
+                    </View>
+                  </View>)}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <SecondaryButton style={{ flex: 1 }} onPress={addManualIngredient}>Add ingredient</SecondaryButton>
+                    {Platform.OS === "web" ? <SecondaryButton style={{ flex: 1 }} onPress={openScanner}>Scan ingredient</SecondaryButton> : null}
+                  </View>
+                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.colors.primaryTint, gap: 3 }}>
+                    <AppText size={11} weight="bold" primary>ONE MEAL TOTAL</AppText>
+                    <AppText size={16} weight="black">{calories || "—"} calories</AppText>
+                    <AppText size={11} muted>{protein || "—"}g protein · {carbs || "—"}g carbs · {fats || "—"}g fat</AppText>
+                  </View>
+                </View> : <>
+                  {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or photograph label"}</SecondaryButton> : null}
+                  {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
+                </>}
                 <Field label="Meal">
                   <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
                 </Field>
-                <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
-                <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                <View style={styles.inputRow}>
-                  <Field label="Protein (g)" style={styles.inputHalf}><Input value={protein} onChangeText={setProtein} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                </View>
+                {!buildFromIngredients ? <>
+                  <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
+                  <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
+                  <View style={styles.inputRow}>
+                    <Field label="Protein (g)" style={styles.inputHalf}><Input value={protein} onChangeText={setProtein} keyboardType="number-pad" placeholder="0" bordered /></Field>
+                    <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
+                    <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
+                  </View>
+                </> : null}
                 {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
         <SaveFeedback area="food" />
         {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
@@ -485,7 +572,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
                 </Field>
                 <Field label="Recipe name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
-                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or scan ingredients (${scannedIngredients.length})` : "Scan barcode or nutrition label"}</SecondaryButton> : null}
+                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or photograph label"}</SecondaryButton> : null}
                 {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
                 <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
                 <View style={styles.inputRow}>
