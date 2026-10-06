@@ -1,4 +1,4 @@
-// v19: refresh navigation, scanner, social gestures, reactions, and presence UI.
+// v21: corrected navigation bundle and nutrition-photo keyboard flow.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
