@@ -185,7 +185,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
             {visibleChats.length > 0 ? (
               <>
                 <ChatGroup people={grouped.attention} openedIds={openedIds} readTimes={readTimes} answeredWorkouts={answeredWorkouts} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} onAction={askAction} />
-                <ChatGroup title="Waiting" people={grouped.waiting} openedIds={openedIds} readTimes={readTimes} answeredWorkouts={answeredWorkouts} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} onAction={askAction} />
+                <ChatGroup title="Waiting for response" people={grouped.waiting} openedIds={openedIds} readTimes={readTimes} answeredWorkouts={answeredWorkouts} onOpen={(person) => nav.push({ name: "chat", id: person.userId })} onAction={askAction} />
               </>
             ) : (
               <AppText size={13} muted>

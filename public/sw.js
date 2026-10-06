@@ -1,4 +1,4 @@
-// v21: corrected navigation bundle and nutrition-photo keyboard flow.
+// v23: surface separate ingredient logging directly in the scanner.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

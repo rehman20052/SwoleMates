@@ -31,7 +31,7 @@ const nutrient = (value: unknown): number | null => {
 };
 export function barcodeProduct(data: unknown): ScannedFood {
   const result = data as { status?: number; product?: Record<string, unknown> };
-  if (result?.status !== 1 || !result.product) throw new Error("Product not found. Try scanning its nutrition label instead.");
+  if (result?.status !== 1 || !result.product) throw new Error("Product not found. Try taking a nutrition-label photo instead.");
   const product = result.product;
   const values = (product.nutriments ?? {}) as Record<string, unknown>;
   // Use a single basis for every nutrient; never mix per-serving and per-100g values.
@@ -57,7 +57,7 @@ export async function lookupBarcode(code: string, signal?: AbortSignal): Promise
   if (!/^\d{8}$|^\d{12,14}$/.test(code)) throw new Error("Enter an 8, 12, 13, or 14 digit food barcode.");
   if (barcodeCache.has(code)) return { ...barcodeCache.get(code)! };
   const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_en,nutriments,serving_size,serving_quantity,serving_quantity_unit`, { signal });
-  if (!response.ok) throw new Error(response.status === 429 ? "Product lookup is busy. Try again shortly or scan the label." : "Could not look up this barcode. Check your connection or scan the label.");
+  if (!response.ok) throw new Error(response.status === 429 ? "Product lookup is busy. Try again shortly or photograph the label." : "Could not look up this barcode. Check your connection or photograph the label.");
   const food = barcodeProduct(await response.json());
   if (barcodeCache.size >= 100) barcodeCache.delete(barcodeCache.keys().next().value!);
   barcodeCache.set(code, food);
