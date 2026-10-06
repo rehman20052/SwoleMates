@@ -1,4 +1,4 @@
-// v22: optionally log assembled ingredients as separate journal entries.
+// v23: surface separate ingredient logging directly in the scanner.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
