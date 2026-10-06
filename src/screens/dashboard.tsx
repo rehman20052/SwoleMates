@@ -1,6 +1,6 @@
 import { HomeBackdrop } from "@/components/home-backdrop";
-import { ReactNode, useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 
@@ -228,6 +228,21 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
     };
   }, [foodJournalReady]);
 
+  // Pulling down on Home reloads partner check-ins and verified workouts.
+  const [refreshing, setRefreshing] = useState(false);
+  const [checkInNonce, setCheckInNonce] = useState(0);
+  const refreshHome = useCallback(async () => {
+    setRefreshing(true);
+    setCheckInNonce((value) => value + 1);
+    try {
+      syncVerifiedWorkoutLogs(await listVerifiedWorkoutLogs());
+    } catch {
+      // The check-in cards show their own error if loading fails.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [syncVerifiedWorkoutLogs]);
+
   const todayIso = daysFromToday(0);
   const currentWeekStart = useMemo(() => startOfWeek(new Date()), [todayIso]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index)), [currentWeekStart]);
@@ -385,7 +400,10 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           )}
         </View>
       ) : (
-        <ScrollBody contentContainerStyle={styles.body}>
+        <ScrollBody
+          contentContainerStyle={styles.body}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refreshHome()} tintColor={theme.colors.primary} />}
+        >
         <View style={[styles.hero, { minHeight: theme.isDark ? 90 : 108, padding: theme.isDark ? 0 : 12, justifyContent: "center", overflow: "hidden", borderRadius: 16 }]}>
           <HomeBackdrop source={require("../../assets/brand/train-gym.jpg")} opacity={theme.effects.heroOpacity} />
           <AppText size={29} weight="black" color={theme.colors.photoText}>
@@ -411,7 +429,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           <QuickWorkoutLog onSaved={() => { setShowLogForm(false); showNotice("Workout saved."); }} />
         ) : null}
 
-        <CheckInPanel />
+        <CheckInPanel
+          reloadKey={checkInNonce}
+          logFor={(plannedWorkoutId) => logs.find((log) => log.plannedWorkoutId === plannedWorkoutId)}
+          onLogWorkout={(log) => beginEditLog(log)}
+        />
         <SaveFeedback area="workouts" />
 
         {notice ? (
@@ -945,7 +967,9 @@ function PartnerFace({ name, photo, size }: { name: string; photo: string | null
   );
 }
 
-function CheckInPanel() {
+// After both partners check in, each can log what they did (exercises, sets, notes) in that
+// workout's own log. It's the same editor as Edit in Recent workouts.
+function CheckInPanel({ reloadKey, logFor, onLogWorkout }: { reloadKey: number; logFor: (plannedWorkoutId: string) => SessionLog | undefined; onLogWorkout: (log: SessionLog) => void }) {
   const theme = useAppTheme();
   const { syncVerifiedWorkoutLogs } = useAppData();
   const [items, setItems] = useState<CheckInWorkout[]>([]);
@@ -975,7 +999,32 @@ function CheckInPanel() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
+
+  // While you're checked in and waiting on your partner, check every 10 seconds (and when you
+  // come back to the app) so their check-in shows up without restarting.
+  const waiting = items.some((item) => item.checkedIn && !item.partnerCheckedIn && item.plan.status !== "completed");
+  useEffect(() => {
+    if (!waiting) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const workouts = await listCheckInWorkouts();
+        if (!active) return;
+        setItems(workouts);
+        if (workouts.some((item) => item.checkedIn && item.partnerCheckedIn)) syncVerifiedWorkoutLogs(await listVerifiedWorkoutLogs());
+      } catch {
+        // Try again on the next tick.
+      }
+    };
+    const timer = setInterval(() => void refresh(), 10000);
+    const appState = AppState.addEventListener("change", (next) => { if (next === "active") void refresh(); });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      appState.remove();
+    };
+  }, [waiting, syncVerifiedWorkoutLogs]);
 
   async function checkIn(item: CheckInWorkout) {
     if (busyId) return;
@@ -1041,6 +1090,15 @@ function CheckInPanel() {
                 {busyId === plan.id ? "Checking in..." : "Check in"}
               </PrimaryButton>
             ) : null}
+            {both ? (() => {
+              const log = logFor(plan.id);
+              if (!log) return <AppText size={12} muted>Your workout log is loading. You can log your exercises in a moment.</AppText>;
+              return (
+                <SecondaryButton height={44} onPress={() => onLogWorkout(log)}>
+                  {log.exercises?.length ? "Edit your workout" : "Log exercise"}
+                </SecondaryButton>
+              );
+            })() : null}
           </Card>
         );
       })}

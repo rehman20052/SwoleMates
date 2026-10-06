@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   PressableProps,
+  type RefreshControlProps,
   ScrollView,
   ScrollViewProps,
   StyleProp,
@@ -134,6 +135,9 @@ export function Screen({ children, style }: PropsWithChildren<{ style?: StylePro
   return <View style={[styles.screen, { backgroundColor: theme.colors.background }, style]}>{children}</View>;
 }
 
+const PULL_TRIGGER = 70;
+const PULL_MAX = 110;
+
 export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function ScrollBody(
   { children, contentContainerStyle, onScroll, scrollEventThrottle, ...props },
   ref,
@@ -142,6 +146,33 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
   const scrollY = useRef(0);
   const keyboardHeight = useRef(0);
   const [keyboardPad, setKeyboardPad] = useState(0);
+
+  // React Native's RefreshControl only works in the native app. On web (browser and the
+  // home-screen app) a pull down from the top of the list calls the same onRefresh.
+  const refresh = (props.refreshControl as { props?: RefreshControlProps } | undefined)?.props;
+  const webPull = Platform.OS === "web" && !!refresh?.onRefresh;
+  const pullStart = useRef<number | null>(null);
+  const [pull, setPull] = useState(0);
+  const touchY = (event: GestureResponderEvent) => event.nativeEvent.touches?.[0]?.pageY ?? event.nativeEvent.pageY;
+  const pullHandlers = webPull
+    ? {
+        onTouchStart: (event: GestureResponderEvent) => {
+          pullStart.current = scrollY.current <= 0 && !refresh?.refreshing ? touchY(event) : null;
+          props.onTouchStart?.(event);
+        },
+        onTouchMove: (event: GestureResponderEvent) => {
+          if (pullStart.current != null) setPull(Math.max(0, Math.min(PULL_MAX, touchY(event) - pullStart.current)));
+          props.onTouchMove?.(event);
+        },
+        onTouchEnd: (event: GestureResponderEvent) => {
+          if (pullStart.current != null && pull >= PULL_TRIGGER) refresh?.onRefresh?.();
+          pullStart.current = null;
+          setPull(0);
+          props.onTouchEnd?.(event);
+        },
+      }
+    : {};
+  const pullLabel = refresh?.refreshing ? "Refreshing…" : pull >= PULL_TRIGGER ? "Release to refresh" : "Pull to refresh";
 
   const reveal = useCallback(() => {
     const scroll = scrollRef.current as (ScrollView & Measurable & { getInnerViewRef?: () => Measurable | null }) | null;
@@ -203,6 +234,7 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
           setScrollRef(ref, node);
         }}
         {...props}
+        {...pullHandlers}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={scrollEventThrottle ?? 16}
@@ -212,6 +244,11 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
         }}
         contentContainerStyle={[styles.scrollBody, contentContainerStyle]}
       >
+        {webPull && (pull > 0 || refresh?.refreshing) ? (
+          <View style={{ height: refresh?.refreshing ? 36 : Math.max(0, pull - 20), alignItems: "center", justifyContent: "flex-end", overflow: "hidden" }}>
+            <Text style={{ fontSize: 12, color: refresh?.tintColor ?? "#8E8E93", paddingBottom: 8 }}>{pullLabel}</Text>
+          </View>
+        ) : null}
         {children}
         {keyboardPad > 0 ? <View style={{ height: keyboardPad }} /> : null}
       </ScrollView>

@@ -13,7 +13,7 @@ import { parseWorkoutDraft, starterWorkoutPlans, type DraftExercise } from "@/li
 const newId = () => `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: { date?: string; existing?: SessionLog; onSaved: () => void }) {
   const theme = useAppTheme();
-  const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback, workspaceSettings, saveWorkspaceSetting, accountUserId } = useAppData();
+  const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback, workspaceSettings, saveWorkspaceSetting, accountUserId, logs } = useAppData();
   const options = ["Choose exercise", ...exerciseOptions([], "")];
   const [names, setNames] = useState<string[]>([]);
   const [pickingId, setPickingId] = useState<string | null>(null);
@@ -36,6 +36,8 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
   const [deletingPlan, setDeletingPlan] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  // Shown after saving a workout that isn't a routine yet: "Save this as a routine?"
+  const [routinePrompt, setRoutinePrompt] = useState<{ name: string; saving: boolean; error: string | null } | null>(null);
   const draft = useSavedDraft("draft:workout:" + (existing?.id ?? date), content => {
     const saved = parseWorkoutDraft(content);
     if (!saved) return;
@@ -54,11 +56,11 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
     const plan = parseWorkoutDraft(item.value.content); return plan ? [{ id: item.id, ...plan }] : [];
   });
   async function savePlan(update = false) {
-    if (!accountUserId || !rows.length || !rows.every(row => row.exercise !== "Choose exercise" && (row.exercise !== "Other" || row.customName.trim()))) { setError("Choose your exercises before saving a plan."); return; }
+    if (!accountUserId || !rows.length || !rows.every(row => row.exercise !== "Choose exercise" && (row.exercise !== "Other" || row.customName.trim()))) { setError("Choose your exercises before saving a routine."); return; }
     const name = (planName || title).trim();
-    if (!name) { setError("Name your plan first."); return; }
+    if (!name) { setError("Name your routine first."); return; }
     const saved = await saveWorkspaceSetting(update && selectedPlan ? selectedPlan : "workout-plan:" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), JSON.stringify({ title: name, notes, rows }), accountUserId, Date.now());
-    setPlanNotice(saved ? "Plan saved. No workout was logged." : "Could not save plan. Try again.");
+    setPlanNotice(saved ? "Routine saved. No workout was logged." : "Could not save routine. Try again.");
   }
   const updateRow = (id: string, changes: Partial<DraftExercise>) => changeRows(current => current.map(row => row.id === id ? { ...row, ...changes } : row));
   async function save() {
@@ -68,36 +70,96 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
     busyRef.current = true; setBusy(true); setError(null);
     const saved = existing ? await updateWorkoutLog(existing.id, { title: title.trim(), notes: notes.trim() || undefined, exercises }) : await logWorkout(title.trim(), notes.trim() || undefined, date, { exercises }, recordId.current);
     busyRef.current = false; setBusy(false);
-    if (saved) { changed.current = false; draft.clear(); onSaved(); }
+    if (!saved) return;
+    changed.current = false; draft.clear();
+    const isRoutine = plans.some(plan => plan.title.trim().toLowerCase() === title.trim().toLowerCase());
+    // Offer to save it as a routine unless it came from one or a routine already has this name.
+    if (accountUserId && rows.length && !selectedPlan && !isRoutine) setRoutinePrompt({ name: title.trim(), saving: false, error: null });
+    else onSaved();
   }
+  async function saveRoutine() {
+    if (!routinePrompt || !accountUserId) return;
+    const name = routinePrompt.name.trim();
+    if (!name) { setRoutinePrompt({ ...routinePrompt, error: "Name your routine first." }); return; }
+    setRoutinePrompt({ ...routinePrompt, saving: true, error: null });
+    const saved = await saveWorkspaceSetting("workout-plan:" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), JSON.stringify({ title: name, notes, rows }), accountUserId, Date.now());
+    if (!saved) { setRoutinePrompt({ ...routinePrompt, saving: false, error: "Could not save the routine. Your workout is saved. Try again." }); return; }
+    setRoutinePrompt(null);
+    onSaved();
+  }
+  // The newest sets, reps and weight you logged for each exercise, by name.
+  function lastNumbers() {
+    const latest = new Map<string, WorkoutExercise>();
+    const newestFirst = [...logs].sort((left, right) => (right.date + (right.loggedAt ?? "")).localeCompare(left.date + (left.loggedAt ?? "")));
+    for (const log of newestFirst) {
+      for (const exercise of log.exercises ?? []) {
+        const key = exercise.name.trim().toLowerCase();
+        if (key && !latest.has(key)) latest.set(key, exercise);
+      }
+    }
+    return latest;
+  }
+  // Adds a plan's exercises after whatever is already logged, so a partner workout keeps its
+  // title and any exercises already entered. Only an empty log takes the plan's name and notes.
+  function addPlan(plan: { id?: string; title: string; notes?: string; rows: DraftExercise[] }) {
+    const room = Math.max(0, 30 - rows.length);
+    if (room === 0) { setError("This workout already has 30 exercises."); return; }
+    const latest = lastNumbers();
+    let filled = 0;
+    const added = plan.rows.slice(0, room).map(row => {
+      const last = latest.get((row.exercise === "Other" ? row.customName : row.exercise).trim().toLowerCase());
+      if (!last) return { ...row, id: newId() };
+      filled += 1;
+      return { ...row, id: newId(), sets: String(last.sets), reps: String(last.reps), weight: Number.isFinite(last.weight) ? String(last.weight) : row.weight, unit: last.unit };
+    });
+    changed.current = true;
+    if (!title.trim()) setTitle(plan.title);
+    if (!notes.trim() && plan.notes) setNotes(plan.notes);
+    setSelectedPlan(rows.length === 0 && plan.id ? plan.id : null);
+    setRows(current => [...current, ...added]);
+    setPlansOpen(false);
+    setError(added.length < plan.rows.length ? `Added ${added.length} of ${plan.rows.length} exercises. A workout holds up to 30.` : null);
+    setPlanNotice(filled ? `Filled with your last numbers for ${filled} of ${added.length} exercise${added.length === 1 ? "" : "s"}.` : "");
+  }
+  if (routinePrompt) return <Card padding={16} radius={20} gap={12}>
+    <SectionLabel>Workout saved</SectionLabel>
+    <AppText size={16} weight="bold">Save this as a routine?</AppText>
+    <AppText muted size={12}>Next time, tap it to fill in these exercises with your latest numbers.</AppText>
+    <Input bordered placeholder="Routine name, e.g. Leg day" value={routinePrompt.name} onChangeText={name => setRoutinePrompt({ ...routinePrompt, name })} maxLength={100} editable={!routinePrompt.saving} />
+    {routinePrompt.error ? <AppText color={theme.colors.danger}>{routinePrompt.error}</AppText> : null}
+    <PrimaryButton height={46} disabled={routinePrompt.saving} onPress={() => void saveRoutine()}>{routinePrompt.saving ? "Saving…" : "Save routine"}</PrimaryButton>
+    <SecondaryButton height={42} disabled={routinePrompt.saving} onPress={() => { setRoutinePrompt(null); onSaved(); }}>Not now</SecondaryButton>
+  </Card>;
   return <Card padding={16} radius={20} gap={12}>
     <SectionLabel>{existing ? "Edit workout" : "Quick workout log"}</SectionLabel>
     <AppText muted size={12}>{draft.status || "Unfinished workouts save as drafts"}</AppText>
-    <SecondaryButton height={38} onPress={() => setPlansOpen(!plansOpen)}>{plansOpen ? "Hide workout plans" : "Workout plans"}</SecondaryButton>
+    {plans.length ? <View style={{ gap: 8 }}>
+      <AppText size={12} weight="bold">Your routines</AppText>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {plans.map(plan => <SecondaryButton key={plan.id} height={38} fontSize={13} disabled={!draft.ready || busy} onPress={() => addPlan(plan)}>{plan.title}</SecondaryButton>)}
+      </View>
+      {planNotice && !plansOpen ? <AppText muted size={12}>{planNotice}</AppText> : null}
+    </View> : null}
+    <SecondaryButton height={38} onPress={() => setPlansOpen(!plansOpen)}>{plansOpen ? "Hide routines" : "Manage routines"}</SecondaryButton>
     {plansOpen ? <View style={{ gap: 8 }}>
-      <AppText muted size={12}>Load a routine before logging. Your session stays editable.</AppText>
+      <AppText muted size={12}>Adding a routine fills in its exercises with your latest numbers. You can change them before saving.</AppText>
       {plans.map(plan => <View key={plan.id} style={{ flexDirection: "row", gap: 8 }}>
-        <SecondaryButton style={{ flex: 1 }} onPress={() => {
-          if (rows.length || title.trim()) { setError("Start a fresh log before loading a plan so your current exercises stay safe."); return; }
-          changed.current = true; setTitle(plan.title); setNotes(plan.notes ?? ""); setRows(plan.rows.map((row: DraftExercise) => ({ ...row, id: newId() }))); setPlansOpen(false); setSelectedPlan(plan.id); setError(null);
-        }}>{plan.title}</SecondaryButton>
+        <SecondaryButton style={{ flex: 1 }} disabled={!draft.ready || busy} onPress={() => addPlan(plan)}>{"Add " + plan.title}</SecondaryButton>
         <SecondaryButton onPress={async () => {
           if (deletingPlan !== plan.id) { setDeletingPlan(plan.id); return; }
           if (accountUserId && await saveWorkspaceSetting(plan.id, "", accountUserId, Date.now())) setDeletingPlan(null);
         }}>{deletingPlan === plan.id ? "Confirm delete" : "Delete"}</SecondaryButton>
         {deletingPlan === plan.id ? <SecondaryButton onPress={() => setDeletingPlan(null)}>Keep</SecondaryButton> : null}
       </View>)}
-      {!plans.length ? <AppText muted>No saved plans yet. Add exercises below, then save your routine.</AppText> : null}
-      <Input bordered placeholder="Plan name (optional)" value={planName} onChangeText={setPlanName} maxLength={100} />
-      <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan()}>Save as workout plan</SecondaryButton>
-      {selectedPlan ? <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan(true)}>Update selected plan</SecondaryButton> : null}
+      {!plans.length ? <AppText muted>No routines yet. Log a workout and save it as a routine.</AppText> : null}
+      <Input bordered placeholder="Routine name (optional)" value={planName} onChangeText={setPlanName} maxLength={100} />
+      <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan()}>Save as routine</SecondaryButton>
+      {selectedPlan ? <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan(true)}>Update selected routine</SecondaryButton> : null}
       <AppText muted size={12}>Starter routines - enter your own working weights</AppText>
-      {starterWorkoutPlans.map(plan => <SecondaryButton key={plan.title} disabled={!draft.ready || busy} onPress={() => {
-        if (rows.length || title.trim()) { setError("Discard your current draft before starting another routine."); return; }
-        changed.current = true; setTitle(plan.title); setNotes(""); setSelectedPlan(null);
-        setRows(plan.exercises.map(exercise => ({ id: newId(), exercise, customName: "", sets: "3", reps: "8", weight: "", unit: "lb" })));
-        setPlansOpen(false); setError(null);
-      }}>{"Start " + plan.title}</SecondaryButton>)} 
+      {starterWorkoutPlans.map(plan => <SecondaryButton key={plan.title} disabled={!draft.ready || busy} onPress={() => addPlan({
+        title: plan.title,
+        rows: plan.exercises.map(exercise => ({ id: newId(), exercise, customName: "", sets: "3", reps: "8", weight: "", unit: "lb" })),
+      })}>{"Add " + plan.title}</SecondaryButton>)}
       {planNotice ? <AppText muted size={12}>{planNotice}</AppText> : null}
     </View> : null}
     <Input bordered placeholder="Workout name, e.g. Push Day" value={title} onChangeText={changeTitle} editable={!busy && draft.ready} maxLength={100} />
