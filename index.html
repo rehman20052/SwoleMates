@@ -152,11 +152,17 @@
       window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=18", document.baseURI));
+          let reloadingForUpdate = false;
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (reloadingForUpdate) return;
+            reloadingForUpdate = true;
+            window.location.reload();
+          });
+          navigator.serviceWorker.register(new URL("sw.js?v=19", document.baseURI)).then((registration) => registration.update());
         });
       }
     </script>
     <script src="mobile-viewport.js" async></script>
-  <script src="/SwoleMates/_expo/static/js/web/entry-974a8a7a43589aa0f90ef16e88e2ce99.js" defer></script>
+  <script src="/SwoleMates/_expo/static/js/web/entry-b567d6fdf8753ef1a008293a66fcbd8f.js" defer></script>
 </body>
 </html>

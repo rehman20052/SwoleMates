@@ -1,4 +1,4 @@
-// v18: automatic label scanning, routines, set logging, navigation, and native render fixes.
+// v19: refresh navigation, scanner, social gestures, reactions, and presence UI.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
