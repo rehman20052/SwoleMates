@@ -1,4 +1,4 @@
-// v21: corrected navigation bundle and nutrition-photo keyboard flow.
+// v22: optionally log assembled ingredients as separate journal entries.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
