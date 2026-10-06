@@ -9,11 +9,11 @@ import { validWorkoutExercises, type WorkoutExercise } from "@/lib/workout-sessi
 import { daysFromToday, type SessionLog, useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 
-import { parseWorkoutDraft, starterWorkoutPlans, type DraftExercise } from "@/lib/workout-drafts";
+import { parseWorkoutDraft, type DraftExercise } from "@/lib/workout-drafts";
 const newId = () => `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: { date?: string; existing?: SessionLog; onSaved: () => void }) {
+export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved, onManageRoutines }: { date?: string; existing?: SessionLog; onSaved: () => void; onManageRoutines?: () => void }) {
   const theme = useAppTheme();
-  const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback, workspaceSettings, saveWorkspaceSetting, accountUserId } = useAppData();
+  const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback, workspaceSettings } = useAppData();
   const options = ["Choose exercise", ...exerciseOptions([], "")];
   const [names, setNames] = useState<string[]>([]);
   const [pickingId, setPickingId] = useState<string | null>(null);
@@ -25,15 +25,12 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
   }, []);
   const [title, setTitle] = useState(existing?.title ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [rows, setRows] = useState<DraftExercise[]>(() => (existing?.exercises ?? []).map(row => ({ id: row.id, exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit })));
+  const [rows, setRows] = useState<DraftExercise[]>(() => (existing?.exercises ?? []).map(row => ({ id: row.id, exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit, setValues: row.setDetails?.map(set => ({ reps: String(set.reps), weight: String(set.weight) })) ?? Array.from({ length: row.sets }, () => ({ reps: String(row.reps), weight: String(row.weight) })) })));
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const recordId = useRef(`log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [error, setError] = useState<string | null>(null);
-  const [planName, setPlanName] = useState("");
   const [plansOpen, setPlansOpen] = useState(false);
-  const [planNotice, setPlanNotice] = useState("");
-  const [deletingPlan, setDeletingPlan] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const draft = useSavedDraft("draft:workout:" + (existing?.id ?? date), content => {
@@ -53,17 +50,13 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
     if (!item.id.startsWith("workout-plan:") || typeof item.value !== "object" || !item.value.content) return [];
     const plan = parseWorkoutDraft(item.value.content); return plan ? [{ id: item.id, ...plan }] : [];
   });
-  async function savePlan(update = false) {
-    if (!accountUserId || !rows.length || !rows.every(row => row.exercise !== "Choose exercise" && (row.exercise !== "Other" || row.customName.trim()))) { setError("Choose your exercises before saving a plan."); return; }
-    const name = (planName || title).trim();
-    if (!name) { setError("Name your plan first."); return; }
-    const saved = await saveWorkspaceSetting(update && selectedPlan ? selectedPlan : "workout-plan:" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), JSON.stringify({ title: name, notes, rows }), accountUserId, Date.now());
-    setPlanNotice(saved ? "Plan saved. No workout was logged." : "Could not save plan. Try again.");
-  }
   const updateRow = (id: string, changes: Partial<DraftExercise>) => changeRows(current => current.map(row => row.id === id ? { ...row, ...changes } : row));
   async function save() {
     if (busyRef.current || !foodJournalReady) return;
-    const exercises: WorkoutExercise[] = rows.map(row => ({ id: row.id, name: (row.exercise === "Other" ? row.customName : row.exercise === "Choose exercise" ? "" : row.exercise).trim(), sets: Number(row.sets), reps: Number(row.reps), weight: row.weight.trim() ? Number(row.weight) : NaN, unit: row.unit }));
+    const exercises: WorkoutExercise[] = rows.map(row => {
+      const details = row.setValues?.length ? row.setValues : Array.from({ length: Number(row.sets) }, () => ({ reps: row.reps, weight: row.weight }));
+      return { id: row.id, name: (row.exercise === "Other" ? row.customName : row.exercise === "Choose exercise" ? "" : row.exercise).trim(), sets: details.length, reps: Number(details[0]?.reps), weight: details[0]?.weight.trim() ? Number(details[0].weight) : NaN, unit: row.unit, setDetails: details.map(set => ({ reps: Number(set.reps), weight: set.weight.trim() ? Number(set.weight) : NaN })) };
+    });
     if (!title.trim() || !validWorkoutExercises(exercises)) { setError("Add a workout name. Each exercise needs a name, 1–100 sets and reps, and a valid weight (use 0 for bodyweight)."); return; }
     busyRef.current = true; setBusy(true); setError(null);
     const saved = existing ? await updateWorkoutLog(existing.id, { title: title.trim(), notes: notes.trim() || undefined, exercises }) : await logWorkout(title.trim(), notes.trim() || undefined, date, { exercises }, recordId.current);
@@ -73,32 +66,14 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
   return <Card padding={16} radius={20} gap={12}>
     <SectionLabel>{existing ? "Edit workout" : "Quick workout log"}</SectionLabel>
     <AppText muted size={12}>{draft.status || "Unfinished workouts save as drafts"}</AppText>
-    <SecondaryButton height={38} onPress={() => setPlansOpen(!plansOpen)}>{plansOpen ? "Hide workout plans" : "Workout plans"}</SecondaryButton>
+    <View style={{ flexDirection: "row", gap: 8 }}><SecondaryButton style={{ flex: 1 }} height={38} onPress={() => setPlansOpen(!plansOpen)}>{plansOpen ? "Hide routines" : "Use a routine"}</SecondaryButton>{onManageRoutines ? <SecondaryButton style={{ flex: 1 }} height={38} onPress={onManageRoutines}>Manage routines</SecondaryButton> : null}</View>
     {plansOpen ? <View style={{ gap: 8 }}>
-      <AppText muted size={12}>Load a routine before logging. Your session stays editable.</AppText>
-      {plans.map(plan => <View key={plan.id} style={{ flexDirection: "row", gap: 8 }}>
-        <SecondaryButton style={{ flex: 1 }} onPress={() => {
+      <AppText muted size={12}>Choose a routine to fill today’s exercises. You can still change every set.</AppText>
+      {plans.map(plan => <SecondaryButton key={plan.id} onPress={() => {
           if (rows.length || title.trim()) { setError("Start a fresh log before loading a plan so your current exercises stay safe."); return; }
-          changed.current = true; setTitle(plan.title); setNotes(plan.notes ?? ""); setRows(plan.rows.map((row: DraftExercise) => ({ ...row, id: newId() }))); setPlansOpen(false); setSelectedPlan(plan.id); setError(null);
-        }}>{plan.title}</SecondaryButton>
-        <SecondaryButton onPress={async () => {
-          if (deletingPlan !== plan.id) { setDeletingPlan(plan.id); return; }
-          if (accountUserId && await saveWorkspaceSetting(plan.id, "", accountUserId, Date.now())) setDeletingPlan(null);
-        }}>{deletingPlan === plan.id ? "Confirm delete" : "Delete"}</SecondaryButton>
-        {deletingPlan === plan.id ? <SecondaryButton onPress={() => setDeletingPlan(null)}>Keep</SecondaryButton> : null}
-      </View>)}
-      {!plans.length ? <AppText muted>No saved plans yet. Add exercises below, then save your routine.</AppText> : null}
-      <Input bordered placeholder="Plan name (optional)" value={planName} onChangeText={setPlanName} maxLength={100} />
-      <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan()}>Save as workout plan</SecondaryButton>
-      {selectedPlan ? <SecondaryButton disabled={!draft.ready || busy} onPress={() => savePlan(true)}>Update selected plan</SecondaryButton> : null}
-      <AppText muted size={12}>Starter routines - enter your own working weights</AppText>
-      {starterWorkoutPlans.map(plan => <SecondaryButton key={plan.title} disabled={!draft.ready || busy} onPress={() => {
-        if (rows.length || title.trim()) { setError("Discard your current draft before starting another routine."); return; }
-        changed.current = true; setTitle(plan.title); setNotes(""); setSelectedPlan(null);
-        setRows(plan.exercises.map(exercise => ({ id: newId(), exercise, customName: "", sets: "3", reps: "8", weight: "", unit: "lb" })));
-        setPlansOpen(false); setError(null);
-      }}>{"Start " + plan.title}</SecondaryButton>)} 
-      {planNotice ? <AppText muted size={12}>{planNotice}</AppText> : null}
+          changed.current = true; setTitle(plan.title); setNotes(plan.notes ?? ""); setRows(plan.rows.map((row: DraftExercise) => ({ ...row, id: newId(), setValues: Array.from({ length: Math.max(1, Number(row.sets) || 3) }, () => ({ reps: row.reps || "8", weight: row.weight || "" })) }))); setPlansOpen(false); setSelectedPlan(plan.id); setError(null);
+        }}>{plan.title}</SecondaryButton>)}
+      {!plans.length ? <AppText muted>No routines yet. Open Manage routines to build one.</AppText> : null}
     </View> : null}
     <Input bordered placeholder="Workout name, e.g. Push Day" value={title} onChangeText={changeTitle} editable={!busy && draft.ready} maxLength={100} />
     {rows.map((row, index) => <View key={row.id} style={{ backgroundColor: theme.colors.surfaceRaised, padding: 12, borderRadius: 12, gap: 10 }}>
@@ -113,18 +88,21 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved }: 
         </ScrollView>
       </View> : null}
       {row.exercise === "Other" ? <Input bordered placeholder="Exercise name" value={row.customName} onChangeText={customName => updateRow(row.id, { customName })} editable={!busy && draft.ready} maxLength={100} /> : null}
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <Field label="Sets" style={{ flex: 1 }}><Input bordered value={row.sets} onChangeText={sets => updateRow(row.id, { sets })} keyboardType="number-pad" editable={!busy && draft.ready} accessibilityLabel={`Exercise ${index + 1} sets`} /></Field>
-        <Field label="Reps" style={{ flex: 1 }}><Input bordered value={row.reps} onChangeText={reps => updateRow(row.id, { reps })} keyboardType="number-pad" editable={!busy && draft.ready} accessibilityLabel={`Exercise ${index + 1} reps`} /></Field>
-        <Field label={`Weight (${row.unit})`} style={{ flex: 1.3 }}><Input bordered value={row.weight} onChangeText={weight => updateRow(row.id, { weight })} keyboardType="decimal-pad" editable={!busy && draft.ready} accessibilityLabel={`Exercise ${index + 1} weight`} /></Field>
-      </View>
+      <AppText size={11} muted>Log each set separately</AppText>
+      {(row.setValues?.length ? row.setValues : [{ reps: row.reps || "8", weight: row.weight }]).map((set, setIndex) => <View key={setIndex} style={{ flexDirection: "row", gap: 8, alignItems: "flex-end" }}>
+        <AppText size={12} weight="bold" style={{ width: 38, paddingBottom: 13 }}>Set {setIndex + 1}</AppText>
+        <Field label="Reps" style={{ flex: 1 }}><Input bordered value={set.reps} onChangeText={reps => updateRow(row.id, { setValues: (row.setValues?.length ? row.setValues : [{ reps: row.reps || "8", weight: row.weight }]).map((item, i) => i === setIndex ? { ...item, reps } : item) })} keyboardType="number-pad" editable={!busy && draft.ready} accessibilityLabel={`Exercise ${index + 1} set ${setIndex + 1} reps`} /></Field>
+        <Field label={`Weight (${row.unit})`} style={{ flex: 1.25 }}><Input bordered value={set.weight} onChangeText={weight => updateRow(row.id, { setValues: (row.setValues?.length ? row.setValues : [{ reps: row.reps || "8", weight: row.weight }]).map((item, i) => i === setIndex ? { ...item, weight } : item) })} keyboardType="decimal-pad" editable={!busy && draft.ready} accessibilityLabel={`Exercise ${index + 1} set ${setIndex + 1} weight`} /></Field>
+        {(row.setValues?.length ?? 1) > 1 ? <SecondaryButton height={42} fontSize={16} accessibilityLabel={`Remove set ${setIndex + 1}`} onPress={() => { const next = (row.setValues ?? [{ reps: row.reps || "8", weight: row.weight }]).filter((_, i) => i !== setIndex); updateRow(row.id, { setValues: next, sets: String(next.length), reps: next[0]?.reps ?? "", weight: next[0]?.weight ?? "" }); }}>−</SecondaryButton> : null}
+      </View>)}
+      <SecondaryButton height={34} fontSize={11} disabled={busy || (row.setValues?.length ?? 1) >= 100} onPress={() => { const current = row.setValues?.length ? row.setValues : [{ reps: row.reps || "8", weight: row.weight }]; const last = current[current.length - 1]; const next = [...current, { ...last }]; updateRow(row.id, { setValues: next, sets: String(next.length) }); }}>+ Add set</SecondaryButton>
       <SecondaryButton height={30} fontSize={11} disabled={busy} onPress={() => {
         const unit = row.unit === "lb" ? "kg" : "lb";
-        const weight = row.weight.trim() && Number.isFinite(Number(row.weight)) ? String(Math.round(Number(row.weight) * (unit === "kg" ? 1 / 2.2046226218 : 2.2046226218) * 100) / 100) : row.weight;
-        updateRow(row.id, { unit, weight });
+        const convert = (weight: string) => weight.trim() && Number.isFinite(Number(weight)) ? String(Math.round(Number(weight) * (unit === "kg" ? 1 / 2.2046226218 : 2.2046226218) * 100) / 100) : weight;
+        updateRow(row.id, { unit, weight: convert(row.weight), setValues: row.setValues?.map(set => ({ ...set, weight: convert(set.weight) })) });
       }}>Switch to {row.unit === "lb" ? "kg" : "lb"}</SecondaryButton>
     </View>)}
-    <SecondaryButton height={38} fontSize={12} disabled={busy || rows.length >= 30} onPress={() => changeRows(current => [...current, { id: newId(), exercise: "Choose exercise", customName: "", sets: "3", reps: "8", weight: "", unit: "lb" }])}>Add exercise</SecondaryButton>
+    <SecondaryButton height={38} fontSize={12} disabled={busy || rows.length >= 30} onPress={() => changeRows(current => [...current, { id: newId(), exercise: "Choose exercise", customName: "", sets: "1", reps: "8", weight: "", unit: "lb", setValues: [{ reps: "8", weight: "" }] }])}>+ Add exercise</SecondaryButton>
     <Input bordered multiline maxLength={10000} placeholder="Workout notes (optional)" value={notes} onChangeText={changeNotes} editable={!busy && draft.ready} />
     {!existing && (title || rows.length || notes) ? <View style={{ flexDirection: "row", gap: 8 }}>
       <SecondaryButton disabled={busy} onPress={() => {

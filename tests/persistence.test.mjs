@@ -43,6 +43,15 @@ function memoryStorage() {
   };
 }
 const recipe = (id, name = 'My recipe') => ({ id, name, meal: 'Lunch', calories: 600, protein: 40, carbs: 65, fats: 20 });
+test('scanned ingredients retain editable base nutrition and servings after a saved food reopens', async () => {
+  const storage = memoryStorage();
+  const journal = createFoodJournal(storage); await journal.load([]);
+  const ingredient = { id: 'scan-1', name: 'Milk', source: 'barcode', basis: '1 cup', servings: '1.5', calories: '120', protein: '6', carbs: '12', fats: '4.5' };
+  const entry = { ...recipe('scanned'), date: '2026-10-05', scannedIngredients: [ingredient] };
+  await journal.change(() => [entry]);
+  const restored = await createFoodJournal(storage).load([]);
+  assert.deepEqual(plain(restored[0].scannedIngredients), [ingredient]);
+});
 const validRecipe = (value) => value && typeof value.id === 'string' && typeof value.name === 'string';
 const defaultGoals = { calorieGoal: 2500, proteinGoal: 190, carbGoal: 260, fatGoal: 75 };
 const macroProfile = { sex: 'Male', age: 28, weightLb: 180, heightIn: 70, goal: 'maintain', targetWeightLb: null,
@@ -241,4 +250,16 @@ test('partial workout drafts allow unfinished numeric fields but reject damaged 
   assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, rows: [{ ...draft.rows[0], unit: 'stones' }] })), null);
   assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, title: 'x'.repeat(101) })), null);
   assert.equal(starterWorkoutPlans.length, 3);
+});
+
+const { nutritionGoalSource, planWithUpdatedWeight } = loadModule('src/lib/nutrition-plan-storage.ts');
+test('custom macro goals survive weight check-ins and legacy custom targets are detected', () => {
+  const profile = { sex: 'Male', age: 28, weightLb: 183, heightIn: 70, goal: 'maintain', steps: '4to7', strengthDays: 3, cardioSessions: 0, cardioLength: null, bodyFat: null, targetWeightLb: null, targetWeeks: null, weighIns: [], plannedWeeklyLb: 0, calorieAdjustment: 0, calibratedThrough: null };
+  const goals = { calorieGoal: 1900, proteinGoal: 160, carbGoal: 180, fatGoal: 60 };
+  const manual = { goals, profile, goalSource: 'manual' };
+  const updated = planWithUpdatedWeight(manual, { ...profile, weightLb: 178 });
+  assert.deepEqual(plain(updated.goals), goals); assert.equal(updated.profile.weightLb, 178); assert.equal(updated.goalSource, 'manual');
+  assert.equal(nutritionGoalSource({ goals, profile }), 'manual');
+  const estimated = { goals: goalsFromProfile(profile), profile, goalSource: 'estimated' };
+  assert.deepEqual(plain(planWithUpdatedWeight(estimated, { ...profile, weightLb: 178 }).goals), plain(goalsFromProfile({ ...profile, weightLb: 178 })));
 });

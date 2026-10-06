@@ -4,6 +4,7 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-
 import { AppText, Avatar, PrimaryButton, SecondaryButton, Screen, TitleBar } from "@/components/ui";
 import { SwipeChatRow, type ChatAction } from "@/components/swipe-chat-row";
 import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, notifyChatAlerts, subscribeChatAlerts, syncIncomingReadCursors, unmatch, type MatchConnection } from "@/lib/matches";
+import { useOnlineUsers } from "@/lib/presence";
 import { blockPerson, blockedUserIds } from "@/lib/safety";
 import { loadAccountHiddenChats, setAccountChatHidden } from "@/lib/account-markers";
 import { supabase } from "@/lib/supabase";
@@ -269,6 +270,7 @@ function ChatGroup({
   hidden?: boolean;
 }) {
   const theme = useAppTheme();
+  const online = useOnlineUsers();
   if (people.length === 0) return null;
   return (
     <View style={styles.section}>
@@ -285,7 +287,7 @@ function ChatGroup({
           onOpen={() => onOpen(person)}
           onAction={(action) => onAction(person, action)}
         >
-          <PersonFace person={person} size={50} />
+          <PersonFace person={person} size={50} online={online.has(person.userId)} />
           <View style={styles.chatText}>
             <AppText size={16} weight="extrabold" numberOfLines={1}>
               {person.name}
@@ -398,14 +400,12 @@ function ChatPreview({ person, isNew, startChat, unread, replied }: { person: Ma
   );
 }
 
-function PersonFace({ person, size }: { person: MatchConnection; size: number }) {
+function PersonFace({ person, size, online }: { person: MatchConnection; size: number; online?: boolean }) {
   const theme = useAppTheme();
-  if (person.photo) return <Avatar source={{ uri: person.photo }} size={size} />;
   return (
-    <View style={[styles.letter, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.primaryTint }]}>
-      <AppText size={size * 0.38} weight="black" primary>
-        {person.name.slice(0, 1).toUpperCase()}
-      </AppText>
+    <View style={{ width: size, height: size }}>
+      {person.photo ? <Avatar source={{ uri: person.photo }} size={size} /> : <View style={[styles.letter, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.primaryTint }]}><AppText size={size * 0.38} weight="black" primary>{person.name.slice(0, 1).toUpperCase()}</AppText></View>}
+      {online ? <View accessibilityLabel="Active now" style={{ position: "absolute", right: -1, bottom: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#42D66B", borderWidth: 2, borderColor: theme.colors.background }} /> : null}
     </View>
   );
 }

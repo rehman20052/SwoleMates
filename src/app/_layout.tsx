@@ -19,6 +19,7 @@ import { PhoneFrame } from "@/components/phone-frame";
 import { VideoCompressorHost } from "@/components/video-compressor-host";
 import { AppDataProvider } from "@/state/app-data";
 import { ThemeProvider, useAppTheme } from "@/theme";
+import { PresenceProvider } from "@/lib/presence";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -68,16 +69,18 @@ function RootShell() {
   return (
     <SafeAreaProvider style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <AppDataProvider>
-        <PhoneFrame>
-          <Stack
-            screenOptions={{
-              contentStyle: { backgroundColor: theme.colors.background },
-              headerShown: false,
-            }}
-          />
-        </PhoneFrame>
-        <VideoCompressorHost />
-        <StatusBar style={theme.isDark ? "light" : "dark"} />
+        <PresenceProvider>
+          <PhoneFrame>
+            <Stack
+              screenOptions={{
+                contentStyle: { backgroundColor: theme.colors.background },
+                headerShown: false,
+              }}
+            />
+          </PhoneFrame>
+          <VideoCompressorHost />
+          <StatusBar style={theme.isDark ? "light" : "dark"} />
+        </PresenceProvider>
       </AppDataProvider>
     </SafeAreaProvider>
   );

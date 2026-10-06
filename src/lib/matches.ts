@@ -31,6 +31,8 @@ export type MatchMessage = {
   body: string;
   createdAt: string;
   editedAt: string | null;
+  heartCount: number;
+  heartedByMe: boolean;
 };
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
@@ -583,13 +585,30 @@ export async function listMessages(matchId: string, me: string): Promise<MatchMe
     error = fallback.error;
   }
   if (error) throw setupError(error);
+  const ids = (data ?? []).map(message => message.id);
+  let reactions: { message_id: string; user_id: string }[] = [];
+  if (ids.length) {
+    const listedReactions = await supabase.from("message_reactions").select("message_id, user_id").in("message_id", ids);
+    if (!listedReactions.error) reactions = listedReactions.data ?? [];
+  }
   return (data ?? []).map((message) => ({
     id: message.id,
     mine: message.sender_id === me,
     body: message.body,
     createdAt: message.created_at,
     editedAt: message.edited_at ?? null,
+    heartCount: reactions.filter(reaction => reaction.message_id === message.id).length,
+    heartedByMe: reactions.some(reaction => reaction.message_id === message.id && reaction.user_id === me),
   }));
+}
+
+export async function toggleMessageHeart(messageId: string, hearted: boolean) {
+  const me = await currentUserId();
+  const query = hearted
+    ? supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", me)
+    : supabase.from("message_reactions").insert({ message_id: messageId, user_id: me, reaction: "heart" });
+  const { error } = await query;
+  if (error) throw new Error(error.message.includes("message_reactions") || error.message.includes("schema cache") ? "Run supabase/message-reactions.sql to enable message hearts." : error.message);
 }
 
 export async function sendMatchMessage(matchId: string, body: string) {

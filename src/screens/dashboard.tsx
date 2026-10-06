@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { LiftProgression } from "@/components/lift-progression";
 import { QuickWorkoutLog } from "@/components/quick-workout-log";
+import { WorkoutRoutines } from "@/components/workout-routines";
 import { WeeklyRecap } from "@/components/weekly-recap";
 import { SaveFeedback } from "@/components/save-feedback";
 import { exerciseSummary } from "@/lib/workout-session";
@@ -187,6 +188,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showCalendar, setShowCalendar] = useState(false);
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showRoutines, setShowRoutines] = useState(false);
   const [homeMode, setHomeMode] = useState<HomeMode>(savedHomeMode);
   const [showRecipes, setShowRecipes] = useState(savedShowRecipes);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
@@ -310,6 +312,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   }
 
   if (showSettings) return <SettingsScreen onClose={() => setShowSettings(false)} />;
+  if (showRoutines) return <WorkoutRoutines onClose={() => setShowRoutines(false)} />;
 
   return (
     <Screen>
@@ -408,7 +411,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           </Pressable>
         </View>
         {showLogForm ? (
-          <QuickWorkoutLog onSaved={() => { setShowLogForm(false); showNotice("Workout saved."); }} />
+          <QuickWorkoutLog onManageRoutines={() => setShowRoutines(true)} onSaved={() => { setShowLogForm(false); showNotice("Workout saved."); }} />
         ) : null}
 
         <CheckInPanel />
@@ -483,7 +486,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                   </AppText>
                   <View style={{ minHeight: 12, flexDirection: "row", alignItems: "center", gap: 3 }}>
                     {logged ? <AppText accessibilityLabel="Workout logged" size={10} weight="bold" color={theme.colors.primaryText}>✓</AppText> : null}
-                    {hasFood ? <View accessibilityLabel="Nutrition logged" style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: logged ? theme.colors.primaryText : theme.colors.primary }} /> : null}
+                    {hasFood ? <View accessibilityLabel="Nutrition logged" style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: logged ? theme.colors.primaryText : theme.colors.muted }} /> : null}
                     {!logged && !hasFood ? <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: theme.colors.muted }} /> : null}
                   </View>
                 </Pressable>
@@ -631,12 +634,10 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     const hasWorkout = loggedDates.has(iso);
                     const hasNutrition = foodEntries.some((entry) => entry.date === iso);
                     const hasActivity = hasWorkout || hasNutrition;
-                    const dayBackground = hasActivity
+                    const dayBackground = hasWorkout
                       ? theme.colors.primary
-                      : isSelected
-                        ? theme.colors.surface
-                        : theme.colors.surfaceRaised;
-                    const dayTextColor = hasActivity ? theme.colors.primaryText : isToday || isSelected ? theme.colors.accent : theme.colors.text;
+                      : theme.colors.surfaceRaised;
+                    const dayTextColor = hasWorkout ? theme.colors.primaryText : isToday || isSelected ? theme.colors.accent : theme.colors.text;
 
                     return (
                       <Pressable

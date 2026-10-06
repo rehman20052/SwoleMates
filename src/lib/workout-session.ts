@@ -1,4 +1,5 @@
-export type WorkoutExercise = { id: string; name: string; sets: number; reps: number; weight: number; unit: "lb" | "kg" };
+export type WorkoutSet = { reps: number; weight: number };
+export type WorkoutExercise = { id: string; name: string; sets: number; reps: number; weight: number; unit: "lb" | "kg"; setDetails?: WorkoutSet[] };
 
 export function isWorkoutExercise(value: unknown): value is WorkoutExercise {
   if (!value || typeof value !== "object") return false;
@@ -8,7 +9,8 @@ export function isWorkoutExercise(value: unknown): value is WorkoutExercise {
     && Number.isInteger(row.sets) && row.sets >= 1 && row.sets <= 100
     && Number.isInteger(row.reps) && row.reps >= 1 && row.reps <= 100
     && Number.isFinite(row.weight) && row.weight >= 0
-    && (row.unit === "lb" || row.unit === "kg");
+    && (row.unit === "lb" || row.unit === "kg")
+    && (row.setDetails === undefined || (Array.isArray(row.setDetails) && row.setDetails.length === row.sets && row.setDetails.every(set => set && Number.isInteger(set.reps) && set.reps >= 1 && set.reps <= 100 && Number.isFinite(set.weight) && set.weight >= 0)));
 }
 
 export function validWorkoutExercises(value: unknown): value is WorkoutExercise[] {

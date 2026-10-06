@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 
 (async () => {
   const root = path.resolve(__dirname, '../dist');
-  const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.ttf': 'font/ttf', '.png': 'image/png', '.svg': 'image/svg+xml' };
+  const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.ttf': 'font/ttf', '.png': 'image/png', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' };
   const server = http.createServer((req, res) => {
     const relative = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).replace(/^\/SwoleMates\/?/, '') || 'index.html';
     const file = path.resolve(root, relative);
@@ -113,6 +113,7 @@ const assert = require('node:assert/strict');
       }
       return route.fulfill({ json: [], headers: { 'content-range': '0-0/0' } });
     });
+    await context.route('https://world.openfoodfacts.org/api/v2/product/**', route => route.fulfill({ json: { status: 1, product: { product_name: 'Scanned test snack', serving_size: '40 g', nutriments: { 'energy-kcal_serving': 120, proteins_serving: 6, carbohydrates_serving: 12, fat_serving: 4.5 } } } }));
     await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await page.getByText('Home', { exact: true }).click({ timeout: 30000 });
     await page.getByText('Weekly recap', { exact: true }).waitFor();
@@ -274,7 +275,7 @@ const assert = require('node:assert/strict');
         if (process.env.THEME_SCREENSHOT_DIR) {
           fs.mkdirSync(process.env.THEME_SCREENSHOT_DIR, { recursive: true });
           await selected.scrollIntoViewIfNeeded();
-          await page.getByText(tab === 'Fuel' ? 'Fuel your training.' : 'Let’s train, Smoke', { exact: true }).scrollIntoViewIfNeeded();
+          await page.getByText(tab === 'Fuel' ? 'Macro plan' : 'Let’s train, Smoke', { exact: true }).scrollIntoViewIfNeeded();
           await page.waitForTimeout(350);
           await page.screenshot({ path: path.join(process.env.THEME_SCREENSHOT_DIR, tab.toLowerCase() + '-' + scheme + '.png') });
           if (tab === 'Fuel' && scheme === 'light') {
@@ -295,6 +296,18 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.getByText('Fuel', { exact: true }).click();
     const foodSearch = page.getByPlaceholder('Search recent foods and recipes');
+    assert.equal(await page.getByText('Daily energy', { exact: true }).count(), 0, 'duplicate energy card is removed');
+    assert.equal(await page.getByText('Fuel your training.', { exact: true }).count(), 0, 'old Fuel hero is removed');
+    assert.equal(await page.locator('button button').count(), 0, 'macro plan has no nested buttons');
+    await page.getByRole('button', { name: 'Edit nutrition goals', exact: true }).click();
+    await page.getByLabel('Custom daily calories').fill('2000');
+    await page.getByLabel('Custom daily protein').fill('150');
+    await page.getByLabel('Custom daily carbs').fill('230');
+    await page.getByLabel('Custom daily fats').fill('55');
+    await page.getByRole('button', { name: 'Save goals', exact: true }).click();
+    await page.getByRole('button', { name: 'Close nutrition goals', exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(cloud.get('nutrition_plan')[0].payload.goalSource, 'manual');
+    await page.getByText('Custom goals', { exact: true }).waitFor();
     await foodSearch.fill('SMOKE yogurt');
     await page.getByRole('button', { name: 'Use recent food Smoke yogurt', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Use saved recipe Smoke yogurt bowl', exact: true }).waitFor();
@@ -318,6 +331,129 @@ const assert = require('node:assert/strict');
     await foodSearch.fill('no matching smoke food');
     await page.getByText('No matching foods or recipes. Use Add food to enter something new.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Clear food search' }).click();
+    await page.getByRole('button', { name: '+ Add food', exact: true }).click();
+    await page.getByRole('button', { name: 'Scan barcode or nutrition label', exact: true }).click();
+    await page.getByLabel('Food barcode', { exact: true }).fill('0123456789012');
+    await page.getByRole('button', { name: 'Look up barcode', exact: true }).click();
+    const ingredientField = key => page.locator(`input[aria-label^="Ingredient "][aria-label$=" ${key}"]`).first();
+    await ingredientField('calories').waitFor();
+    assert.equal(await ingredientField('fats').inputValue(), '4.5');
+    await page.getByRole('button', { name: 'Servings for Scanned test snack', exact: true }).click();
+    await ingredientField('servings').fill('1.5');
+    await page.getByLabel('Scanned ingredient totals').getByText('180 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Use ingredient totals', exact: true }).click();
+    await page.getByRole('button', { name: 'Close scanner', exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(cloud.get('food').filter(row => !row.deleted).length, 2, 'scanning and review never log automatically');
+    await page.getByRole('button', { name: 'Add to today', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Close add food', exact: true }).waitFor({ state: 'hidden' });
+    const scanned = cloud.get('food').find(row => row.payload.name === 'Scanned test snack');
+    assert.equal(scanned.payload.calories, 180); assert.equal(scanned.payload.protein, 9); assert.equal(scanned.payload.fats, 6.8);
+    assert.equal(scanned.payload.scannedIngredients[0].servings, '1.5', 'saved entries keep base nutrition and editable servings');
+    await page.getByLabel('Protein: 29 of 150 grams, 19 percent of daily target', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('progressbar', { name: 'Daily calorie progress' }).getAttribute('aria-valuenow'), '330', 'calorie progress uses the same live journal totals');
+    await page.getByRole('button', { name: '+ Add food', exact: true }).click();
+    await page.getByRole('button', { name: 'Scan barcode or nutrition label', exact: true }).click();
+    const barcodePng = await page.evaluate(() => {
+      const left = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+      const code = '0123456789012';
+      const bits = '101' + code.slice(1, 7).split('').map(digit => left[Number(digit)]).join('') + '01010' + code.slice(7).split('').map(digit => left[Number(digit)].split('').map(bit => bit === '0' ? '1' : '0').join('')).join('') + '101';
+      const canvas = document.createElement('canvas'); canvas.width = (bits.length + 24) * 4; canvas.height = 220;
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = 'white'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle = 'black';
+      bits.split('').forEach((bit,index) => { if (bit === '1') ctx.fillRect((index + 12)*4,20,4,160); });
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('input[type="file"]').last().setInputFiles({ name: 'barcode.png', mimeType: 'image/png', buffer: Buffer.from(barcodePng, 'base64') });
+    await ingredientField('calories').waitFor();
+    assert.equal(await ingredientField('calories').inputValue(), '120', 'real EAN13 pixels decode into a product lookup');
+    // A rotated photograph also decodes, and appends rather than overwriting the first ingredient.
+    const rotatedBarcode = await page.evaluate(async data => {
+      const image = new Image(); image.src = 'data:image/png;base64,' + data; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.height; canvas.height = image.width;
+      const ctx = canvas.getContext('2d'); ctx.translate(canvas.width, 0); ctx.rotate(Math.PI / 2); ctx.drawImage(image, 0, 0);
+      return canvas.toDataURL('image/png').split(',')[1];
+    }, barcodePng);
+    await page.locator('input[type="file"]').last().setInputFiles({ name: 'rotated-barcode.png', mimeType: 'image/png', buffer: Buffer.from(rotatedBarcode, 'base64') });
+    await page.getByLabel('Scanned ingredient totals').getByText('240 cal', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Remove ingredient Scanned test snack', exact: true }).count(), 2);
+    await ingredientField('name').fill('Second snack');
+    await page.getByRole('button', { name: 'Servings for Second snack', exact: true }).click();
+    await ingredientField('servings').fill('2');
+    await page.getByLabel('Scanned ingredient totals').getByText('360 cal', { exact: true }).waitFor();
+    await ingredientField('protein').fill('8');
+    await page.getByLabel('Scanned ingredient totals').getByText('22g protein · 36g carbs · 13.5g fat', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Remove ingredient Second snack', exact: true }).click();
+    await page.getByLabel('Scanned ingredient totals').getByText('120 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Nutrition label', exact: true }).click();
+    await page.evaluate(() => { Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: true, value: () => Promise.reject(new DOMException('Denied', 'NotAllowedError')) }); });
+    await page.getByRole('button', { name: 'Scan next ingredient', exact: true }).click();
+    await page.getByText(/Camera permission was denied/).waitFor();
+    if (process.env.TEST_FOOD_OCR) {
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement('canvas'); canvas.width = 1000; canvas.height = 650;
+        const ctx = canvas.getContext('2d'); ctx.fillStyle = 'white'; ctx.fillRect(0, 0, 1000, 650); ctx.fillStyle = 'black'; ctx.font = 'bold 42px Arial';
+        ['Nutrition Facts', 'Serving Size 2 pieces (40 g)', 'Calories 120', 'Total Fat 4.5 g', 'Total Carbohydrate 12 g', 'Protein 6 g'].forEach((line, i) => ctx.fillText(line, 50, 75 + i * 90));
+        return canvas.toDataURL('image/png').split(',')[1];
+      });
+      await page.locator('input[type="file"]').last().setInputFiles({ name: 'nutrition.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+      await page.getByLabel('Scanned ingredient totals').getByText('2 ingredients · total for this list', { exact: true }).waitFor({ timeout: 100000 }).catch(async error => { console.error('OCR diagnostics:', await page.locator('body').innerText(), errors); throw error; });
+      assert.equal(await ingredientField('calories').inputValue(), '120');
+      assert.equal(await ingredientField('protein').inputValue(), '6');
+      assert.equal(await ingredientField('fats').inputValue(), '4.5', 'the enhanced reader detects decimal fat without a manual correction');
+      assert.equal(await ingredientField('carbs').inputValue(), '12');
+      // Crop/retry must replace this label rather than append another copy.
+      await ingredientField('name').fill('Label snack');
+      await page.getByRole('button', { name: 'Crop and retry last label', exact: true }).click();
+      await page.getByRole('button', { name: 'Read cropped label', exact: true }).click();
+      await page.getByRole('button', { name: 'Cancel scan', exact: true }).waitFor({ state: 'hidden', timeout: 100000 });
+      await page.getByRole('button', { name: 'Edit nutrition for Label snack', exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: /^Remove ingredient / }).count(), 2);
+      await page.getByLabel('Scanned ingredient totals').getByText('240 cal', { exact: true }).waitFor();
+    }
+    await page.getByRole('button', { name: 'Close scanner', exact: true }).click();
+    await page.getByRole('button', { name: /^Edit or scan ingredients/ }).click();
+    await page.getByLabel('Scanned ingredient totals').getByText(process.env.TEST_FOOD_OCR ? '240 cal' : '120 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close scanner', exact: true }).click();
+    await page.getByRole('button', { name: 'Close add food', exact: true }).click();
+    // Building a recipe uses the same multi-ingredient list and never auto-logs its scans.
+    const beforeScannedRecipe = cloud.get('food').filter(row => !row.deleted).length;
+    await page.getByRole('button', { name: '+ Save recipe', exact: true }).click();
+    await page.getByPlaceholder('e.g. Chicken burrito bowl').fill('Scanned recipe');
+    await page.getByRole('button', { name: 'Scan barcode or nutrition label', exact: true }).click();
+    for (const code of ['0123456789012', '1234567890128']) {
+      await page.getByLabel('Food barcode', { exact: true }).fill(code);
+      await page.getByRole('button', { name: 'Look up barcode', exact: true }).click();
+      await page.getByRole('button', { name: 'Cancel scan', exact: true }).waitFor({ state: 'hidden' });
+    }
+    await page.getByLabel('Scanned ingredient totals').getByText('240 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Use ingredient totals', exact: true }).click();
+    await page.getByRole('button', { name: 'Save recipe', exact: true }).click();
+    await page.getByRole('button', { name: 'Close recipe form', exact: true }).waitFor({ state: 'hidden' });
+    const scannedRecipe = cloud.get('recipes').find(row => row.payload.name === 'Scanned recipe');
+    assert.equal(scannedRecipe.payload.protein, 12); assert.equal(scannedRecipe.payload.scannedIngredients.length, 2);
+    assert.equal(cloud.get('food').filter(row => !row.deleted).length, beforeScannedRecipe);
+    await foodSearch.fill('Scanned recipe');
+    await page.getByRole('button', { name: 'Use saved recipe Scanned recipe', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit or scan ingredients (2)', exact: true }).click();
+    await page.getByLabel('Scanned ingredient totals').getByText('240 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Add manually', exact: true }).click();
+    await ingredientField('name').fill('Extra ingredient');
+    assert.equal(await page.getByRole('button', { name: 'Use ingredient totals', exact: true }).isDisabled(), true);
+    for (const [key, value] of Object.entries({ calories: '100', protein: '20', carbs: '2', fats: '1' })) await ingredientField(key).fill(value);
+    await page.getByLabel('Scanned ingredient totals').getByText('340 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Use ingredient totals', exact: true }).click();
+    await page.getByRole('button', { name: 'Close add food', exact: true }).click();
+    assert.equal(cloud.get('food').filter(row => !row.deleted).length, beforeScannedRecipe, 'ingredient edits never auto-log');
+    // Older/manual recipes have no ingredient metadata: retain their current total as a base item.
+    await foodSearch.fill('Smoke yogurt bowl');
+    await page.getByRole('button', { name: 'Use saved recipe Smoke yogurt bowl', exact: true }).click();
+    await page.getByRole('button', { name: 'Scan barcode or nutrition label', exact: true }).click();
+    await page.getByLabel('Scanned ingredient totals').getByText('250 cal', { exact: true }).waitFor();
+    await page.getByLabel('Food barcode', { exact: true }).fill('0123456789012');
+    await page.getByRole('button', { name: 'Look up barcode', exact: true }).click();
+    await page.getByLabel('Scanned ingredient totals').getByText('370 cal', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close scanner', exact: true }).click();
+    await page.getByRole('button', { name: 'Close add food', exact: true }).click();
+    await foodSearch.fill('');
     // Imported recipe catalog must use the current cross-device stores and keep saving separate from logging.
     const foodBeforeRecipe = cloud.get('food').filter(row => !row.deleted).length;
     await page.getByRole('button', { name: 'Open recipes', exact: true }).click();
@@ -488,7 +624,7 @@ const assert = require('node:assert/strict');
     await bundleFailurePage.getByRole('button', { name: 'Reload app', exact: true }).waitFor();
     await bundleFailurePage.close();
     }
-    console.log('Mobile Pages smoke passed: Train/Fuel dark-light-dark switching, Settings preference, light sheets, compact/searchable lifts, entrance animation, reduced motion, workout saves, recap and keyboard recovery.');
+    console.log('Mobile Pages smoke passed: multi-ingredient scans, rotated barcode decoding, real label OCR, servings, totals, saved recipes, Train/Fuel themes and keyboard recovery.');
     if (process.env.SCREENSHOT_PATH) {
       await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.getByText('Home', { exact: true }).last().click();

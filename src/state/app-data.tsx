@@ -1,6 +1,6 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
 import {
@@ -17,7 +17,7 @@ import { withCurrentWeight, type NutritionProfile } from "@/lib/macro-calculator
 import { supabase } from "@/lib/supabase";
 import { isFoodEntry, sumFoodEntries } from "@/lib/food-journal";
 import { mergeVerifiedLogs, workoutLogKey } from "@/lib/workout-log-sync";
-import { goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
+import { nutritionGoalSource, planWithUpdatedWeight, goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
 import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
@@ -106,6 +106,7 @@ export type FoodLogEntry = {
   carbs: number;
   fats: number;
   artwork?: import("@/lib/item-artwork").ItemArtwork;
+  scannedIngredients?: import("@/lib/food-scanner").ScanIngredient[];
 };
 
 export type SavedMeal = Omit<FoodLogEntry, "id" | "date"> & {
@@ -131,6 +132,7 @@ type AppData = {
   foodEntries: FoodLogEntry[];
   savedMeals: SavedMeal[];
   nutritionProfile: NutritionProfile | null;
+  nutritionGoalSource: "manual" | "estimated";
   trackedLifts: TrackedLift[];
 };
 
@@ -319,7 +321,7 @@ function seedData(): AppData {
     nutrition: defaultNutrition,
     foodEntries: [],
     savedMeals: [],
-    nutritionProfile: null,
+    nutritionProfile: null, nutritionGoalSource: "manual",
     trackedLifts: [],
   };
 }
@@ -355,13 +357,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     const refreshDate = () => setToday(daysFromToday(0));
     const timer = setInterval(refreshDate, 60000);
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") refreshDate(); });
-    if (typeof window !== "undefined") window.addEventListener("focus", refreshDate);
-    if (typeof document !== "undefined") document.addEventListener("visibilitychange", refreshDate);
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("focus", refreshDate);
+    if (Platform.OS === "web" && typeof document !== "undefined") document.addEventListener("visibilitychange", refreshDate);
     return () => {
       clearInterval(timer);
       subscription.remove();
-      if (typeof window !== "undefined") window.removeEventListener("focus", refreshDate);
-      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", refreshDate);
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("focus", refreshDate);
+      if (Platform.OS === "web" && typeof document !== "undefined") document.removeEventListener("visibilitychange", refreshDate);
     };
   }, []);
   const filtersTouched = useRef(false);
@@ -376,7 +378,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     function applySnapshot(snapshot: Awaited<ReturnType<typeof loadAccountStores>>) {
       setData((current) => ({ ...current,
         savedMeals: snapshot.recipes, foodEntries: snapshot.foodEntries,
-        nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile,
+        nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile, nutritionGoalSource: nutritionGoalSource(snapshot.plan),
         logs: mergeVerifiedLogs(snapshot.logs, current.logs.filter((log) => log.checkedIn && log.plannedWorkoutId), snapshot.deletedWorkoutIds),
         deletedWorkoutIds: snapshot.deletedWorkoutIds, weeklyWorkoutGoal: snapshot.weeklyWorkoutGoal,
         trackedLifts: snapshot.lifts, workspaceSettings: snapshot.workspaceSettings,
@@ -431,17 +433,17 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       }
     });
     const foreground = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (Platform.OS === "web" && typeof document !== "undefined" && document.visibilityState === "hidden") return;
       void refresh(currentOwner);
     };
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") foreground(); });
     const timer = setInterval(foreground, 15000);
-    if (typeof window !== "undefined") window.addEventListener("focus", foreground);
-    if (typeof document !== "undefined") document.addEventListener("visibilitychange", foreground);
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("focus", foreground);
+    if (Platform.OS === "web" && typeof document !== "undefined") document.addEventListener("visibilitychange", foreground);
     return () => {
       active = false; accountGeneration.current++; clearInterval(timer); auth.subscription.unsubscribe(); subscription.remove();
-      if (typeof window !== "undefined") window.removeEventListener("focus", foreground);
-      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", foreground);
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("focus", foreground);
+      if (Platform.OS === "web" && typeof document !== "undefined") document.removeEventListener("visibilitychange", foreground);
     };
   }, [retrySync]);
 
@@ -530,7 +532,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     };
     const persistPlan = (edit: (current: SavedNutritionPlan) => SavedNutritionPlan) => persistAccount(async (stores) => {
       const plans = await stores.plan.change((current) => [edit(current[0] ?? { goals: defaultNutrition, profile: null })]);
-      return { nutrition: { ...defaultNutrition, ...plans[0].goals }, nutritionProfile: plans[0].profile };
+      return { nutrition: { ...defaultNutrition, ...plans[0].goals }, nutritionProfile: plans[0].profile, nutritionGoalSource: nutritionGoalSource(plans[0]) };
     }, setNutritionPlanError);
     const persistRecipes = (edit: (current: SavedMeal[]) => SavedMeal[]) => persistAccount(async (stores) => ({ savedMeals: await stores.recipes.change(edit) }), setRecipeStorageError);
     const persistFood = (edit: (current: FoodLogEntry[]) => FoodLogEntry[]) => persistAccount(async (stores) => ({ foodEntries: await stores.food.change(edit) }), setFoodJournalError);
@@ -706,7 +708,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         });
       },
       updateNutrition(nutrition) {
-        return persistPlan((current) => ({ ...current, goals: nutrition }));
+        return persistPlan((current) => ({ ...current, goals: nutrition, goalSource: "manual" }));
       },
       async addFoodEntry(entry, date = daysFromToday(0)) {
         const nextEntry: FoodLogEntry = { ...entry, id: `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, date };
@@ -732,14 +734,14 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return persistPlan((current) => {
           const weighIns = new Map([...(profile.weighIns ?? []), ...(current.profile?.weighIns ?? [])].map((entry) => [entry.date, entry]));
           const savedProfile = { ...profile, weighIns: [...weighIns.values()].sort((a, b) => a.date.localeCompare(b.date)) };
-          return { profile: savedProfile, goals: goalsFromProfile(savedProfile) };
+          return { profile: savedProfile, goals: goalsFromProfile(savedProfile), goalSource: "estimated" };
         });
       },
       logWeighIn(weightLb) {
         return persistPlan((current) => {
           if (!current.profile) throw new Error("Set up your macro plan first.");
           const profile = withCurrentWeight(current.profile, daysFromToday(0), weightLb);
-          return { profile, goals: goalsFromProfile(profile) };
+          return planWithUpdatedWeight(current, profile);
         });
       },
       saveTrackedLift(id, details) {

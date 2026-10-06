@@ -1,5 +1,5 @@
 import { createContext, createElement, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import { supabase } from "@/lib/supabase";
 
@@ -151,13 +151,13 @@ const ThemeContext = createContext<{
 });
 
 function readStoredScheme(): ColorScheme {
-  if (typeof localStorage === "undefined") return "dark";
-  try { return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; } catch { return "dark"; }
+  if (Platform.OS !== "web" || typeof globalThis.localStorage === "undefined") return "dark";
+  try { return globalThis.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; } catch { return "dark"; }
 }
 
 function storeScheme(scheme: ColorScheme) {
-  if (typeof localStorage === "undefined") return;
-  try { localStorage.setItem(THEME_KEY, scheme); } catch { /* The account remains authoritative. */ }
+  if (Platform.OS !== "web" || typeof globalThis.localStorage === "undefined") return;
+  try { globalThis.localStorage.setItem(THEME_KEY, scheme); } catch { /* The account remains authoritative. */ }
 }
 
 export function ThemeProvider({ children }: PropsWithChildren) {
@@ -185,11 +185,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     });
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void refresh(); });
     const focus = () => void refresh();
-    if (typeof window !== "undefined") window.addEventListener("focus", focus);
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("focus", focus);
     return () => {
       active = false;
       generation.current++; auth.subscription.unsubscribe(); subscription.remove();
-      if (typeof window !== "undefined") window.removeEventListener("focus", focus);
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("focus", focus);
     };
   }, []);
 

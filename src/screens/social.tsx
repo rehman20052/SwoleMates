@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -10,6 +10,7 @@ import { appFrameSize } from "@/components/phone-frame";
 import { NotificationMedia } from "@/components/notification-media";
 import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
 import { MAX_MEDIA_BYTES } from "@/lib/media-limits";
+import { useOnlineUsers } from "@/lib/presence";
 import { prepareVideo } from "@/lib/prepare-video";
 import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
 import {
@@ -529,6 +530,10 @@ function SocialBoard({
   const [focus, setFocus] = useState<NoticeFocus | null>(null);
   const [audience, setAudience] = useState<"friends" | "public">("friends");
   const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
+  const pullStart = useRef<{ x: number; y: number; eligible: boolean } | null>(null);
+  const pullDistance = useRef(0);
+  const [pullReady, setPullReady] = useState(false);
   const [postsPublic, setPostsPublic] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -634,10 +639,30 @@ function SocialBoard({
         <TitleBar title={title} onBack={onBack} right={composer ? <NotificationBell /> : undefined} />
         <ScrollBody
           ref={scrollRef}
-          refreshControl={<RefreshControl refreshing={board.refreshing} onRefresh={() => void board.refresh()} tintColor={theme.colors.primary} />}
-          onScroll={board.syncVideos}
+          onScroll={(event) => { scrollPosition.current = event.nativeEvent.contentOffset.y; board.syncVideos(); }}
           scrollEventThrottle={64}
+          directionalLockEnabled
+          onTouchStart={(event) => {
+            const touch = event.nativeEvent.touches[0];
+            pullStart.current = touch ? { x: touch.pageX, y: touch.pageY, eligible: scrollPosition.current <= 1 } : null;
+            pullDistance.current = 0; setPullReady(false);
+          }}
+          onTouchMove={(event) => {
+            const start = pullStart.current; const touch = event.nativeEvent.touches[0];
+            if (!start?.eligible || !touch) return;
+            const dx = Math.abs(touch.pageX - start.x); const dy = touch.pageY - start.y;
+            const deliberate = dy >= 110 && dy > dx * 2.2;
+            pullDistance.current = deliberate ? dy : 0;
+            setPullReady(deliberate);
+          }}
+          onTouchEnd={() => {
+            const shouldRefresh = pullDistance.current >= 110 && !board.refreshing;
+            pullStart.current = null; pullDistance.current = 0; setPullReady(false);
+            if (shouldRefresh) void board.refresh();
+          }}
+          onTouchCancel={() => { pullStart.current = null; pullDistance.current = 0; setPullReady(false); }}
         >
+          {pullReady ? <View style={{ alignItems: "center", paddingVertical: 8 }}><AppText size={12} weight="bold" color={theme.colors.accent}>Release to refresh</AppText></View> : null}
           {onOpenFriend ? <FriendRow onOpen={onOpenFriend} /> : null}
           {composer ? <AudienceSwitch value={audience} onChange={setAudience} /> : null}
           {composer && audience === "public" ? (
@@ -966,6 +991,7 @@ function AudienceSwitch({ value, onChange }: { value: "friends" | "public"; onCh
 
 function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   const { feed, me } = useSocial();
+  const online = useOnlineUsers();
   const [latest, setLatest] = useState<Record<string, string>>({});
   const [seen, setSeen] = useState<Record<string, string>>({});
   const friendKey = feed.friendIds.join(",");
@@ -1009,8 +1035,8 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   }, [feed.friendIds, latest, seen]);
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow}>
-      <FriendCircle name={me.name || "You"} photo={me.photo} label="You" onPress={() => onOpen("me")} />
+    <ScrollView horizontal nestedScrollEnabled directionalLockEnabled bounces={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow} style={Platform.OS === "web" ? ({ touchAction: "pan-x", overscrollBehaviorX: "contain" } as ViewStyle) : undefined}>
+      <FriendCircle name={me.name || "You"} photo={me.photo} label="You" online onPress={() => onOpen("me")} />
       {ordered.map((id) => {
         const person = feed.people[id];
         if (!person) return null;
@@ -1021,6 +1047,7 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
             photo={person.photo}
             label={firstName(person.name)}
             fresh={friendHasFreshPost(latest[id], seen[id])}
+            online={online.has(id)}
             onPress={() => onOpen(id)}
           />
         );
@@ -1034,12 +1061,14 @@ function FriendCircle({
   photo,
   label,
   fresh,
+  online,
   onPress,
 }: {
   name: string;
   photo?: string | null;
   label: string;
   fresh?: boolean;
+  online?: boolean;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
@@ -1052,6 +1081,7 @@ function FriendCircle({
         ]}
       >
         <PersonAvatar name={name} photo={photo} size={64} />
+        {online ? <View accessibilityLabel="Active now" style={{ position: "absolute", right: 0, bottom: 1, width: 16, height: 16, borderRadius: 8, backgroundColor: "#42D66B", borderWidth: 3, borderColor: theme.colors.background }} /> : null}
       </View>
       <AppText size={11} weight="semibold" numberOfLines={1}>
         {label}

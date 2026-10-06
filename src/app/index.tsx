@@ -10,6 +10,7 @@ import {
   Modal,
   AppState,
   Platform,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -21,7 +22,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, Path, Rect, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { AuthForm } from '@/components/auth-form';
@@ -110,22 +111,16 @@ function StartupSplash({ ready, onFinished }: { ready: boolean; onFinished: () =
   );
 }
 
-function HomeBarbellIcon({ color }: { color: string }) {
+function TabIcon({ name, color }: { name: 'Discover' | 'Chat' | 'Home' | 'Social' | 'Profile'; color: string }) {
+  if (name === 'Discover') return <Svg width={24} height={24} viewBox="0 0 24 24"><Circle cx="12" cy="12" r="9" fill={color} opacity={0.9} /><Path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" fill={color === '#CCFF00' ? '#0A0A0C' : '#F5F6F2'} /></Svg>;
+  if (name === 'Chat') return <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v7a3.5 3.5 0 0 1-3.5 3.5H11l-4.5 4v-4A3.5 3.5 0 0 1 3 12.5v-7Z" fill={color} /></Svg>;
+  if (name === 'Social') return <Svg width={26} height={24} viewBox="0 0 26 24"><Circle cx="9" cy="7" r="4" fill={color} /><Circle cx="19" cy="8" r="3" fill={color} opacity={0.78} /><Path d="M1.5 21v-2.5A5.5 5.5 0 0 1 7 13h4a5.5 5.5 0 0 1 5.5 5.5V21H1.5Zm15-7.2c4.8-.7 8 1.7 8 5.2v2h-6v-2.5a7.6 7.6 0 0 0-2-4.7Z" fill={color} /></Svg>;
+  if (name === 'Profile') return <Svg width={24} height={24} viewBox="0 0 24 24"><Circle cx="12" cy="7" r="4" fill={color} /><Path d="M4 22v-2.5A7.5 7.5 0 0 1 11.5 12h1A7.5 7.5 0 0 1 20 19.5V22H4Z" fill={color} /></Svg>;
   return (
-    <Svg width={24} height={22} viewBox="0 0 32 28" accessibilityLabel="Home">
-      <Path
-        d="M4 11.5 16 2.5l12 9M23.5 7V3.5H27V10"
-        fill="none"
-        stroke={color}
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Line x1={8} y1={19} x2={24} y2={19} stroke={color} strokeWidth={2.5} strokeLinecap="round" />
-      <Rect x={5.5} y={14.5} width={3} height={9} rx={1.2} fill={color} />
-      <Rect x={2.5} y={16.25} width={2.5} height={5.5} rx={1} fill={color} />
-      <Rect x={23.5} y={14.5} width={3} height={9} rx={1.2} fill={color} />
-      <Rect x={27} y={16.25} width={2.5} height={5.5} rx={1} fill={color} />
+    <Svg width={26} height={24} viewBox="0 0 28 24" accessibilityLabel="Home">
+      <Line x1={6} y1={12} x2={22} y2={12} stroke={color} strokeWidth={3} strokeLinecap="round" />
+      <Rect x={4} y={6} width={4} height={12} rx={1.5} fill={color} /><Rect x={1} y={8.5} width={3} height={7} rx={1.2} fill={color} />
+      <Rect x={20} y={6} width={4} height={12} rx={1.5} fill={color} /><Rect x={24} y={8.5} width={3} height={7} rx={1.2} fill={color} />
     </Svg>
   );
 }
@@ -612,14 +607,22 @@ export default function App() {
           style={[
             styles.bottomNav,
             {
-              backgroundColor: theme.colors.background,
-              borderTopColor: theme.colors.border,
+              backgroundColor: theme.isDark ? '#0A0D0B' : '#F3F6EA',
+              borderColor: theme.isDark ? '#25371C' : '#CFD8C0',
+              boxShadow: theme.isDark ? '0 -8px 28px rgba(107,170,0,0.16)' : '0 -8px 24px rgba(71,102,0,0.12)',
               // Keep controls above the home indicator while painting the entire
               // inset with the tab bar's background (on native and web).
               paddingBottom: Math.max(4, insets.bottom),
             },
+            Platform.OS === 'web' ? ({ backgroundImage: theme.isDark
+              ? 'linear-gradient(110deg, #15220F 0%, #090C0A 42%, #0B100A 68%, #294A08 100%)'
+              : 'linear-gradient(110deg, #ECF3E2 0%, #FFFFFF 45%, #F5F8EF 68%, #DCECBF 100%)' } as unknown as ViewStyle) : null,
           ]}
         >
+          {Platform.OS !== 'web' ? <Svg pointerEvents="none" width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
+            <Defs><LinearGradient id="nav-gradient" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor={theme.isDark ? '#14200E' : '#EDF3E4'} /><Stop offset="0.5" stopColor={theme.isDark ? '#090C0A' : '#FFFFFF'} /><Stop offset="1" stopColor={theme.isDark ? '#1E3507' : '#E5F0CF'} /></LinearGradient></Defs>
+            <Rect width="100%" height="100%" fill="url(#nav-gradient)" />
+          </Svg> : null}
           {([
             { name: 'Discover', icon: '✨' },
             { name: 'Chat', icon: '💬' },
@@ -642,13 +645,9 @@ export default function App() {
                 onPress={() => nav.setTab(tab.name)}
               >
                 <View style={styles.navIconWrap}>
-                  {tab.name === 'Home' ? (
-                    <View style={styles.homeNavIcon}>
-                      <HomeBarbellIcon color={isActive ? theme.colors.accent : theme.colors.muted} />
-                    </View>
-                  ) : (
-                    <Text style={[styles.navIcon, isActive && styles.activeNavIcon]}>{tab.icon}</Text>
-                  )}
+                  <View style={styles.homeNavIcon}>
+                    <TabIcon name={tab.name} color={isActive ? theme.colors.primary : theme.isDark ? '#C1C3C7' : '#555B52'} />
+                  </View>
                   {tab.name === 'Chat' && chatAlerts > 0 ? (
                     <View style={[styles.chatBadge, { backgroundColor: theme.colors.primary }]}>
                       <Text style={[styles.chatBadgeText, { color: theme.colors.primaryText }]}>{chatAlerts > 9 ? '9+' : chatAlerts}</Text>
@@ -835,13 +834,17 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#0F0F0F',
-    borderTopWidth: 1,
+    borderWidth: 1,
     borderTopColor: '#222222',
-    paddingTop: 8,
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingTop: 10,
     paddingHorizontal: 10,
     justifyContent: 'space-around',
   },
-  navItem: { alignItems: 'center', flex: 1, overflow: 'visible' },
+  navItem: { alignItems: 'center', flex: 1, minHeight: 50, overflow: 'visible' },
   navIconWrap: { position: 'relative', overflow: 'visible' },
   chatBadge: {
     position: 'absolute',

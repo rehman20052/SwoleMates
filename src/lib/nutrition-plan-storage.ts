@@ -7,7 +7,7 @@ export type NutritionGoals = {
   carbGoal: number;
   fatGoal: number;
 };
-export type SavedNutritionPlan = { goals: NutritionGoals; profile: NutritionProfile | null };
+export type SavedNutritionPlan = { goals: NutritionGoals; profile: NutritionProfile | null; goalSource?: "manual" | "estimated" };
 export const nutritionPlanStorageKey = "swolemates.nutrition-plan";
 
 export function isNutritionGoals(value: unknown): value is NutritionGoals {
@@ -24,7 +24,18 @@ export function goalsFromProfile(profile: NutritionProfile): NutritionGoals {
 export function isSavedPlan(value: unknown): value is SavedNutritionPlan {
   if (!value || typeof value !== "object") return false;
   const plan = value as SavedNutritionPlan;
-  return isNutritionGoals(plan.goals) && (plan.profile === null || parseNutritionProfile(plan.profile) !== null);
+  return isNutritionGoals(plan.goals) && (plan.profile === null || parseNutritionProfile(plan.profile) !== null)
+    && (plan.goalSource === undefined || plan.goalSource === "manual" || plan.goalSource === "estimated");
+}
+export function nutritionGoalSource(plan: SavedNutritionPlan): "manual" | "estimated" {
+  if (plan.goalSource) return plan.goalSource;
+  if (!plan.profile) return "manual";
+  const estimated = goalsFromProfile(plan.profile);
+  return (Object.keys(estimated) as (keyof NutritionGoals)[]).every(key => estimated[key] === plan.goals[key]) ? "estimated" : "manual";
+}
+export function planWithUpdatedWeight(plan: SavedNutritionPlan, profile: NutritionProfile): SavedNutritionPlan {
+  const goalSource = nutritionGoalSource(plan);
+  return { profile, goalSource, goals: goalSource === "manual" ? plan.goals : goalsFromProfile(profile) };
 }
 export function createNutritionPlanStore(storage: ListStorage) {
   const store = createDurableList(storage, nutritionPlanStorageKey, isSavedPlan);
