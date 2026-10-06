@@ -166,6 +166,10 @@ const emptyProfile = (): UserProfile => ({
 export default function App() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
+  const installedWebApp = Platform.OS === 'web' && typeof window !== 'undefined' && (
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches
+  );
   const [currentScreen, setCurrentScreen] = useState('launch');
   const [checkingSession, setCheckingSession] = useState(true);
   const [showStartup, setShowStartup] = useState(true);
@@ -612,7 +616,10 @@ export default function App() {
               boxShadow: theme.isDark ? '0 -8px 28px rgba(107,170,0,0.16)' : '0 -8px 24px rgba(71,102,0,0.12)',
               // Keep controls above the home indicator while painting the entire
               // inset with the tab bar's background (on native and web).
-              paddingBottom: Math.max(4, insets.bottom),
+              // Installed iOS web apps report the full home-indicator inset. A
+              // small optical trim keeps the controls from floating too high
+              // while retaining a comfortable gesture-safe buffer.
+              paddingBottom: Math.max(4, insets.bottom - (installedWebApp ? 6 : 0)),
             },
             Platform.OS === 'web' ? ({ backgroundImage: theme.isDark
               ? 'linear-gradient(110deg, #15220F 0%, #090C0A 42%, #0B100A 68%, #294A08 100%)'
