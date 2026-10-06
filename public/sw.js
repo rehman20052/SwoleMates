@@ -1,4 +1,4 @@
-// v17: refreshed Fuel journal, search, recipes, and bundled thumbnail artwork.
+// v21: corrected navigation bundle and nutrition-photo keyboard flow.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

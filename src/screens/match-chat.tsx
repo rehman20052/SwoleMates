@@ -7,9 +7,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { icons } from "@/assets";
 import { WorkoutPlanCard } from "@/components/workout-plan";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
-import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, toggleMessageHeart, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
 import { clearCanceledWorkoutMessages, listMatchWorkouts, workoutPlanId, type PlannedWorkout } from "@/lib/workouts";
 import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
+import { useOnlineUsers } from "@/lib/presence";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -30,6 +31,7 @@ function menuHeight(canEdit: boolean, confirmingDelete: boolean) {
 
 export function MatchChat({ userId }: { userId: string }) {
   const theme = useAppTheme();
+  const online = useOnlineUsers();
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -51,6 +53,7 @@ export function MatchChat({ userId }: { userId: string }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const stageRef = useRef<View>(null);
   const bubbleNodes = useRef(new Map<string, View>());
+  const lastMessageTap = useRef<{ id: string; at: number } | null>(null);
   const [editing, setEditing] = useState<MatchMessage | null>(null);
   const inputRef = useRef<TextInput>(null);
   const draftBeforeEdit = useRef("");
@@ -246,6 +249,19 @@ export function MatchChat({ userId }: { userId: string }) {
     setPlansLoaded(true);
   }
 
+  function tapMessage(message: MatchMessage) {
+    const now = Date.now(); const previous = lastMessageTap.current;
+    lastMessageTap.current = { id: message.id, at: now };
+    if (!previous || previous.id !== message.id || now - previous.at > 360) return;
+    lastMessageTap.current = null;
+    const nextHearted = !message.heartedByMe;
+    setMessages(current => current.map(item => item.id === message.id ? { ...item, heartedByMe: nextHearted, heartCount: Math.max(0, item.heartCount + (nextHearted ? 1 : -1)) } : item));
+    void toggleMessageHeart(message.id, message.heartedByMe).catch((err: unknown) => {
+      setMessages(current => current.map(item => item.id === message.id ? message : item));
+      setError(err instanceof Error ? err.message : "Could not update that reaction.");
+    });
+  }
+
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   async function send() {
@@ -363,7 +379,7 @@ export function MatchChat({ userId }: { userId: string }) {
       <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
         <View style={styles.header}>
           <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
-          {person?.photo ? <Avatar source={{ uri: person.photo }} size={40} /> : null}
+          {person?.photo ? <View style={{ width: 40, height: 40 }}><Avatar source={{ uri: person.photo }} size={40} />{online.has(person.userId) ? <View accessibilityLabel="Active now" style={{ position: "absolute", right: -1, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: "#42D66B", borderWidth: 2, borderColor: theme.colors.background }} /> : null}</View> : null}
           <View style={styles.identity}>
             <AppText size={16} weight="extrabold" numberOfLines={1}>
               {person?.name ?? "Chat"}
@@ -446,6 +462,7 @@ export function MatchChat({ userId }: { userId: string }) {
                 <Bubble
                   key={message.id}
                   message={message}
+                  onDoublePress={() => tapMessage(message)}
                   hidden={held?.id === message.id}
                   onHold={message.mine && !planId ? () => holdMessage(message) : undefined}
                   onBind={message.mine && !planId ? (node) => {
@@ -683,23 +700,22 @@ function MessageBody({ message, lifted }: { message: MatchMessage; lifted?: bool
         {time}
         {message.editedAt ? " · Edited" : ""}
       </AppText>
+      {message.heartCount > 0 ? <View style={{ position: "absolute", right: 8, bottom: -12, minWidth: 28, height: 24, paddingHorizontal: 6, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised, borderWidth: 1, borderColor: message.heartedByMe ? theme.colors.primary : theme.colors.border }}><AppText size={13}>♥ {message.heartCount > 1 ? message.heartCount : ""}</AppText></View> : null}
     </View>
   );
 }
 
-function Bubble({ message, onHold, onBind, hidden }: { message: MatchMessage; onHold?: () => void; onBind?: (node: View | null) => void; hidden?: boolean }) {
+function Bubble({ message, onHold, onDoublePress, onBind, hidden }: { message: MatchMessage; onHold?: () => void; onDoublePress: () => void; onBind?: (node: View | null) => void; hidden?: boolean }) {
   const row = (
     <View ref={onBind} collapsable={false} style={[styles.bubbleSlot, message.mine ? styles.mineSlot : styles.theirSlot]}>
       <MessageBody message={message} />
     </View>
   );
-  if (!onHold) {
-    return <View style={[styles.bubbleRow, hidden && styles.hiddenBubble]}>{row}</View>;
-  }
   return (
     <Pressable
-      accessibilityLabel={`Your message, ${message.body}`}
-      accessibilityHint="Hold to edit or delete"
+      accessibilityLabel={`${message.mine ? "Your" : "Received"} message, ${message.body}`}
+      accessibilityHint={onHold ? "Double tap to heart. Hold to edit or delete." : "Double tap to heart."}
+      onPress={onDoublePress}
       delayLongPress={400}
       onLongPress={onHold}
       style={[styles.bubbleRow, hidden && styles.hiddenBubble]}

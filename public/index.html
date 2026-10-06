@@ -152,7 +152,13 @@
       window.addEventListener("pageshow", lockPortrait);
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
-          navigator.serviceWorker.register(new URL("sw.js?v=17", document.baseURI));
+          let reloadingForUpdate = false;
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (reloadingForUpdate) return;
+            reloadingForUpdate = true;
+            window.location.reload();
+          });
+          navigator.serviceWorker.register(new URL("sw.js?v=21", document.baseURI)).then((registration) => registration.update());
         });
       }
     </script>
