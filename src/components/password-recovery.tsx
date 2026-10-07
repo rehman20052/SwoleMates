@@ -2,11 +2,15 @@ import { type ReactNode, useEffect, useState } from "react";
 import { AppText, Field, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton } from "./ui";
 import { supabase } from "@/lib/supabase";
 
-export function PasswordRecovery({ children }: { children: ReactNode }) {
+export function PasswordRecovery({ children, recoveryAccepted }: { children: ReactNode; recoveryAccepted: boolean }) {
   const [active, setActive] = useState(() => typeof window !== "undefined" && (new URLSearchParams(window.location.search).get("recovery") === "1" || /type=recovery/.test(window.location.hash)));
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    setReady(recoveryAccepted);
+    if (recoveryAccepted) { setActive(true); setMessage(null); }
+  }, [recoveryAccepted]);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event,session) => {
       if (event === "PASSWORD_RECOVERY") { setActive(true); setReady(Boolean(session)); }
