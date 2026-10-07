@@ -372,12 +372,7 @@ export async function chatAlertCount() {
   const me = await signedInUserId();
   if (!me) return 0;
 
-  let connections: MatchConnection[] = [];
-  try {
-    connections = await listConnections();
-  } catch {
-    return 0;
-  }
+  const connections = await listConnections();
 
   let reads = await chatReadTimes();
   const blocked = await blockedUserIds();
@@ -434,6 +429,7 @@ export function listConnections() {
 }
 
 async function loadConnections() {
+  await blockedUserIds();
   const { data, error } = await supabase.rpc("my_connections");
   if (error) throw setupError(error);
   return ((data ?? []) as Parameters<typeof personFrom>[0][])
@@ -463,110 +459,20 @@ export async function sendMatchRequest(toUserId: string) {
     const retry = await supabase.rpc("send_match_request", { target_user: toUserId });
     error = retry.error;
   }
-  if (error) await sendMatchRequestDirect(me, toUserId);
-  notifyChatAlerts();
-}
-
-async function sendMatchRequestDirect(me: string, toUserId: string) {
-  const { data, error } = await supabase
-    .from("match_requests")
-    .select("id, from_user_id, to_user_id, status")
-    .or(`and(from_user_id.eq.${me},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${me})`);
   if (error) throw setupError(error);
-
-  const rows = (data ?? []) as { id: string; from_user_id: string; to_user_id: string; status: string }[];
-  const reverse = rows.find((row) => row.from_user_id === toUserId && row.to_user_id === me);
-  const mine = rows.find((row) => row.from_user_id === me && row.to_user_id === toUserId);
-
-  // Keep the same row so the old chat returns once they accept. Their old request
-  // stays unmatched until the database function can turn it into a new outgoing request.
-  if (mine?.status === "unmatched") {
-    const { error: reopenError } = await supabase
-      .from("match_requests")
-      .update({ status: "pending", ended_at: null, ended_by: null })
-      .eq("id", mine.id);
-    if (reopenError) throw setupError(reopenError);
-    return;
-  }
-  if (reverse?.status === "unmatched") {
-    throw new Error("Run the latest match request script in Supabase, then try matching again.");
-  }
-
-  if (reverse && reverse.status !== "accepted") {
-    const { error: acceptError } = await supabase.from("match_requests").update({ status: "accepted" }).eq("id", reverse.id);
-    if (acceptError) throw setupError(acceptError);
-  }
-  if (reverse && mine && mine.status !== "accepted") {
-    const { error: deleteError } = await supabase.from("match_requests").delete().eq("id", mine.id);
-    if (deleteError) throw setupError(deleteError);
-    return;
-  }
-  if (reverse) return;
-
-  if (mine) {
-    if (mine.status === "pending" || mine.status === "accepted") return;
-    const { error: reopenError } = await supabase.from("match_requests").update({ status: "pending" }).eq("id", mine.id);
-    if (reopenError) throw setupError(reopenError);
-    return;
-  }
-
-  const { error: insertError } = await supabase.from("match_requests").insert({
-    from_user_id: me,
-    to_user_id: toUserId,
-    status: "pending",
-  });
-  if (insertError) throw setupError(insertError);
+  notifyChatAlerts();
 }
 
 export async function respondToMatch(requestId: string, accept: boolean) {
-  const { error } = await supabase
-    .from("match_requests")
-    .update({ status: accept ? "accepted" : "declined" })
-    .eq("id", requestId);
-  if (error) throw setupError(error);
-  if (accept) {
-    const collapsed = await supabase.rpc("collapse_mutual_requests");
-    if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
-  }
-  notifyChatAlerts();
+  await transitionMatch(requestId, accept ? "accept" : "decline");
 }
-
-// Ends an accepted match. The chat is hidden from both people, and either one can send a new request later.
-export async function unmatch(requestId: string) {
-  const me = await currentUserId();
-  const { error } = await supabase
-    .from("match_requests")
-    .update({ status: "unmatched", ended_at: new Date().toISOString(), ended_by: me })
-    .eq("id", requestId)
-    .eq("status", "accepted");
+async function transitionMatch(requestId: string, action: string) {
+  const { error } = await supabase.rpc("transition_match", { request_id: requestId, action });
   if (error) throw setupError(error);
   notifyChatAlerts();
 }
-
-export async function cancelMatchRequest(requestId: string) {
-  const me = await currentUserId();
-  const cancelled = await supabase.rpc("cancel_match_request", { request_id: requestId });
-  if (!cancelled.error) {
-    notifyChatAlerts();
-    return;
-  }
-  if (cancelled.error.code !== "PGRST202" && cancelled.error.code !== "42883") {
-    throw new Error(cancelled.error.message || "Could not cancel this request.");
-  }
-  // Older installations can cancel a request with no workout references until
-  // the focused repair installs the transactional cancellation function.
-  const { data, error } = await supabase.from("match_requests").delete()
-    .eq("id", requestId).eq("from_user_id", me).eq("status", "pending").select("id");
-  if (error) {
-    if (error.code === "42501") throw new Error("Cancellation permission needs updating in Supabase. Run supabase/cancel-match-requests.sql.");
-    if (error.code === "23503") throw new Error("Cancellation needs a database update to preserve workout history. Run supabase/cancel-match-requests.sql, then try again.");
-    // Preserve the actual error; a foreign-key conflict is not a missing script.
-    throw new Error(error.message || "Could not cancel this request.");
-  }
-  if (!data?.length) throw new Error("This request is no longer pending, or cancellation permission needs updating. Refresh requests; if it is still pending, run supabase/cancel-match-requests.sql.");
-  notifyChatAlerts();
-}
-
+export async function unmatch(requestId: string) { await transitionMatch(requestId, "unmatch"); }
+export async function cancelMatchRequest(requestId: string) { await transitionMatch(requestId, "cancel"); }
 export async function listMessages(matchId: string, me: string): Promise<MatchMessage[]> {
   const listed = await supabase
     .from("match_messages")

@@ -120,6 +120,23 @@ export function formatDistance(miles: number) {
   return rounded === 1 ? "1 mile away" : `${rounded} miles away`;
 }
 
+export function compatibility(candidate: DiscoverCandidate, mine: UserProfile) {
+  const gym = mine.primaryGym.trim().toLowerCase();
+  const sameGym = Boolean(gym && mine.gymAddress.trim() && gym === candidate.profile.primaryGym.trim().toLowerCase() && mine.gymAddress.trim().toLowerCase() === candidate.profile.gymAddress.trim().toLowerCase());
+  const days = mine.availabilityDays.filter(day => candidate.profile.availabilityDays.includes(day));
+  const times = mine.availabilityTimes.filter(time => candidate.profile.availabilityTimes.includes(time));
+  const overlap = days.length * times.length;
+  const goals = mine.selectedGoals.filter(goal => candidate.profile.selectedGoals.includes(goal));
+  return { sameGym, overlap, goals: goals.length, reasons: [sameGym ? `Same gym: ${mine.primaryGym}` : null,
+    overlap ? `Both available ${days.join(", ")} · ${times.join(", ")}` : null, goals.length ? `Shared goals: ${goals.join(", ")}` : null].filter((value): value is string => value !== null).slice(0,3) };
+}
+export function rankCandidates(candidates: DiscoverCandidate[], mine: UserProfile) {
+  return [...candidates].sort((a,b) => {
+    const left = compatibility(a,mine), right = compatibility(b,mine);
+    return Number(right.sameGym)-Number(left.sameGym) || right.overlap-left.overlap || right.goals-left.goals || a.distanceMiles-b.distanceMiles || a.id.localeCompare(b.id);
+  });
+}
+
 const accountId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isAccountId(id: string) {
@@ -229,6 +246,7 @@ export function discoverSetupMessage(error: unknown) {
   if (message.includes("discover_profiles") || message.includes("discover_people") || message.includes("schema cache")) {
     return "Discover storage is not set up on this Supabase project yet.";
   }
+  if (message.includes("Safety")) return message;
   return "Could not load people near you. Check your connection and try again.";
 }
 

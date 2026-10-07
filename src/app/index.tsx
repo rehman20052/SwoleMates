@@ -182,6 +182,7 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [chatAlerts, setChatAlerts] = useState(0);
+  const [safetyNotice, setSafetyNotice] = useState<string | null>(null);
   const [socialAlerts, setSocialAlerts] = useState(0);
   const finishStartup = useCallback(() => setShowStartup(false), []);
 
@@ -190,7 +191,9 @@ export default function App() {
     let active = true;
     const refresh = () => {
       void chatAlertCount().then((count) => {
-        if (active) setChatAlerts(count);
+        if (active) { setChatAlerts(count); setSafetyNotice(null); }
+      }).catch((error: unknown) => {
+        if (active) { setChatAlerts(0); setSafetyNotice(error instanceof Error ? error.message : "Safety protection is temporarily unavailable."); }
       });
     };
     refresh();
@@ -592,6 +595,7 @@ export default function App() {
         screen edge instead of leaving a band of background under the tabs. */}
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View nativeID="app-bottom-safe-area" style={[styles.mainAppContainer, hideTabBar && { paddingBottom: insets.bottom }]}>
+        {safetyNotice ? <Text accessibilityRole="alert" style={{color:theme.colors.danger,padding:12,fontSize:12}}>{safetyNotice}</Text> : null}
         <View style={styles.tabStage}>
           {activeTab === 'Social' ? (
             <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />

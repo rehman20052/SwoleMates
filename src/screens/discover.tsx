@@ -8,6 +8,8 @@ import {
   fetchDiscoverProfiles,
   formatDistance,
   matchesDiscoverFilters,
+  rankCandidates,
+  compatibility,
   publishDiscoverProfile,
   saveDiscoverFilters,
   type DiscoverCandidate,
@@ -78,10 +80,10 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
 
   const queue = useMemo(
     () =>
-      candidates.filter(
+      rankCandidates(candidates.filter(
         (candidate) =>
           !hidden.has(candidate.id) && !requestedIds.includes(candidate.id) && matchesDiscoverFilters(candidate, discoverFilters, profile),
-      ),
+      ), profile),
     [candidates, hidden, requestedIds, discoverFilters, profile],
   );
 
@@ -156,6 +158,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
           distanceLabel={formatDistance(current.distanceMiles)}
           footer={
             <Card padding={16} radius={18} gap={14}>
+              {compatibility(current, profile).reasons.map(reason => <AppText key={reason} size={12} primary>{reason}</AppText>)}
               <View style={{ gap: 4 }}>
                 <AppText size={18} weight="extrabold">
                   Train with {current.profile.fullName.trim().split(/\s+/)[0]}?
