@@ -41,6 +41,16 @@ function backend() {
   return { state, remote };
 }
 const valid = (item) => item && typeof item.id === 'string';
+test('explicit food undo restores its tombstone without removing another device addition', async () => {
+  const server = backend(), a = device(server, 'alice', 'food');
+  const original = { id: 'meal', calories: 400 };
+  await a.store.load([original]); await a.store.change(() => []);
+  const b = device(server, 'alice', 'food'); await b.store.load([]);
+  await b.store.change(rows => [...rows, { id: 'other', calories: 200 }]);
+  await assert.rejects(a.store.change(rows => [...rows, original]), /deleted/);
+  await a.store.change(rows => [...rows, original], ['meal']);
+  assert.deepEqual(copy(await b.store.refresh()).map(row => row.id).sort(), ['meal', 'other']);
+});
 test('structured workout sets, reps and weights reopen on a second device and keep later edits', async () => {
   const server = backend();
   const phone = device(server, 'alice', 'workout_logs'); await phone.store.load([]);
@@ -97,16 +107,16 @@ test('two devices editing the same row detect a conflict rather than silently ov
   const pending = a.store.change((rows) => rows.map((row) => ({ ...row, name: 'Older edit' })));
   await entered;
   await b.store.change((rows) => rows.map((row) => ({ ...row, name: 'Newer edit' })));
-  release(); await assert.rejects(pending, /Newer version/);
-  assert.equal((await a.store.refresh())[0].name, 'Newer edit');
+  release(); await pending; assert.equal(a.store.status().phase, 'conflict');
+  assert.equal((await a.store.refresh())[0].name, 'Older edit'); await a.store.resolve('server'); assert.equal((await a.store.refresh())[0].name, 'Newer edit');
 });
-test('failed saves retain server state, and acknowledged saves succeed despite cache errors', async () => {
+test('offline saves persist locally, and local write failures never report saved', async () => {
   const server = backend(); const a = device(server); await a.store.load([{ id: 'r', name: 'Original' }]);
   server.state.failSave = true;
-  await assert.rejects(a.store.change(() => []), /Network down/);
+  await a.store.change(() => []); assert.equal(a.store.status().phase, 'pending'); assert.deepEqual(copy(await a.store.cached()), []);
   server.state.failSave = false; a.local.failWrite = true;
-  await a.store.change((rows) => [...rows, { id: 'new' }]);
-  assert.deepEqual(copy(await device(server).store.load([])).map((row) => row.id).sort(), ['new', 'r']);
+  await assert.rejects(a.store.change((rows) => [...rows, { id: 'new' }]), /Device cache full/);
+  assert.deepEqual(copy(await device(server).store.load([])).map((row) => row.id).sort(), ['r']);
 });
 test('account-scoped caches and server records never carry into a different account', async () => {
   const server = backend(); const local = storage();
@@ -116,6 +126,26 @@ test('account-scoped caches and server records never carry into a different acco
   assert.deepEqual(copy(await alice.store.cached()), [{ id: 'alice-private' }]);
   await bob.store.change(() => [{ id: 'bob-private' }]);
   assert.deepEqual(copy(await alice.store.refresh()), [{ id: 'alice-private' }]);
+});
+test('offline relaunch preserves additions and pending deletions, reconnect syncs only the owning account', async () => {
+  const server=backend(), local=storage(); const a=device(server,'alice','food',local);
+  await a.store.load([{id:'old'}]); server.state.failRead=true;server.state.failSave=true;
+  await a.store.change(rows => [...rows,{id:'new',calories:200}]); await a.store.change(rows => rows.filter(row => row.id!=='old'));
+  const reopened=device(server,'alice','food',local); assert.deepEqual(copy(await reopened.store.load([])),[{id:'new',calories:200}]);
+  assert.equal(reopened.store.status().phase,'pending');
+  assert.deepEqual(copy(await device(server,'bob','food',local).store.load([])),[]);
+  server.state.failRead=false;server.state.failSave=false;await reopened.store.retry();
+  assert.deepEqual(copy(await device(server,'alice','food').store.load([])),[{id:'new',calories:200}]);
+});
+test('conflicting local edits survive restart until explicit reapply', async () => {
+  const server=backend(),local=storage(),a=device(server,'alice','recipes',local);
+  await a.store.load([{id:'r',name:'server'}]);server.state.failRead=true;server.state.failSave=true;
+  await a.store.change(rows => rows.map(row=>({...row,name:'local'})));
+  server.state.failRead=false;server.state.failSave=false;
+  const b=device(server);await b.store.load([]);await b.store.change(rows=>rows.map(row=>({...row,name:'other device'})));
+  await a.store.retry();assert.equal(a.store.status().phase,'conflict');
+  const reopened=device(server,'alice','recipes',local);assert.equal((await reopened.store.load([]))[0].name,'local');
+  await reopened.store.resolve('reapply');assert.equal((await device(server).store.load([]))[0].name,'local');
 });
 test('plan, dated food, lifts with history, settings, and hidden chats reopen on a second device', async () => {
   const server = backend();

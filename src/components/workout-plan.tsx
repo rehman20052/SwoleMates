@@ -5,6 +5,7 @@ import { AppText, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { acceptWindowClosed, cancelWorkoutRequest, respondToWorkout, type PlannedWorkout } from "@/lib/workouts";
 import { formatDate } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
+import { SharedWorkoutSession } from "./shared-workout-session";
 
 export function WorkoutPlanCard({
   plan,
@@ -85,6 +86,7 @@ export function WorkoutPlanCard({
       <AppText size={13} muted>
         {statusLine}
       </AppText>
+      <SharedWorkoutSession plan={plan} me={me} />
       {error ? (
         <AppText size={12} color={theme.colors.danger}>
           {error}

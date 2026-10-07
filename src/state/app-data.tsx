@@ -139,6 +139,7 @@ type AppData = {
 type AppDataContextValue = AppData & {
   saveFeedback: Partial<Record<SaveArea, SaveFeedback>>;
   retrySave: (area: SaveArea) => Promise<boolean>;
+  resolveSave: (area: SaveArea, choice: "server" | "reapply") => Promise<void>;
   accountUserId: string | null;
   saveWorkspaceSetting: (id: string, content: string, owner: string, updatedAt: number) => Promise<boolean>;
   review: (partnerId: string, interested: boolean) => void;
@@ -159,6 +160,8 @@ type AppDataContextValue = AppData & {
   addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">, date?: string) => Promise<boolean>;
   updateFoodEntry: (entryId: string, entry: Omit<FoodLogEntry, "id" | "date">) => Promise<boolean>;
   deleteFoodEntry: (entryId: string) => Promise<boolean>;
+  restoreFoodEntry: (entry: FoodLogEntry) => Promise<boolean>;
+  copyFoodMeal: (sourceDate: string, sourceMeal: FoodLogEntry["meal"], destinationDate: string, destinationMeal: FoodLogEntry["meal"]) => Promise<boolean>;
   foodJournalReady: boolean;
   foodJournalError: string | null;
   recipesReady: boolean;
@@ -184,7 +187,7 @@ type AppDataContextValue = AppData & {
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 export type SaveArea = "food" | "recipes" | "plan" | "lifts" | "workouts" | "drafts";
-export type SaveFeedback = { phase: "saving" | "saved" | "error"; message?: string };
+export type SaveFeedback = { phase: "saving" | "saved" | "pending" | "conflict" | "error"; message?: string };
 const weeklyWorkoutGoalKey = "swolemates.weekly-workout-goal";
 const dashboardStateKey = "swolemates.dashboard-state";
 
@@ -376,6 +379,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     let refreshing = false;
     let currentOwner: string | null = null;
     function applySnapshot(snapshot: Awaited<ReturnType<typeof loadAccountStores>>) {
+      const stores = accountStores.current;
+      if (stores) setSaveFeedback({ food: stores.food.status(), recipes: stores.recipes.status(), plan: stores.plan.status(), lifts: stores.lifts.status(), workouts: stores.logs.status(), drafts: stores.settings.status() });
       setData((current) => ({ ...current,
         savedMeals: snapshot.recipes, foodEntries: snapshot.foodEntries,
         nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile, nutritionGoalSource: nutritionGoalSource(snapshot.plan),
@@ -437,11 +442,21 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       void refresh(currentOwner);
     };
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") foreground(); });
-    const timer = setInterval(foreground, 15000);
+    let realtime = false;
+    const channel = supabase.channel("account-record-deltas")
+      .on("postgres_changes", { event: "*", schema: "public", table: "account_records" }, foreground)
+      .subscribe(status => { realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
+    const timer = setInterval(() => { if (!realtime) foreground(); }, 60000);
+    const retryTimer = setInterval(() => {
+      const stores = accountStores.current;
+      if (stores && Object.values(stores).some(store => typeof store === "object" && "status" in store && store.status().phase === "pending")) foreground();
+    }, 5000);
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", foreground);
     if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("focus", foreground);
     if (Platform.OS === "web" && typeof document !== "undefined") document.addEventListener("visibilitychange", foreground);
     return () => {
-      active = false; accountGeneration.current++; clearInterval(timer); auth.subscription.unsubscribe(); subscription.remove();
+      active = false; accountGeneration.current++; clearInterval(timer); clearInterval(retryTimer); void supabase.removeChannel(channel); auth.subscription.unsubscribe(); subscription.remove();
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", foreground);
       if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("focus", foreground);
       if (Platform.OS === "web" && typeof document !== "undefined") document.removeEventListener("visibilitychange", foreground);
     };
@@ -517,7 +532,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           const changes = await operation(stores);
           if (generation !== accountGeneration.current || accountStores.current !== stores) return false;
           update((current) => ({ ...current, ...changes })); setError(null); setSyncError(null);
-          feedback({ phase: "saved" }); delete saveRetries.current[area]; return true;
+          const store = area === "food" ? stores.food : area === "recipes" ? stores.recipes : area === "plan" ? stores.plan : area === "lifts" ? stores.lifts : area === "drafts" ? stores.settings : stores.logs;
+          feedback(store.status()); delete saveRetries.current[area]; return true;
         } catch (error) {
           if (generation === accountGeneration.current) {
             const message = accountSyncError(error); setError(message);
@@ -543,6 +559,20 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     }, setWorkoutStorageError);
 
     return {
+      async resolveSave(area, choice) {
+        const stores = accountStores.current;
+        if (!stores) return;
+        const generation = accountGeneration.current;
+        const store = area === "food" ? stores.food : area === "recipes" ? stores.recipes : area === "plan" ? stores.plan : area === "lifts" ? stores.lifts : area === "drafts" ? stores.settings : stores.logs;
+        try {
+          await store.resolve(choice);
+          const snapshot = await refreshAccountStores(stores, defaultNutrition);
+          if (generation !== accountGeneration.current) return;
+          setData(current => ({ ...current, savedMeals: snapshot.recipes, foodEntries: snapshot.foodEntries, logs: snapshot.logs, trackedLifts: snapshot.lifts, workspaceSettings: snapshot.workspaceSettings,
+            nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile }));
+          setSaveFeedback(current => ({ ...current, [area]: store.status() }));
+        } catch (error) { if (generation === accountGeneration.current) setSyncError(accountSyncError(error)); }
+      },
       ...data,
       saveFeedback,
       retrySave: (area) => saveRetries.current[area]?.() ?? Promise.resolve(false),
@@ -720,6 +750,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       },
       async deleteFoodEntry(entryId) {
         return persistFood((current) => current.filter((item) => item.id !== entryId));
+      },
+      restoreFoodEntry(entry) {
+        return persistAccount(async stores => ({ foodEntries: await stores.food.change(current => current.some(item => item.id===entry.id) ? current : [entry,...current], [entry.id]) }), setFoodJournalError);
+      },
+      copyFoodMeal(sourceDate, sourceMeal, destinationDate, destinationMeal) {
+        return persistFood(current => {
+          const copies = current.filter(entry => entry.date===sourceDate && entry.meal===sourceMeal).map(entry => ({ ...entry,id:`food-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,date:destinationDate,meal:destinationMeal }));
+          if (!copies.length) throw new Error("No foods in that source meal.");
+          return [...copies,...current];
+        });
       },
       async saveMeal(meal) {
         return persistRecipes((current) => [{ ...meal, id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }, ...current]);

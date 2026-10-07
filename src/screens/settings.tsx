@@ -8,6 +8,10 @@ import { notifyChatAlerts } from "@/lib/matches";
 import { listBlockedPeople, unblockPerson, type BlockedPerson } from "@/lib/safety";
 import { useNavigation } from "@/navigation";
 import { useAppTheme, useColorScheme } from "@/theme";
+import { deleteAccount, exportAccountData } from "@/lib/account-controls";
+import { diagnosticsPreference, setDiagnosticsPreference } from "@/lib/diagnostics";
+import { supabase } from "@/lib/supabase";
+import { useAppData } from "@/state/app-data";
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const theme = useAppTheme();
@@ -21,6 +25,21 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const [paused, setPaused] = useState(false);
   const [pauseMessage, setPauseMessage] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const { accountUserId } = useAppData();
+  const [diagnostics, setDiagnostics] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteStage, setDeleteStage] = useState<0 | 1 | 2>(0);
+  const [controlsReady, setControlsReady] = useState(false);
+  const [deletionReady, setDeletionReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (accountUserId) void diagnosticsPreference(accountUserId).then(value => { if (active) setDiagnostics(value); });
+    void supabase.rpc("account_controls_available").then(({data,error}) => { if (active) setControlsReady(!error && data === true); });
+    void supabase.functions.invoke("delete-account",{body:{action:"capabilities"}}).then(({data,error}) => { if (active) setDeletionReady(!error && data?.available === true); });
+    return () => { active=false; };
+  }, [accountUserId]);
 
   useEffect(() => {
     let active = true;
@@ -87,6 +106,35 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     <Screen>
       <TitleBar title="Settings" onBack={onClose} />
       <ScrollBody contentContainerStyle={styles.list}>
+        <View style={[styles.card, { backgroundColor:theme.colors.surface,borderColor:theme.colors.border }]}>
+          <AppText weight="bold">Account data</AppText>
+          {!controlsReady ? <AppText size={12} muted>Account export is available once server setup is complete and connectivity is verified.</AppText> : null}
+          <SecondaryButton disabled={!controlsReady || accountBusy} onPress={async () => {
+            setAccountBusy(true); setAccountMessage(null);
+            try {
+              const data = await exportAccountData();
+              if (Platform.OS !== "web") throw new Error("Open the web app to download your JSON export.");
+              const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
+              const link = document.createElement("a"); link.href=url; link.download="swolemates-account.json"; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
+              setAccountMessage("Export downloaded. Local pending changes are identified in the JSON.");
+            } catch (error) { setAccountMessage(error instanceof Error ? error.message : "Export failed."); }
+            finally { setAccountBusy(false); }
+          }}>Download account JSON</SecondaryButton>
+          <View style={{flexDirection:"row",gap:10,alignItems:"center"}}><View style={{flex:1,gap:4}}><AppText weight="bold">Share minimal diagnostics</AppText><AppText size={12} muted>Optional reports contain release, platform, screen, operation, error code and fingerprint. Reports expire after 30 days.</AppText></View><Toggle value={diagnostics} accessibilityLabel="Opt in to minimal diagnostics" onChange={async value => { if (!accountUserId) return; try { await setDiagnosticsPreference(accountUserId,value); setDiagnostics(value); } catch { setAccountMessage("Could not save diagnostic preference."); } }} /></View>
+          {deleteStage === 0 ? <SecondaryButton disabled={!deletionReady || accountBusy} textColor={theme.colors.danger} onPress={() => setDeleteStage(1)}>Delete account</SecondaryButton> : <View style={{gap:10}}>
+            <AppText color={theme.colors.danger}>Permanently remove your account, personal records and uploaded media.</AppText>
+            <Field label="Confirm your password"><Input secureTextEntry value={deletePassword} onChangeText={setDeletePassword} editable={!accountBusy} /></Field>
+            {deleteStage === 1 ? <SecondaryButton disabled={!deletePassword} onPress={() => setDeleteStage(2)}>Continue to final confirmation</SecondaryButton> : <PrimaryButton disabled={accountBusy} onPress={async () => {
+              setAccountBusy(true); setAccountMessage(null);
+              try { await deleteAccount(deletePassword); setDeletePassword(""); nav.signOut(); }
+              catch (error) { setAccountMessage(error instanceof Error ? error.message : "Deletion failed."); }
+              finally { setAccountBusy(false); }
+            }}>Permanently delete my account</PrimaryButton>}
+            <SecondaryButton disabled={accountBusy} onPress={() => {setDeleteStage(0);setDeletePassword("");}}>Keep account</SecondaryButton>
+          </View>}
+          {!deletionReady ? <AppText size={12} muted>Account deletion requires the server endpoint to be deployed and reachable.</AppText> : null}
+          {accountMessage ? <AppText size={12}>{accountMessage}</AppText> : null}
+        </View>
         <AppText size={13} weight="bold" primary upper>
           Account
         </AppText>

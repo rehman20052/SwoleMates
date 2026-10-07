@@ -11,7 +11,7 @@ import { useAppTheme } from "@/theme";
 
 import { parseWorkoutDraft, type DraftExercise } from "@/lib/workout-drafts";
 const newId = () => `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved, onManageRoutines }: { date?: string; existing?: SessionLog; onSaved: () => void; onManageRoutines?: () => void }) {
+export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved, onManageRoutines, plannedWorkoutId, initialPlan, initialTitle }: { date?: string; existing?: SessionLog; onSaved: () => void; onManageRoutines?: () => void; plannedWorkoutId?: string; initialPlan?: { name: string; sets: number; reps: number }[]; initialTitle?: string }) {
   const theme = useAppTheme();
   const { logWorkout, updateWorkoutLog, foodJournalReady, saveFeedback, workspaceSettings } = useAppData();
   const options = ["Choose exercise", ...exerciseOptions([], "")];
@@ -23,23 +23,23 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved, on
     void loadExerciseCatalog(AsyncStorage).then(catalog => { if (active) setNames(catalog.names); });
     return () => { active = false; };
   }, []);
-  const [title, setTitle] = useState(existing?.title ?? "");
+  const [title, setTitle] = useState(existing?.title ?? initialTitle ?? "");
   const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [rows, setRows] = useState<DraftExercise[]>(() => (existing?.exercises ?? []).map(row => ({ id: row.id, exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit, setValues: row.setDetails?.map(set => ({ reps: String(set.reps), weight: String(set.weight) })) ?? Array.from({ length: row.sets }, () => ({ reps: String(row.reps), weight: String(row.weight) })) })));
+  const [rows, setRows] = useState<DraftExercise[]>(() => (existing?.exercises ?? initialPlan?.map((row,index) => ({ ...row,id:`shared-${index}`,weight:0,unit:"lb" as const })) ?? []).map(row => ({ id: row.id, exercise: options.includes(row.name) ? row.name : "Other", customName: row.name, sets: String(row.sets), reps: String(row.reps), weight: String(row.weight), unit: row.unit, setValues: ("setDetails" in row ? row.setDetails : undefined)?.map(set => ({ reps: String(set.reps), weight: String(set.weight) })) ?? Array.from({ length: row.sets }, () => ({ reps: String(row.reps), weight: String(row.weight) })) })));
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const recordId = useRef(`log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const recordId = useRef(plannedWorkoutId ? `session-${plannedWorkoutId}` : `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [error, setError] = useState<string | null>(null);
   const [plansOpen, setPlansOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const [mode, setMode] = useState<"choose" | "log">(existing ? "log" : "choose");
+  const [mode, setMode] = useState<"choose" | "log">(existing || plannedWorkoutId ? "log" : "choose");
   const [activeExercise, setActiveExercise] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [restRemaining, setRestRemaining] = useState(0);
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set());
   const [restoredDraft, setRestoredDraft] = useState(false);
-  const draft = useSavedDraft("draft:workout:" + (existing?.id ?? date), content => {
+  const draft = useSavedDraft("draft:workout:" + (plannedWorkoutId ?? existing?.id ?? date), content => {
     const saved = parseWorkoutDraft(content);
     if (!saved) return;
     setTitle(saved.title); setNotes(saved.notes); setRows(saved.rows);
@@ -79,7 +79,7 @@ export function QuickWorkoutLog({ date = daysFromToday(0), existing, onSaved, on
     });
     if (!title.trim() || !validWorkoutExercises(exercises)) { setError("Add a workout name. Each exercise needs a name, 1–100 sets and reps, and a valid weight (use 0 for bodyweight)."); return; }
     busyRef.current = true; setBusy(true); setError(null);
-    const saved = existing ? await updateWorkoutLog(existing.id, { title: title.trim(), notes: notes.trim() || undefined, exercises }) : await logWorkout(title.trim(), notes.trim() || undefined, date, { exercises }, recordId.current);
+    const saved = existing ? await updateWorkoutLog(existing.id, { title: title.trim(), notes: notes.trim() || undefined, exercises }) : await logWorkout(title.trim(), notes.trim() || undefined, date, { exercises, plannedWorkoutId }, recordId.current);
     busyRef.current = false; setBusy(false);
     if (saved) { changed.current = false; draft.clear(); onSaved(); }
   }
