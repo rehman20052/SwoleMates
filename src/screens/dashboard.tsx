@@ -190,6 +190,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showSettings, setShowSettings] = useState(false);
   const [showRoutines, setShowRoutines] = useState(false);
   const [homeMode, setHomeMode] = useState<HomeMode>(savedHomeMode);
+  const [fuelScrolled, setFuelScrolled] = useState(false);
   const [showRecipes, setShowRecipes] = useState(savedShowRecipes);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
@@ -328,11 +329,12 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         }
       />
 
-      <View style={styles.modeSwitch}>
+      {!(homeMode === "fuel" && fuelScrolled) ? <View style={styles.modeSwitch}>
         <SegmentSwitch
           value={homeMode}
           onChange={(next) => {
             savedHomeMode = next;
+            setFuelScrolled(false);
             setHomeMode(next);
           }}
           options={[
@@ -340,7 +342,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             { id: "fuel", label: "Fuel" },
           ]}
         />
-      </View>
+      </View> : null}
       {accountSyncError ? <View style={{ paddingHorizontal: 20, gap: 8 }}><AppText color={theme.colors.danger}>{accountSyncError}</AppText><SecondaryButton onPress={retryAccountSync}>Retry account sync</SecondaryButton></View> : null}
       {workoutStorageError ? <AppText size={13} color={theme.colors.danger} style={{ paddingHorizontal: 20 }}>{workoutStorageError}</AppText> : null}
 
@@ -357,6 +359,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           ) : (
             <NutritionTrackerScreen
               embedded
+              onScrolledChange={setFuelScrolled}
               header={
                 <Pressable
                   accessibilityRole="button"

@@ -27,3 +27,22 @@ test('recent foods deduplicate repeat logs, keep portion variants, and search re
   assert.equal(entries.length, 3, 'search never changes the saved journal');
   assert.equal(foodChoices([], [], '').length, 0, 'no seeded placeholder foods');
 });
+test('common-food search returns per-100g macro data ahead of personal matches', () => {
+  const catalog = [{ id: 'banana', name: 'Banana', per100g: { calories: 89, protein: 1.1, carbs: 22.8, fats: 0.3 } }];
+  const choices = foodChoices([], [], 'peeled banana', catalog);
+  assert.equal(choices.length, 1, 'common preparation words do not hide the underlying food');
+  const banana = choices[0];
+  assert.equal(banana.source, 'common');
+  assert.equal(banana.food.per100g.calories, 89);
+});
+test('bundled USDA catalog includes broad cooked-food coverage with complete macros', () => {
+  const catalog = JSON.parse(readFileSync('src/data/usda-foods.json', 'utf8'));
+  assert.ok(catalog.length > 10000, `expected more than 10,000 foods, found ${catalog.length}`);
+  assert.ok(catalog.filter(food => /cooked|boiled|baked|roasted|grilled|fried|steamed/i.test(food.name)).length > 1000, 'prepared foods are broadly represented');
+  assert.ok(catalog.every(food => food.id.startsWith('usda-') && food.name && ['calories', 'protein', 'carbs', 'fats'].every(key => Number.isFinite(food.per100g[key]))));
+});
+test('prepared-food searches can fall back to the USDA cooked description', () => {
+  const catalog = [{ id: 'broccoli-cooked', name: 'Broccoli, cooked', per100g: { calories: 35, protein: 2.4, carbs: 7.2, fats: 0.4 } }];
+  assert.equal(foodChoices([], [], 'steamed broccoli', catalog)[0].food.id, 'broccoli-cooked');
+  assert.equal(foodChoices([], [], 'cooked broccoli', [{ ...catalog[0], name: 'Broccoli, uncooked' }]).length, 0, 'cooked does not accidentally match uncooked');
+});
