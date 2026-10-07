@@ -28,8 +28,11 @@ import { supabase } from "@/lib/supabase";
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
+  const [recoveryAccepted, setRecoveryAccepted] = useState(false);
   useEffect(() => {
-    const {data} = supabase.auth.onAuthStateChange((_event,session) => {
+    const {data} = supabase.auth.onAuthStateChange((event,session) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryAccepted(Boolean(session));
+      if (event === "SIGNED_OUT") setRecoveryAccepted(false);
       clearDiagnosticsPreference();
       if (session) void diagnosticsPreference(session.user.id).catch(() => undefined);
     });
@@ -38,13 +41,13 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
     <ThemeProvider>
-      <RootShell />
+      <RootShell recoveryAccepted={recoveryAccepted} />
     </ThemeProvider>
     </AppErrorBoundary>
   );
 }
 
-function RootShell() {
+function RootShell({ recoveryAccepted }: { recoveryAccepted: boolean }) {
   const theme = useAppTheme();
   const [fontWaitExpired, setFontWaitExpired] = useState(false);
   const [fontsLoaded, fontError] = useFonts({
@@ -84,7 +87,7 @@ function RootShell() {
       <AppDataProvider>
         <PresenceProvider>
           <PhoneFrame>
-            <PasswordRecovery>
+            <PasswordRecovery recoveryAccepted={recoveryAccepted}>
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: theme.colors.background },
