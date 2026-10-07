@@ -29,8 +29,9 @@
         var results = lookup && lookup.querySelector('[data-food-results]');
         var bottom = Math.min(box.bottom, viewport.offsetTop + viewport.height) - 12;
         var top = Math.max(box.top, viewport.offsetTop) + 12;
-        // Reveal the first selectable result while keeping the search field visible.
-        var desiredBottom = results ? Math.min(results.getBoundingClientRect().bottom, input.bottom + 100) : input.bottom;
+        // Use the available space for results, keeping the search at the top
+        // when the full list cannot fit above the keyboard.
+        var desiredBottom = results ? results.getBoundingClientRect().bottom : input.bottom;
         desiredBottom = Math.min(desiredBottom, input.top + Math.max(0, bottom - top));
         if (desiredBottom > bottom) parent.scrollTop += desiredBottom - bottom;
         else if (input.top < top) parent.scrollTop -= top - input.top;

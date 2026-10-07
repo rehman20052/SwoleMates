@@ -30,6 +30,7 @@ export function FoodSearch({ entries, recipes, ready, onSelect, mode = "recent",
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Icon source={finding ? icons.zap : icons.clock} size={finding ? 18 : 24} tint={theme.colors.accent} /><View style={{ flex: 1, gap: 3 }}><AppText size={finding ? 13 : 16} weight="bold">{finding ? "Look up food macros" : "Recent foods"}</AppText>{!finding ? <AppText size={12} muted>Quickly reuse foods and saved recipes</AppText> : null}</View>{ready && limit > 3 && choices.length > 3 ? <SecondaryButton height={34} fontSize={12} onPress={() => setLimit(3)}>Show less</SecondaryButton> : null}</View>
     <Input bordered placeholder={finding ? "Search common foods" : "Search recent foods and recipes"} accessibilityLabel={finding ? "Search common foods for macro information" : "Search recent foods and recipes"} value={query} onChangeText={value => { setQuery(value); setLimit(3); }} />
     {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear food search" onPress={() => { setQuery(""); setLimit(3); }}><AppText size={12} primary>Clear search</AppText></Pressable> : null}
+    <View {...({ dataSet: finding ? { foodResults: "true" } : undefined } as ViewProps)} style={{ gap: 8 }}>
     {!ready ? <AppText size={12} muted>Loading your foods and recipes…</AppText> : choices.length ? <>
       {choices.slice(0, limit).map(choice => {
         const common = choice.source === "common";
@@ -43,6 +44,7 @@ export function FoodSearch({ entries, recipes, ready, onSelect, mode = "recent",
       })}
       {choices.length > limit ? <SecondaryButton height={34} fontSize={12} onPress={() => setLimit(value => value + 10)}>Show more foods ({choices.length - limit})</SecondaryButton> : null}
     </> : query.trim() || !finding ? <AppText size={12} muted>{query.trim() ? (finding ? "No common food found. Try a simpler name." : "No matching foods or recipes. Use Add food to enter something new.") : "Foods you log will appear here. Your saved recipes are searchable here too."}</AppText> : null}
+    </View>
   </>;
   return finding
     ? <View {...({ dataSet: { foodLookup: "true" } } as ViewProps)} style={{ gap: 8, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border }}>{content}</View>
