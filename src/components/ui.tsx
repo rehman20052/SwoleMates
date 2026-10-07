@@ -754,7 +754,7 @@ export function ProgressBar({ progress }: { progress: number }) {
       <View
         style={[
           styles.progressFill,
-          { backgroundColor: theme.colors.primary, width: `${Math.max(0, Math.min(1, progress)) * 100}%` },
+          { backgroundColor: theme.colors.accent, width: `${Math.max(0, Math.min(1, progress)) * 100}%` },
         ]}
       />
     </View>

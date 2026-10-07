@@ -179,6 +179,16 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   }
 
   function ingredientValidationError() {
+    for (const [index, item] of scannedIngredients.entries()) {
+      const label = `Ingredient ${index + 1}${item.name.trim() ? ` (${item.name.trim()})` : ""}`;
+      if (!item.name.trim()) return `${label}: enter a food name.`;
+      const amount = Number(item.servings.trim().replace(",", "."));
+      if (!item.servings.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100) return `${label}: enter a serving amount greater than 0 and no more than 100 servings.`;
+      for (const key of ["calories", "protein", "carbs", "fats"] as const) {
+        const value = Number(item[key].trim().replace(",", "."));
+        if (!item[key].trim() || !Number.isFinite(value) || value < 0 || value > 100000) return `${label}: enter valid ${key === "fats" ? "fat" : key} (0 is allowed).`;
+      }
+    }
     const hasScannedIngredient = scannedIngredients.some(item => item.source !== "manual");
     if (buildFromIngredients && !hasScannedIngredient) {
       return "Complete each ingredient's name, calories, protein, carbs, and fat. Enter 0 for any macro the ingredient doesn't contain.";
@@ -428,18 +438,18 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         </View>
         {journalTab === "Journal" ? <TrainingCard padding={16} gap={14}>
           <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}><View style={[styles.intakeIcon, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><Icon source={icons.flame} size={20} tint={caloriesOverGoal ? overGoalColor : theme.colors.primary} /></View><View style={{ gap: 2 }}><AppText size={16} weight="extrabold">Daily intake</AppText><AppText size={12} muted>{dayLabel} · {todayEntries.length} foods logged</AppText></View></View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}><View style={[styles.intakeIcon, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><Icon source={icons.flame} size={20} tint={caloriesOverGoal ? overGoalColor : theme.colors.accent} /></View><View style={{ gap: 2 }}><AppText size={16} weight="extrabold">Daily intake</AppText><AppText size={12} muted>{dayLabel} · {todayEntries.length} foods logged</AppText></View></View>
             <Pressable accessibilityRole="button" onPress={openGoals} style={[styles.goalPill, { backgroundColor: theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary>Edit goals</AppText></Pressable>
           </View>
           <View style={[styles.calorieSummary, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border, borderWidth: 1 }]}>
             <View style={styles.sectionHeader}>
               <View><AppText size={34} weight="black">{Math.round(currentNutrition.calories).toLocaleString()}<AppText size={13} weight="semibold" muted> kcal</AppText></AppText><AppText size={12} muted>of {currentNutrition.calorieGoal.toLocaleString()} kcal goal</AppText></View>
-              <View style={[styles.remainingPill, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><AppText size={18} weight="extrabold" color={caloriesOverGoal ? overGoalColor : theme.colors.primary}>{Math.abs(Math.round(currentNutrition.calorieGoal - currentNutrition.calories)).toLocaleString()}</AppText><AppText size={10} weight="bold" color={caloriesOverGoal ? overGoalColor : theme.colors.primary}>{caloriesOverGoal ? "OVER" : "LEFT"}</AppText></View>
+              <View style={[styles.remainingPill, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><AppText size={18} weight="extrabold" color={caloriesOverGoal ? overGoalColor : theme.colors.accent}>{Math.abs(Math.round(currentNutrition.calorieGoal - currentNutrition.calories)).toLocaleString()}</AppText><AppText size={10} weight="bold" color={caloriesOverGoal ? overGoalColor : theme.colors.accent}>{caloriesOverGoal ? "OVER" : "LEFT"}</AppText></View>
             </View>
             <ProgressBar progress={currentNutrition.calories / Math.max(1, currentNutrition.calorieGoal)} />
           </View>
           <View style={{ gap: 8 }}><AppText size={12} weight="bold" muted>MACRO PROGRESS</AppText><View style={styles.macroRow}>{(["protein", "carbs", "fats"] as Macro[]).map((macro, index) => {
-            const colors = ["#83A92B", "#D69A28", "#5799A1"];
+            const colors = theme.isDark ? ["#83A92B", "#D69A28", "#5799A1"] : [theme.colors.accent, theme.colors.carbs, theme.colors.fat];
             const current = currentNutrition[macro];
             const target = currentNutrition[macroGoals[macro]];
             return <View key={macro} style={[styles.macroTile, { backgroundColor: theme.colors.surfaceRaised }]}><AppText size={11} muted>{macroLabel(macro)}</AppText><AppText size={16} weight="bold">{Math.round(current)}<AppText size={10} muted> / {target}g</AppText></AppText><View accessibilityRole="progressbar" accessibilityLabel={`${macroLabel(macro)} progress`} accessibilityValue={{ min: 0, max: target, now: Math.min(current, target) }} style={[styles.macroTrack, { backgroundColor: theme.colors.border }]}><View style={{ height: "100%", width: `${Math.min(100, current / Math.max(1, target) * 100)}%`, borderRadius: 4, backgroundColor: colors[index] }} /></View></View>;
@@ -664,6 +674,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                     </View>
                     {addFoodTab === "Food" ? <FoodSearch key={`food-lookup-${item.id}`} entries={[]} recipes={[]} ready onSelect={choice => useCommonFoodForIngredient(item.id, choice)} mode="find" /> : null}
                     <Field label="Food name"><Input bordered value={item.name} placeholder="e.g. Chicken breast" onChangeText={(value) => editManualIngredient(item.id, { name: value })} /></Field>
+                    {!catalogFood ? <Field label={`Servings (${item.basis})`}><Input bordered accessibilityLabel={`Servings for ingredient ${index + 1}`} value={item.servings} keyboardType="decimal-pad" onChangeText={value => editManualIngredient(item.id, { servings: value })} /></Field> : null}
                     {item.basis === "100 g" ? <View style={{ gap: 8, padding: 10, borderRadius: 12, backgroundColor: theme.colors.primaryTint }}>
                       <AppText size={11} weight="bold" primary>MACROS FOR YOUR SELECTED AMOUNT</AppText>
                       <AppText size={12} weight="bold">Amount in meal: {item.servings ? Number(item.servings) * 100 : "—"}g</AppText>
