@@ -1,9 +1,25 @@
 // Browser-only capture/recognition helpers. All readers and model assets load on demand.
+import { normalizeBarcode } from "@/scanning/barcodes";
+import type { BarcodeFormat, TextFrame, TextObservation } from "@/scanning/types";
+
 export function scannerAsset(name: string) {
   return new URL(`${process.env.EXPO_PUBLIC_BASE_PATH || ""}/scanner/${name}`, window.location.origin).href;
 }
 let barcodeReader: Promise<typeof import("zxing-wasm/reader")> | undefined;
 export async function decodeFoodBarcode(image: ImageData | Blob): Promise<string | null> {
+  const native = globalThis as typeof globalThis & { BarcodeDetector?: new (options: { formats: string[] }) => { detect(source: ImageBitmap | HTMLCanvasElement): Promise<{ rawValue: string; format: string }[]> }; };
+  if (native.BarcodeDetector) {
+    try {
+      const source = image instanceof Blob ? await createImageBitmap(image) : (() => { const canvas = document.createElement("canvas"); canvas.width = image.width; canvas.height = image.height; canvas.getContext("2d")!.putImageData(image, 0, 0); return canvas; })();
+      const detector = new native.BarcodeDetector({ formats: ["upc_a", "upc_e", "ean_8", "ean_13", "itf"] });
+      const found = await detector.detect(source);
+      if (source instanceof ImageBitmap) source.close();
+      for (const result of found) {
+        const hinted = ({ upc_a: "upc_a", upc_e: "upc_e", ean_8: "ean_8", ean_13: "ean_13", itf: "itf" } as Record<string, BarcodeFormat>)[result.format];
+        try { return normalizeBarcode(result.rawValue, hinted).value; } catch { /* Let ZXing retry invalid browser detections. */ }
+      }
+    } catch { /* BarcodeDetector is optional and format support differs by browser. */ }
+  }
   barcodeReader ??= import("zxing-wasm/reader").then(async reader => {
     await reader.prepareZXingModule({ overrides: { locateFile: (file: string) => scannerAsset(file) }, fireImmediately: true });
     return reader;
@@ -11,7 +27,22 @@ export async function decodeFoodBarcode(image: ImageData | Blob): Promise<string
   const reader = await barcodeReader;
   const found = await reader.readBarcodes(image, { formats: ["EAN13", "EAN8", "UPCA", "UPCE", "ITF14"],
     tryHarder: true, tryRotate: true, tryInvert: true, tryDownscale: true, maxNumberOfSymbols: 1 });
-  return found.find(result => result.isValid && /^\d{8}$|^\d{12,14}$/.test(result.text))?.text ?? null;
+  for (const result of found) {
+    if (!result.isValid) continue;
+    try { return normalizeBarcode(result.text, ({ UPCA: "upc_a", UPCE: "upc_e", EAN8: "ean_8", EAN13: "ean_13", ITF14: "itf" } as Record<string, BarcodeFormat>)[result.format]).value; } catch { /* continue */ }
+  }
+  return null;
+}
+
+type TesseractWord = { text?: string; confidence?: number; bbox?: { x0: number; y0: number; x1: number; y1: number } };
+type TesseractData = { words?: TesseractWord[]; blocks?: { paragraphs?: { lines?: { words?: TesseractWord[] }[] }[] }[] | null };
+export function tesseractTextFrame(data: TesseractData, width: number, height: number, id = `web-${Date.now()}`): TextFrame {
+  const words = data.words ?? data.blocks?.flatMap(block => block.paragraphs?.flatMap(paragraph => paragraph.lines?.flatMap(line => line.words ?? []) ?? []) ?? []) ?? [];
+  const observations: TextObservation[] = words.flatMap((word, index) => {
+    if (!word.text?.trim() || !word.bbox || width <= 0 || height <= 0) return [];
+    return [{ id: `${id}-${index}`, text: word.text, confidence: Math.max(0, Math.min(1, (word.confidence ?? 0) / 100)), bounds: { x: word.bbox.x0 / width, y: word.bbox.y0 / height, width: (word.bbox.x1 - word.bbox.x0) / width, height: (word.bbox.y1 - word.bbox.y0) / height } }];
+  });
+  return { id, capturedAt: Date.now(), width, height, observations };
 }
 export type PhotoCrop = { left: number; top: number; right: number; bottom: number };
 export const fullPhoto: PhotoCrop = { left: 0, top: 0, right: 100, bottom: 100 };
@@ -49,13 +80,13 @@ export function enhanceLabel(original: HTMLCanvasElement) {
   }
   ctx.putImageData(pixels, 0, 0); return canvas;
 }
-export function videoFrame(video: HTMLVideoElement, mode: "barcode" | "label", cropped = true) {
+export function videoFrame(video: HTMLVideoElement, mode: "barcode" | "label", cropped = true, maxDimension = 2400) {
   // Preview uses the natural video ratio, so the visible guide and capture match exactly.
   const width = video.videoWidth, height = video.videoHeight;
   if (!width || !height) throw new Error("Wait for a sharp camera preview, then try again.");
   const cropWidth = cropped ? width * (mode === "barcode" ? .9 : .8) : width;
   const cropHeight = cropped ? height * (mode === "barcode" ? .5 : .76) : height;
-  const scale = Math.min(1, 2400 / Math.max(cropWidth, cropHeight));
+  const scale = Math.min(1, maxDimension / Math.max(cropWidth, cropHeight));
   const canvas = document.createElement("canvas"); canvas.width = Math.round(cropWidth * scale); canvas.height = Math.round(cropHeight * scale);
   canvas.getContext("2d")!.drawImage(video, (width - cropWidth) / 2, (height - cropHeight) / 2, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
   return canvas;

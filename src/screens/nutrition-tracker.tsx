@@ -527,7 +527,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                     <AppText size={11} muted>{protein || "—"}g protein · {carbs || "—"}g carbs · {fats || "—"}g fat</AppText>
                   </View>
                 </View> : <>
-                  {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or photograph label"}</SecondaryButton> : null}
+                  {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or nutrition label"}</SecondaryButton> : null}
                   {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
                 </>}
                 <Field label="Meal">
@@ -572,7 +572,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
                 </Field>
                 <Field label="Recipe name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
-                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or photograph label"}</SecondaryButton> : null}
+                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode or nutrition label"}</SecondaryButton> : null}
                 {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
                 <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
                 <View style={styles.inputRow}>

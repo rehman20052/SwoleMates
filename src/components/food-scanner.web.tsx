@@ -3,8 +3,11 @@ import { View } from "react-native";
 import type { Worker } from "tesseract.js";
 import { AppText, Field, Input, PrimaryButton, ScrollBody, SecondaryButton } from "./ui";
 import { ingredientTotals, lookupBarcode, nutritionKeys, parseNutritionLabel, scannedIngredient, type ScanIngredient, type ScannedFood } from "@/lib/food-scanner";
-import { decodeFoodBarcode, enhanceLabel, fullPhoto, labelCanvas, scannerAsset, videoFrame, type PhotoCrop } from "@/lib/food-scanner-browser";
+import { decodeFoodBarcode, enhanceLabel, fullPhoto, labelCanvas, scannerAsset, tesseractTextFrame, videoFrame, type PhotoCrop } from "@/lib/food-scanner-browser";
+import { parseNutritionFrame } from "@/scanning/nutrition/parser";
+import { hasReliableNutrition, NutritionFrameAggregator } from "@/scanning/nutrition/aggregate";
 import { useAppTheme } from "@/theme";
+import { rememberConfirmedIngredient } from "@/scanning/product-memory";
 
 type Props = {
   initialIngredients?: ScanIngredient[];
@@ -43,6 +46,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
   const [crop, setCrop] = useState<PhotoCrop>(fullPhoto);
   const [showCrop, setShowCrop] = useState(false);
   const replaceLabel = useRef<string | null>(null);
+  const liveNutrition = useRef(new NutritionFrameAggregator());
   const totals = ingredientTotals(items);
 
   useEffect(() => {
@@ -112,15 +116,24 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
         worker.current = reader;
       }
       await reader.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: "1", user_defined_dpi: "300" });
-      const output = await reader.recognize(original, { rotateAuto: true });
+      const output = await reader.recognize(original, { rotateAuto: true }, { text: true, blocks: true });
       if (current !== generation.current) return;
-      let food = parseNutritionLabel(output.data.text);
+      const spatial = parseNutritionFrame(tesseractTextFrame(output.data, original.width, original.height));
+      let food: ScannedFood = spatial.calories.value !== null || spatial.protein.value !== null || spatial.carbs.value !== null || spatial.fat.value !== null ? {
+        name: "Scanned food", calories: spatial.calories.value, protein: spatial.protein.value, carbs: spatial.carbs.value, fats: spatial.fat.value,
+        basis: spatial.basis === "per_100g" ? "100 g / 100 ml — check the label" : spatial.servingSize.value ? `1 serving (${spatial.servingSize.value})` : "Serving size not detected — check the label", source: "label",
+      } : parseNutritionLabel(output.data.text);
       if (nutritionKeys.some(key => food[key] === null) || output.data.confidence < 75) {
         setStatus("Checking harder-to-read values...");
         await reader.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
-        const second = await reader.recognize(enhanceLabel(original), { rotateAuto: true });
+        const enhanced = enhanceLabel(original);
+        const second = await reader.recognize(enhanced, { rotateAuto: true }, { text: true, blocks: true });
         if (current !== generation.current) return;
-        const alternative = parseNutritionLabel(second.data.text);
+        const parsedAlternative = parseNutritionFrame(tesseractTextFrame(second.data, enhanced.width, enhanced.height));
+        const alternative: ScannedFood = parsedAlternative.calories.value !== null || parsedAlternative.protein.value !== null || parsedAlternative.carbs.value !== null || parsedAlternative.fat.value !== null ? {
+          name: "Scanned food", calories: parsedAlternative.calories.value, protein: parsedAlternative.protein.value, carbs: parsedAlternative.carbs.value, fats: parsedAlternative.fat.value,
+          basis: parsedAlternative.basis === "per_100g" ? "100 g / 100 ml — check the label" : parsedAlternative.servingSize.value ? `1 serving (${parsedAlternative.servingSize.value})` : "Serving size not detected — check the label", source: "label",
+        } : parseNutritionLabel(second.data.text);
         const count = (entry: ScannedFood) => nutritionKeys.filter(key => entry[key] !== null).length;
         // Different passes may interpret table columns differently. Do not mix bases.
         if (food.basis === alternative.basis) {
@@ -134,7 +147,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
     } finally { clearTimeout(timeout); if (current === generation.current) { readingJob.current = null; setBusy(false); setStatus(""); } }
   }
   async function startCamera() {
-    cancel(); const current = generation.current;
+    cancel(); liveNutrition.current.reset(); const current = generation.current;
     setError(""); setNotice(""); setStatus("Opening camera...");
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access needs HTTPS. Use a photo below, or open the published app.");
@@ -147,7 +160,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
       if (current !== generation.current) return;
       setHasTorch(Boolean(caps?.torch));
       if (caps?.zoom && caps.zoom.max > caps.zoom.min) setZoom({ ...caps.zoom, value: (track.getSettings() as MediaTrackSettings & { zoom?: number }).zoom ?? caps.zoom.min });
-      setCamera(true); setStatus("Keep the entire barcode inside the frame. Move back slightly if blurry.");
+      setCamera(true); setStatus(mode === "barcode" ? "Keep the entire barcode inside the frame. Move back slightly if blurry." : "Hold the complete Nutrition Facts table steady inside the frame.");
       if (!video.current) throw new Error("Camera preview unavailable. Try taking a photo instead.");
       video.current.srcObject = feed; await video.current.play();
       if (current !== generation.current) return;
@@ -155,15 +168,41 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
       const scan = async () => {
         if (current !== generation.current || !video.current || !stream.current) return;
         try {
-          const frame = videoFrame(video.current, "barcode", ++attempts % 3 !== 0);
-          const code = await decodeFoodBarcode(frame.getContext("2d")!.getImageData(0, 0, frame.width, frame.height));
-          if (current !== generation.current) return;
-          if (code) { void lookup(code); return; }
+          if (mode === "barcode") {
+            const frame = videoFrame(video.current, "barcode", ++attempts % 3 !== 0);
+            const code = await decodeFoodBarcode(frame.getContext("2d")!.getImageData(0, 0, frame.width, frame.height));
+            if (current !== generation.current) return;
+            if (code) { void lookup(code); return; }
+          } else {
+            const [{ createWorker, PSM }, frame] = await Promise.all([import("tesseract.js"), Promise.resolve(videoFrame(video.current, "label", true, 1400))]);
+            if (current !== generation.current) return;
+            let reader = worker.current;
+            if (!reader) {
+              setStatus("Preparing the on-device label reader…");
+              reader = await createWorker("eng", 1, { workerPath: scannerAsset("worker.min.js"), corePath: scannerAsset(""), langPath: scannerAsset(""), workerBlobURL: false });
+              if (current !== generation.current) { await reader.terminate(); return; }
+              worker.current = reader;
+              await reader.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, preserve_interword_spaces: "1", user_defined_dpi: "240" });
+            }
+            setStatus("Reading live label… hold steady");
+            const output = await reader.recognize(frame, { rotateAuto: false }, { text: true, blocks: true });
+            if (current !== generation.current) return;
+            const stable = liveNutrition.current.add(parseNutritionFrame(tesseractTextFrame(output.data, frame.width, frame.height, `live-${attempts++}`)));
+            const count = [stable.calories, stable.protein, stable.carbs, stable.fat].filter(field => field.value !== null).length;
+            setStatus(`${count}/4 nutrition values stable${hasReliableNutrition(stable) ? " — ready" : "; keep the label steady"}`);
+            if (hasReliableNutrition(stable)) {
+              stopCamera();
+              append({ name: "Scanned food", calories: stable.calories.value, protein: stable.protein.value, carbs: stable.carbs.value, fats: stable.fat.value,
+                basis: stable.servingSize.value ? `1 serving (${stable.servingSize.value})` : "Serving size not detected — check the label", source: "label" });
+              liveNutrition.current.reset(); return;
+            }
+          }
         } catch (err) {
           if (current !== generation.current) return;
+          if (mode === "label") { stopCamera(); setStatus(""); setError("Live label reading stopped. Take a label photo instead, or enter the values manually."); return; }
           if (attempts > 3 && err instanceof Error && /fetch|wasm|module/i.test(err.message)) { stopCamera(); setStatus(""); setError("The barcode reader could not load. Check your connection, then retry or enter the barcode digits."); return; }
         }
-        if (current === generation.current) loop.current = setTimeout(() => void scan(), 250);
+        if (current === generation.current) loop.current = setTimeout(() => void scan(), mode === "barcode" ? 250 : 650);
       };
       void scan();
     } catch (err) {
@@ -223,20 +262,22 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
     </View>
     <View style={{ paddingHorizontal: 18, gap: 10 }}>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        {(["barcode", "label"] as const).map(option => <SecondaryButton key={option} disabled={busy} style={{ flex: 1, backgroundColor: mode === option ? theme.colors.primaryTint : theme.colors.surface }} onPress={() => { cancel(); setMode(option); setError(""); setNotice(""); }}>{option === "barcode" ? "Barcode" : "Nutrition photo"}</SecondaryButton>)}
+        {(["barcode", "label"] as const).map(option => <SecondaryButton key={option} disabled={busy} style={{ flex: 1, backgroundColor: mode === option ? theme.colors.primaryTint : theme.colors.surface }} onPress={() => { cancel(); liveNutrition.current.reset(); setMode(option); setError(""); setNotice(""); }}>{option === "barcode" ? "Barcode" : "Nutrition label"}</SecondaryButton>)}
       </View>
-      <AppText size={12} muted>{mode === "barcode" ? "Scan a product, adjust its servings, then scan the next ingredient." : "Take a clear photo of the complete nutrition table. We’ll read it and add the values for you."}</AppText>
+      <AppText size={12} muted>{mode === "barcode" ? "Scan a product, adjust its servings, then scan the next ingredient." : "Hover over the complete Nutrition Facts table and hold steady. Values are accepted only after repeated frames agree."}</AppText>
       <div style={{ position: "relative", display: camera ? "block" : "none", height: "min(38dvh, 340px)", minHeight: 260, borderRadius: 20, overflow: "hidden", background: "#080a08" }}>
         <video ref={video} muted playsInline autoPlay aria-label="Food scanner camera preview" style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} />
-        <div aria-hidden style={{ position: "absolute", pointerEvents: "none", left: "5%", right: "5%", top: "25%", bottom: "25%", border: "2px solid #C6FF00", borderRadius: 12, boxShadow: "0 0 0 999px rgba(0,0,0,.25)" }} />
+        <div aria-hidden style={{ position: "absolute", pointerEvents: "none", left: mode === "barcode" ? "5%" : "10%", right: mode === "barcode" ? "5%" : "10%", top: mode === "barcode" ? "25%" : "10%", bottom: mode === "barcode" ? "25%" : "10%", border: "2px solid #C6FF00", borderRadius: 12, boxShadow: "0 0 0 999px rgba(0,0,0,.25)" }} />
       </div>
       {camera ? <>
         <View style={{ flexDirection: "row", gap: 8 }}>{hasTorch ? <SecondaryButton style={{ flex: 1 }} onPress={() => void cameraSetting("torch", !torch)}>{torch ? "Light off" : "Light on"}</SecondaryButton> : null}{zoom ? <label style={{ flex: 1, color: theme.colors.text, fontSize: 12 }}>Zoom<input type="range" aria-label="Camera zoom" min={zoom.min} max={Math.max(zoom.min, Math.min(zoom.max, 4))} step="0.1" value={zoom.value} onChange={event => void cameraSetting("zoom", Number(event.target.value))} style={{ width: "100%" }} /></label> : null}<SecondaryButton style={{ flex: 1 }} onPress={() => { generation.current++; stopCamera(); setStatus(""); }}>Stop camera</SecondaryButton></View>
-      </> : <PrimaryButton disabled={busy || items.length >= 100} onPress={() => mode === "label" ? file.current?.click() : void startCamera()}>{mode === "label" ? "Take nutrition label photo" : items.length ? "Scan next ingredient" : "Open camera"}</PrimaryButton>}
+      </> : <PrimaryButton disabled={busy || items.length >= 100} onPress={() => void startCamera()}>{mode === "label" ? "Scan nutrition label live" : items.length ? "Scan next ingredient" : "Open camera"}</PrimaryButton>}
       {mode === "label" ? <AppText size={10} muted>Use bright, even light and keep the entire table in focus. You can correct any value after it is read.</AppText> : null}
+      {mode === "label" && !camera ? <SecondaryButton disabled={busy || items.length >= 100} onPress={() => file.current?.click()}>Take or choose a label photo instead</SecondaryButton> : null}
       {status ? <AppText accessibilityLiveRegion="polite" muted size={12}>{status}</AppText> : null}
       {busy ? <SecondaryButton onPress={() => cancel()}>Cancel scan</SecondaryButton> : null}
       {error ? <AppText accessibilityLiveRegion="polite" color={theme.colors.danger}>{error}</AppText> : null}
+      {error && mode === "barcode" ? <SecondaryButton onPress={() => { setMode("label"); setError(""); setStatus(""); }}>Scan Nutrition Label</SecondaryButton> : null}
       {notice ? <AppText accessibilityLiveRegion="polite" size={12} muted>{notice}</AppText> : null}
     </View>
     <ScrollBody nativeID="food-scanner-scroll" style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 180 }}>
@@ -287,7 +328,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
     </ScrollBody>
     <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background, gap: 6 }}>
       {items.length > 0 && !totals.complete ? <AppText size={11} muted>Fill missing values to finish your ingredient list.</AppText> : null}
-      <PrimaryButton disabled={!totals.complete || busy} onPress={() => { cancel(true); onUse({ name: items.length === 1 ? items[0].name.trim() : "Scanned meal", calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fats: totals.fats, basis: "Total of selected ingredient servings", source: items.every(item => item.source === "barcode") ? "barcode" : items.some(item => item.source === "label") ? "label" : "manual" }, items); }}>Use ingredient totals</PrimaryButton>
+      <PrimaryButton disabled={!totals.complete || busy} onPress={() => { cancel(true); void Promise.all(items.map(rememberConfirmedIngredient)).catch(() => undefined); onUse({ name: items.length === 1 ? items[0].name.trim() : "Scanned meal", calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fats: totals.fats, basis: "Total of selected ingredient servings", source: items.every(item => item.source === "barcode") ? "barcode" : items.some(item => item.source === "label") ? "label" : "manual" }, items); }}>Use ingredient totals</PrimaryButton>
     </View>
   </View>;
 }
