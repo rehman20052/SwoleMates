@@ -16,7 +16,14 @@ function loadModule(file) {
   return exports;
 }
 const { createRecipeStore, recipeStorageKey } = loadModule('src/lib/recipe-storage.ts');
-const { createFoodJournal, foodJournalKey, sumFoodEntries } = loadModule('src/lib/food-journal.ts');
+const { createFoodJournal, foodJournalKey, sumFoodEntries, copyMealEntries } = loadModule('src/lib/food-journal.ts');
+test('meal copying preserves portions while assigning fresh IDs, destination date and meal', () => {
+  const source = [{ id: 'source', date: '2026-10-02', meal: 'Lunch', name: 'Rice', calories: 450, protein: 9, carbs: 90, fats: 1 },
+    { id: 'excluded', date: '2026-10-02', meal: 'Dinner', calories: 100 }];
+  const copied = copyMealEntries(source, '2026-10-02', 'Lunch', '2026-10-03', 'Dinner', () => 'fresh');
+  assert.deepEqual(plain(copied), [{ ...source[0], id: 'fresh', date: '2026-10-03', meal: 'Dinner' }]);
+  assert.equal(source[0].id, 'source');
+});
 const { createHiddenChatStore } = loadModule('src/lib/hidden-chats.ts');
 const { createDurableList } = loadModule('src/lib/durable-list.ts');
 const { mergeVerifiedLogs, workoutLogKey } = loadModule('src/lib/workout-log-sync.ts');

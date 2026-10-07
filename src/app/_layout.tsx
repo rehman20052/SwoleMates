@@ -20,14 +20,27 @@ import { VideoCompressorHost } from "@/components/video-compressor-host";
 import { AppDataProvider } from "@/state/app-data";
 import { ThemeProvider, useAppTheme } from "@/theme";
 import { PresenceProvider } from "@/lib/presence";
+import { PasswordRecovery } from "@/components/password-recovery";
+import { AppErrorBoundary } from "@/components/error-boundary";
+import { clearDiagnosticsPreference, diagnosticsPreference } from "@/lib/diagnostics";
+import { supabase } from "@/lib/supabase";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
+  useEffect(() => {
+    const {data} = supabase.auth.onAuthStateChange((_event,session) => {
+      clearDiagnosticsPreference();
+      if (session) void diagnosticsPreference(session.user.id).catch(() => undefined);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
   return (
+    <AppErrorBoundary>
     <ThemeProvider>
       <RootShell />
     </ThemeProvider>
+    </AppErrorBoundary>
   );
 }
 
@@ -71,12 +84,14 @@ function RootShell() {
       <AppDataProvider>
         <PresenceProvider>
           <PhoneFrame>
+            <PasswordRecovery>
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: theme.colors.background },
                 headerShown: false,
               }}
             />
+            </PasswordRecovery>
           </PhoneFrame>
           <VideoCompressorHost />
           <StatusBar style={theme.isDark ? "light" : "dark"} />

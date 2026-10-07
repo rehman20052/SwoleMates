@@ -22,6 +22,11 @@ export function sumFoodEntries(entries: FoodLogEntry[], date: string) {
   }), { calories: 0, protein: 0, carbs: 0, fats: 0 });
 }
 
+export function copyMealEntries(entries: FoodLogEntry[], sourceDate: string, sourceMeal: FoodLogEntry["meal"], destinationDate: string, destinationMeal: FoodLogEntry["meal"], makeId: () => string) {
+  return entries.filter(entry => entry.date === sourceDate && entry.meal === sourceMeal)
+    .map(entry => ({ ...entry, id: makeId(), date: destinationDate, meal: destinationMeal }));
+}
+
 export function createFoodJournal(storage: ListStorage) {
   return createDurableList(storage, foodJournalKey, isFoodEntry);
 }

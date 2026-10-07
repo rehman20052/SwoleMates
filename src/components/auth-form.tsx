@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
-import { AppText, Field, Input, PrimaryButton, Segmented } from "@/components/ui";
+import { AppText, Field, Input, PrimaryButton, SecondaryButton, Segmented } from "@/components/ui";
+import { requestPasswordRecovery } from "@/lib/account-controls";
 import { profileFromUser, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/theme";
@@ -168,6 +169,12 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
           "Log In"
         )}
       </PrimaryButton>
+      {mode === "login" ? <SecondaryButton disabled={submitting} onPress={async () => {
+        setError(null); setNotice(null); setSubmitting(true);
+        try { await requestPasswordRecovery(email); setNotice("If this email has an account, a recovery link will arrive shortly."); }
+        catch (error) { setError(error instanceof Error ? error.message : "Could not send recovery email."); }
+        finally { setSubmitting(false); }
+      }}>Forgot password?</SecondaryButton> : null}
     </View>
   );
 }

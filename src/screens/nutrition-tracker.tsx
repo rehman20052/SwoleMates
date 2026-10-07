@@ -1,7 +1,7 @@
 import { FoodScanner } from "@/components/food-scanner";
 import { ingredientTotals, scannedIngredient, type ScanIngredient } from "@/lib/food-scanner";
 import { HomeBackdrop } from "@/components/home-backdrop";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
@@ -74,8 +74,33 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
   const [carbs, setCarbs] = useState("");
   const [fats, setFats] = useState("");
   const [goalValues, setGoalValues] = useState({ calories: "", protein: "", carbs: "", fats: "" });
+  const { accountUserId, workspaceSettings, saveWorkspaceSetting, restoreFoodEntry, copyFoodMeal } = useAppData();
+  const [undo, setUndo] = useState<{ entry: FoodLogEntry; until: number } | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [copySource, setCopySource] = useState<Meal>("Breakfast");
+  const [copyDestination, setCopyDestination] = useState<Meal>("Breakfast");
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
+  useEffect(() => { if (!undo) return; const timer = setTimeout(() => setUndo(null), Math.max(0, undo.until - Date.now())); return () => clearTimeout(timer); }, [undo]);
+  useEffect(() => { setUndo(null); setShortcutError(null); }, [accountUserId]);
+  const favorites = workspaceSettings.flatMap(item => {
+    if (!item.id.startsWith("favorite-food:") || typeof item.value !== "object" || !item.value.content) return [];
+    try { const food = JSON.parse(item.value.content) as FoodLogEntry; return [{ settingId: item.id, food }]; } catch { return []; }
+  });
+  async function saveShortcut(id: string, content: string) {
+    if (!accountUserId) return false;
+    const saved = await saveWorkspaceSetting(id, content, accountUserId, Date.now());
+    setShortcutError(saved ? null : "Could not save this change."); return saved;
+  }
+  async function removeFood(entry: FoodLogEntry) {
+    if (await deleteFoodEntry(entry.id)) setUndo({ entry, until: Date.now() + 10000 });
+  }
 
   const journalDate = date ?? daysFromToday(0);
+  const completeSetting = workspaceSettings.find(item => item.id === `nutrition-day:${journalDate}`)?.value;
+  const dayComplete = typeof completeSetting === "object" && completeSetting.content === "complete";
+  const [jy,jm,jd] = journalDate.split("-").map(Number);
+  const yesterday = new Date(jy,jm-1,jd-1);
+  const yesterdayDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,"0")}-${String(yesterday.getDate()).padStart(2,"0")}`;
   const isToday = journalDate === daysFromToday(0);
   const [year, month, day] = journalDate.split("-").map(Number);
   const dayLabel = isToday ? "Today" : new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -446,6 +471,18 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
 
 
         {journalTab === "Journal" ? <View style={{ gap: 12 }}>
+        <SecondaryButton disabled={!foodJournalReady || journalDate > daysFromToday(0)} onPress={() => void saveShortcut(`nutrition-day:${journalDate}`, dayComplete ? "" : "complete")}>{dayComplete ? "Day complete ✓ · Mark incomplete" : "Mark day complete"}</SecondaryButton>
+        <AppText size={12} muted>{dayComplete ? "All meals for this day are logged." : "This day is unmarked; its totals may be partial."}</AppText>
+        <SecondaryButton onPress={() => setCopying(value => !value)}>Copy yesterday's meal</SecondaryButton>
+        {copying ? <TrainingCard padding={12} gap={10}><AppText weight="bold">Copy from {yesterdayDate} to {journalDate}</AppText><Field label="Source meal"><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} onPress={() => setCopySource(option)}>{copySource === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field><Field label="Destination meal"><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} onPress={() => setCopyDestination(option)}>{copyDestination === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field><PrimaryButton onPress={async () => {
+          const source = foodEntries.filter(entry => entry.date === yesterdayDate && entry.meal === copySource);
+          if (!source.length) { setShortcutError("No foods in that source meal."); return; }
+          if (!(await copyFoodMeal(yesterdayDate,copySource,journalDate,copyDestination))) return;
+          setCopying(false); setShortcutError(null);
+        }}>Copy meal</PrimaryButton></TrainingCard> : null}
+        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Favorite portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><SecondaryButton onPress={() => reuseFood({ key: settingId,source:"recent",food })}>{food.name} · {food.calories} cal</SecondaryButton><Pressable onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove favorite</AppText></Pressable></View>)}</TrainingCard> : null}
+        {undo ? <TrainingCard padding={12} gap={8}><AppText>{undo.entry.name} deleted</AppText><SecondaryButton onPress={async () => { if (Date.now() >= undo.until) { setUndo(null); return; } if (await restoreFoodEntry(undo.entry)) setUndo(null); }}>Undo (10 seconds)</SecondaryButton></TrainingCard> : null}
+        {shortcutError ? <AppText color={theme.colors.danger}>{shortcutError}</AppText> : null}
         <View style={[styles.sectionHeader, { flexWrap: "wrap", gap: 12 }]}>
           <View style={{ flex: 1, minWidth: 140 }}>
             <AppText size={20} weight="extrabold">Food journal</AppText>
@@ -477,7 +514,8 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                   <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${entry.name}`} onPress={() => openFoodEditor(entry)} style={{ minHeight: 44, justifyContent: "center", flex: 1 }}>
                     <AppText size={12} weight="bold" primary>Edit food</AppText>
                   </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${entry.name}`} onPress={() => deleteFoodEntry(entry.id)} style={{ minHeight: 44, justifyContent: "center" }}><AppText size={12} color={theme.colors.danger}>Delete</AppText></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Favorite ${entry.name} portion`} onPress={() => void saveShortcut(`favorite-food:${entry.id}`,JSON.stringify(entry))} style={{ minHeight:44,justifyContent:"center" }}><AppText size={12} primary>Favorite portion</AppText></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${entry.name}`} onPress={() => void removeFood(entry)} style={{ minHeight: 44, justifyContent: "center" }}><AppText size={12} color={theme.colors.danger}>Delete</AppText></Pressable>
                   </View> : null}
                 </View>
               ))}
@@ -651,7 +689,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                 </View> : <>
                   {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
                 </>}
-                {!buildFromIngredients && !savingNewRecipe && !editingFood && addFoodTab === "Food" ? <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, zIndex: 20 }}>
+                {!buildFromIngredients && !savingNewRecipe && !editingFood && addFoodTab === "Food" ? <View style={{ gap: 12 }}>
                   <View style={{ flex: 1, gap: 7 }}><AppText size={12} weight="bold" muted>MEAL</AppText><View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View></View>
                   <FoodSearch entries={[]} recipes={[]} ready onSelect={useCommonFood} mode="find" compact />
                 </View> : <Field label="Meal">
