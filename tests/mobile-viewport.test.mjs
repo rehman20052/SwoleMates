@@ -80,7 +80,7 @@ test("reveals food results with the search field inside a keyboard-sized ingredi
   const scroller = { overflow: "auto", scrollHeight: 1600, clientHeight: 350, scrollTop: 0,
     parentElement: app.document.body, getBoundingClientRect: () => ({ top: 100, bottom: 450 }) };
   const results = { getBoundingClientRect: () => ({ bottom: 710 - scroller.scrollTop }) };
-  app.document.activeElement = { matches: () => true, parentElement: scroller,
+  app.document.activeElement = { value: "chicken", matches: () => true, parentElement: scroller,
     closest: () => ({ querySelector: () => results }),
     getBoundingClientRect: () => ({ top: 390 - scroller.scrollTop, bottom: 436 - scroller.scrollTop }) };
   app.viewport.height = 450;

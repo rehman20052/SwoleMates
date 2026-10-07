@@ -31,10 +31,13 @@
         var top = Math.max(box.top, viewport.offsetTop) + 12;
         // Use the available space for results, keeping the search at the top
         // when the full list cannot fit above the keyboard.
-        var desiredBottom = results ? results.getBoundingClientRect().bottom : input.bottom;
-        desiredBottom = Math.min(desiredBottom, input.top + Math.max(0, bottom - top));
-        if (desiredBottom > bottom) parent.scrollTop += desiredBottom - bottom;
-        else if (input.top < top) parent.scrollTop -= top - input.top;
+        var hasResults = results && field.value && field.value.trim();
+        var desiredBottom = hasResults ? results.getBoundingClientRect().bottom : input.bottom;
+        // Compute one bounded correction. Alternating bottom/top corrections
+        // made long result lists jump on successive viewport events.
+        var correction = Math.max(0, desiredBottom - bottom);
+        correction = Math.min(correction, input.top - top);
+        if (Math.abs(correction) > 1) parent.scrollTop += correction;
         break;
       }
       parent = parent.parentElement;
@@ -137,7 +140,8 @@
     var button = event.target.closest && event.target.closest('[role="button"], button');
     // Composer buttons are siblings of their input. Keep focus while sending,
     // but allow navigation and unrelated buttons to dismiss the keyboard.
-    if (editor(field) && button && field.parentElement.contains(button)) event.preventDefault();
+    var lookup = field && field.closest && field.closest('[data-food-lookup]');
+    if (editor(field) && button && (field.parentElement.contains(button) || (lookup && lookup.contains(button)))) event.preventDefault();
   });
   update();
 })();

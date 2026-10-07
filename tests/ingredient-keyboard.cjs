@@ -136,6 +136,17 @@ const assert = require('node:assert/strict');
     await search.fill('rice');
     await page.waitForTimeout(600);
     await page.getByRole('button', { name: /^Use common food/ }).first().click();
+    await keyboardViewport(null, 0);
+    await page.getByPlaceholder('e.g. Chicken burrito').fill('Mixed breakfast');
+    await page.getByRole('button', { name: 'Add ingredient', exact: true }).click();
+    const manual = page.getByRole('button', { name: 'Remove ingredient 2', exact: true }).locator('..').locator('..');
+    await manual.getByPlaceholder('e.g. Chicken breast').fill('Manual eggs');
+    const macros = manual.getByPlaceholder('0', { exact: true });
+    for (const [index, value] of ['140', '12', '0', '10'].entries()) await macros.nth(index).fill(value);
+    await page.getByRole('button', { name: 'Add to today', exact: true }).click();
+    await page.waitForTimeout(500);
+    await page.getByText('Mixed breakfast', { exact: true }).first().waitFor();
+    assert.equal(await page.getByPlaceholder('e.g. Chicken burrito').count(), 0, 'mixed meal saves and closes the form');
     console.log('Ingredient keyboard browser check passed:', geometry);
   } finally {
     if (browser) await browser.close();
