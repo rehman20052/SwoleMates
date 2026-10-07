@@ -41,11 +41,12 @@ function safetyError(error: { message?: string; code?: string } | null, fallback
 }
 
 export async function blockedUserIds() {
-  const me = await signedInUserId().catch(() => null);
-  if (!me) return new Set<string>();
-  const { data, error } = await supabase.from("block").select("blocked_id").eq("user_id", me);
-  if (error) return new Set<string>();
-  return new Set((data ?? []).map((row) => row.blocked_id).filter((id): id is string => Boolean(id)));
+  await signedInUserId();
+  const { data, error } = await supabase.rpc("blocked_contact_ids");
+  if (error) throw new Error(error.code === "PGRST202" || error.code === "42883"
+    ? "Safety setup is pending. The project administrator must apply supabase/reliability-safety.sql before contact features can be enabled."
+    : "Safety protection could not be checked. Reconnect and try again.");
+  return new Set<string>((data ?? []).map((row: { person: string }) => row.person));
 }
 
 export async function listBlockedPeople(): Promise<BlockedPerson[]> {
@@ -72,35 +73,11 @@ export async function listBlockedPeople(): Promise<BlockedPerson[]> {
   }));
 }
 
-async function hideMatch(userId: string, me: string) {
-  const { data } = await supabase.rpc("my_connections");
-  for (const row of (data ?? []) as { id?: string; other_user_id?: string; status?: string; direction?: string }[]) {
-    if (!row.id || row.other_user_id !== userId) continue;
-    if (row.status === "accepted") {
-      await supabase
-        .from("match_requests")
-        .update({ status: "unmatched", ended_at: new Date().toISOString(), ended_by: me })
-        .eq("id", row.id)
-        .eq("status", "accepted");
-    } else if (row.status === "pending" && row.direction === "outgoing") {
-      await supabase.from("match_requests").delete().eq("id", row.id);
-    } else if (row.status === "pending") {
-      await supabase.from("match_requests").update({ status: "declined" }).eq("id", row.id);
-    }
-  }
-}
-
 export async function blockPerson(userId: string) {
-  const me = await signedInUserId();
-  if (me === userId) throw new Error("You can't block yourself.");
-  const { error } = await supabase.from("block").insert({ user_id: me, blocked_id: userId });
-  if (error) {
-    const mapped = safetyError(error, "Could not block that person.");
-    if (mapped) throw mapped;
-  }
-  await hideMatch(userId, me);
+  await signedInUserId();
+  const { error } = await supabase.rpc("block_contact", { person: userId });
+  if (error) throw new Error(error.message || "Could not block that person.");
 }
-
 export async function unblockPerson(userId: string) {
   const me = await signedInUserId();
   const { error } = await supabase.from("block").delete().eq("user_id", me).eq("blocked_id", userId);
