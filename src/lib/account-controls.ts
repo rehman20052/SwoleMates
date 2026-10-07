@@ -28,8 +28,17 @@ export async function deleteAccount(password: string) {
   if (error || !data.user) throw new Error("Sign in again before deleting your account.");
   const owner = data.user.id;
   const result = await supabase.functions.invoke("delete-account", { body: { password, confirm: "DELETE" } });
-  if (result.error || !result.data?.deleted) throw new Error("Account deletion did not complete. Please try again.");
-  const keys = (await AsyncStorage.getAllKeys()).filter(key => key.includes(`.${owner}.`) || key.endsWith(`.${owner}`));
-  await AsyncStorage.multiRemove(keys);
-  await supabase.auth.signOut({ scope: "local" });
+  if (result.error || !result.data?.deleted) {
+    const status = (result.error as { context?: { status?: number } } | null)?.context?.status;
+    if (status === 403) throw new Error("Password confirmation failed. Check your password and try again.");
+    if (status === 404) throw new Error("Account deletion is temporarily unavailable. Please try again later.");
+    throw new Error("Account deletion did not complete. Please try again.");
+  }
+  try {
+    const keys = (await AsyncStorage.getAllKeys()).filter(key => key.includes(`.${owner}.`) || key.endsWith(`.${owner}`));
+    await AsyncStorage.multiRemove(keys);
+  } finally {
+    const { data: current } = await supabase.auth.getSession();
+    if (current.session?.user.id === owner) await supabase.auth.signOut({ scope: "local" });
+  }
 }

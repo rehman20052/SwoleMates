@@ -11,9 +11,10 @@ export type Route =
   | { name: "social-profile"; userId: string }
   | { name: "schedule"; partnerId?: string }
   | { name: "scheduled"; workoutId: string }
-  | { name: "nutrition"; date?: string };
+  | { name: "nutrition"; date?: string }
+  | { name: "delete-account" };
 
-export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "social-profile", "schedule", "scheduled"];
+export const fullScreenRoutes: Route["name"][] = ["chat", "request-profile", "social-profile", "schedule", "scheduled", "delete-account"];
 
 type Navigation = {
   push: (route: Route) => void;

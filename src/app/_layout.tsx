@@ -22,7 +22,7 @@ import { ThemeProvider, useAppTheme } from "@/theme";
 import { PresenceProvider } from "@/lib/presence";
 import { PasswordRecovery } from "@/components/password-recovery";
 import { AppErrorBoundary } from "@/components/error-boundary";
-import { clearDiagnosticsPreference, diagnosticsPreference } from "@/lib/diagnostics";
+import { clearDiagnosticsPreference } from "@/lib/diagnostics";
 import { supabase } from "@/lib/supabase";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -34,7 +34,6 @@ export default function RootLayout() {
       if (event === "PASSWORD_RECOVERY") setRecoveryAccepted(Boolean(session));
       if (event === "SIGNED_OUT") setRecoveryAccepted(false);
       clearDiagnosticsPreference();
-      if (session) void diagnosticsPreference(session.user.id).catch(() => undefined);
     });
     return () => data.subscription.unsubscribe();
   }, []);

@@ -5,18 +5,22 @@ Deno.serve(async request => {
   if (request.method === "OPTIONS") return new Response(null,{headers:cors});
   if (request.method !== "POST") return respond(405,{error:"Method not allowed"});
   const url = Deno.env.get("SUPABASE_URL")!;
-  const client = createClient(url,Deno.env.get("SUPABASE_ANON_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
   const token = request.headers.get("Authorization")?.replace(/^Bearer\s+/i,"");
   if (!token) return respond(401,{error:"Sign in required"});
+  const client = createClient(url,Deno.env.get("SUPABASE_ANON_KEY")!,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:`Bearer ${token}`}}});
   const {data:identity,error:identityError} = await client.auth.getUser(token);
   if (identityError || !identity.user?.email) return respond(401,{error:"Sign in required"});
   let body;
   try { body = await request.json(); } catch { return respond(400,{error:"Invalid request"}); }
-  if (body.action === "capabilities") return respond(200,{available:true});
+  if (!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return respond(503,{error:"Deletion unavailable"});
+  const admin = createClient(url,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+  if (body.action === "capabilities") {
+    const {data,error} = await client.rpc("account_controls_available");
+    return respond(200,{available:!error && data===true});
+  }
   if (body.confirm !== "DELETE" || typeof body.password !== "string" || body.password.length>256) return respond(400,{error:"Confirmation required"});
   const {data:verified,error:passwordError} = await client.auth.signInWithPassword({email:identity.user.email,password:body.password});
   if (passwordError || verified.user?.id!==identity.user.id) return respond(403,{error:"Password confirmation failed"});
-  const admin = createClient(url,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
   const owner = identity.user.id;
   try {
     // Only delete object paths within this verified owner's UUID directory.
