@@ -75,6 +75,21 @@ test("document pageTop accounts for native document pan as well as the visual of
   assert.equal(app.styles.has("--app-viewport-top"), false);
 });
 
+test("reveals food results with the search field inside a keyboard-sized ingredient sheet", () => {
+  const app = setup();
+  const scroller = { overflow: "auto", scrollHeight: 1600, clientHeight: 350, scrollTop: 0,
+    parentElement: app.document.body, getBoundingClientRect: () => ({ top: 100, bottom: 450 }) };
+  const results = { getBoundingClientRect: () => ({ bottom: 710 - scroller.scrollTop }) };
+  app.document.activeElement = { matches: () => true, parentElement: scroller,
+    closest: () => ({ querySelector: () => results }),
+    getBoundingClientRect: () => ({ top: 390 - scroller.scrollTop, bottom: 436 - scroller.scrollTop }) };
+  app.viewport.height = 450;
+  app.resize(); app.settle();
+  assert.equal(scroller.scrollTop, 272);
+  assert.ok(app.document.activeElement.getBoundingClientRect().top >= 112);
+  assert.ok(results.getBoundingClientRect().bottom <= 438);
+});
+
 test("reveals an ingredient search after its modal finishes shrinking for the keyboard", () => {
   const app = setup();
   const scroller = { overflow: "auto", scrollHeight: 1600, clientHeight: 700, scrollTop: 0,
