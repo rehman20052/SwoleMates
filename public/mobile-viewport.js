@@ -24,9 +24,14 @@
       if ((overflow === "auto" || overflow === "scroll") && parent.scrollHeight > parent.clientHeight) {
         var box = parent.getBoundingClientRect();
         var input = field.getBoundingClientRect();
+        var lookup = field.closest && field.closest('[data-food-lookup]');
+        var results = lookup && lookup.querySelector('[data-food-results]');
         var bottom = Math.min(box.bottom, viewport.offsetTop + viewport.height) - 12;
         var top = Math.max(box.top, viewport.offsetTop) + 12;
-        if (input.bottom > bottom) parent.scrollTop += input.bottom - bottom;
+        // Reveal the first selectable result while keeping the search field visible.
+        var desiredBottom = results ? Math.min(results.getBoundingClientRect().bottom, input.bottom + 100) : input.bottom;
+        desiredBottom = Math.min(desiredBottom, input.top + Math.max(0, bottom - top));
+        if (desiredBottom > bottom) parent.scrollTop += desiredBottom - bottom;
         else if (input.top < top) parent.scrollTop -= top - input.top;
         break;
       }
@@ -91,6 +96,7 @@
   window.addEventListener("focus", recover);
   window.addEventListener("resize", schedule);
   document.addEventListener("focusin", schedule);
+  document.addEventListener("food-search-updated", schedule);
   document.addEventListener("focusout", function () { schedule(); recover(); });
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) recover();

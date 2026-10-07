@@ -3,11 +3,10 @@ export type CommonFood = { id: string; name: string; per100g: { calories: number
 export type FoodChoice = { key: string; source: "recent" | "recipe"; food: SavedMeal | FoodLogEntry; lastLogged?: string }
   | { key: string; source: "common"; food: CommonFood };
 const normalize = (name: string) => name.trim().toLocaleLowerCase().replace(/\s+/g, " ");
-const preparationWords = new Set(["peeled", "raw", "fresh", "plain"]);
 const cookedForms: Record<string, string[]> = {
   cooked: ["cooked", "boiled", "baked", "roasted", "grilled", "fried", "steamed", "broiled", "sauteed"],
-  boiled: ["boiled", "cooked"], baked: ["baked", "cooked"], roasted: ["roasted", "cooked"],
-  grilled: ["grilled", "broiled", "cooked"], fried: ["fried", "cooked"], steamed: ["steamed", "cooked"],
+  raw: ["raw", "uncooked"], boiled: ["boiled"], baked: ["baked"], roasted: ["roasted"],
+  grilled: ["grilled"], fried: ["fried"], steamed: ["steamed"], broiled: ["broiled"], sauteed: ["sauteed"],
 };
 const matchesWord = (name: string, word: string) => (cookedForms[word] ?? [word]).some(candidate =>
   cookedForms[word] ? new RegExp(`(^|[^a-z])${candidate}([^a-z]|$)`).test(name) : name.includes(candidate));
@@ -27,7 +26,7 @@ export function foodChoices(entries: FoodLogEntry[], recipes: SavedMeal[], query
   const words = normalize(query).split(" ").filter(Boolean);
   const personal = [...recent, ...saved].filter(choice => words.every(word => normalize(choice.food.name).includes(word)));
   if (!words.length) return personal;
-  const commonWords = words.filter(word => !preparationWords.has(word));
+  const commonWords = words;
   const common = catalog
     .filter(food => commonWords.every(word => matchesWord(normalize(food.name), word)))
     .sort((a, b) => {
