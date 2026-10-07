@@ -410,8 +410,8 @@ erDiagram
 
 - `discover_people()`: Returns people within 50 miles with a rounded distance. Reads `discover_profiles` today. A paused profile stays saved and is left out of everyone else's results.
 - `my_connections()`: Lists your requests and matches with the other person's card and last message.
-- `send_match_request(to_user_id)`: Sends a request, accepts theirs if they already asked, and reopens declined or unmatched ones.
-- `collapse_mutual_requests()`: Turns two requests between the same people into one match.
+- `send_match_request(target_user)`: Sends a request and automatically accepts only a current reciprocal pending request. Reopened declined or unmatched connections require fresh acceptance.
+- `transition_match(request_id, action)`: Validates participant ownership and current status for accept, decline, cancel and unmatch. Legacy `collapse_mutual_requests()` access is revoked when present.
 - `shares_posts_with(author)`: True for you, and for your matches when neither of you blocked the other. The Social read rules use it.
 - `can_see_post(target_post)`: True when you can see that post.
 - `social_people(people)`: Names and main photos for people in your feed: your matches, and anyone who commented on a post you can see.

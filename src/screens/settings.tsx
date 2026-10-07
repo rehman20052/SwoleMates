@@ -35,10 +35,37 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const [deletionReady, setDeletionReady] = useState(false);
   useEffect(() => {
     let active = true;
-    if (accountUserId) void diagnosticsPreference(accountUserId).then(value => { if (active) setDiagnostics(value); });
-    void supabase.rpc("account_controls_available").then(({data,error}) => { if (active) setControlsReady(!error && data === true); });
-    void supabase.functions.invoke("delete-account",{body:{action:"capabilities"}}).then(({data,error}) => { if (active) setDeletionReady(!error && data?.available === true); });
-    return () => { active=false; };
+    let checking = false;
+    setControlsReady(false); setDeletionReady(false); setDiagnostics(false);
+    setDeleteStage(0); setDeletePassword(""); setAccountMessage(null);
+    if (accountUserId) void diagnosticsPreference(accountUserId)
+      .then(value => { if (active) setDiagnostics(value); })
+      .catch(() => { if (active) setAccountMessage("Could not read diagnostic preference."); });
+    const check = async () => {
+      if (!accountUserId || checking) return;
+      checking = true;
+      try {
+        const results = await Promise.allSettled([
+          supabase.rpc("account_controls_available"),
+          supabase.functions.invoke("delete-account", { body: { action: "capabilities" } }),
+        ]);
+        if (!active) return;
+        const [controls, deletion] = results;
+        setControlsReady(controls.status === "fulfilled" && !controls.value.error && controls.value.data === true);
+        setDeletionReady(deletion.status === "fulfilled" && !deletion.value.error && deletion.value.data?.available === true);
+      } finally { checking = false; }
+    };
+    const wake = () => { void check(); };
+    wake();
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", wake); window.addEventListener("focus", wake);
+    }
+    return () => {
+      active = false;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", wake); window.removeEventListener("focus", wake);
+      }
+    };
   }, [accountUserId]);
 
   useEffect(() => {

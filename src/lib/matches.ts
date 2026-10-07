@@ -451,14 +451,7 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
   if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Home settings before matching again.");
 
-  // This database names the argument to_user_id. A newer script renames it to
-  // target_user so it does not clash with the column. Calling the missing name
-  // never returns, so try the live name first.
-  let { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
-  if (error && `${error.message} ${error.hint ?? ""}`.includes("target_user")) {
-    const retry = await supabase.rpc("send_match_request", { target_user: toUserId });
-    error = retry.error;
-  }
+  const { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
   if (error) throw setupError(error);
   notifyChatAlerts();
 }
