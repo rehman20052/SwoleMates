@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Platform, Pressable, View, type ViewProps } from "react-native";
 import { AppText, Icon, Input, SecondaryButton } from "./ui";
 import { TrainingCard } from "./training-card";
 import { icons } from "@/assets";
@@ -17,11 +17,13 @@ export function FoodSearch({ entries, recipes, ready, onSelect, mode = "recent",
   const [limit, setLimit] = useState(3);
   const finding = mode === "find";
   const choices = useMemo(() => foodChoices(finding ? [] : entries, finding ? [] : recipes, query, finding ? commonFoods : []), [entries, recipes, query, finding]);
-  if (compact && finding) return <View style={{ width: "42%", minWidth: 150, gap: 7, zIndex: 30 }}>
-    <AppText size={12} weight="bold" muted>LOOK UP FOOD MACROS</AppText>
+  useEffect(() => { if (Platform.OS === "web" && typeof document !== "undefined") document.dispatchEvent(new Event("food-search-updated")); }, [query, limit, choices.length]);
+  if (compact && finding) return <View {...({ dataSet: { foodLookup: "true" } } as ViewProps)} style={{ width: "100%", gap: 7 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Icon source={icons.zap} size={18} tint={theme.colors.accent} /><AppText size={13} weight="bold">Look up food macros</AppText></View>
     <Input bordered placeholder="Search foods" accessibilityLabel="Look up food macros" value={query} onChangeText={value => { setQuery(value); setLimit(3); }} />
-    {query.trim() ? <View style={{ paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, maxHeight: 220, overflow: "hidden" }}>
-      {!ready ? <AppText size={11} muted>Loading foods...</AppText> : choices.length ? choices.slice(0, limit).map(choice => choice.source === "common" ? <Pressable key={choice.key} accessibilityRole="button" accessibilityLabel={`Use common food ${choice.food.name}`} onPress={() => { onSelect(choice); setQuery(""); setLimit(3); }} style={({ pressed }) => ({ paddingVertical: 9, borderBottomWidth: 1, borderColor: theme.colors.border, backgroundColor: pressed ? theme.colors.primaryTint : "transparent" })}><AppText size={12} weight="bold" numberOfLines={1}>{choice.food.name}</AppText><AppText size={10} muted>{choice.food.per100g.calories} cal · {choice.food.per100g.protein}g protein / 100g</AppText></Pressable> : null) : <AppText size={11} muted>No foods found. Try another name.</AppText>}
+    {query.trim() ? <View {...({ dataSet: { foodResults: "true" } } as ViewProps)} style={{ paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
+      {!ready ? <AppText size={11} muted>Loading foods...</AppText> : choices.length ? choices.slice(0, limit).map(choice => choice.source === "common" ? <Pressable key={choice.key} accessibilityRole="button" accessibilityLabel={`Use common food ${choice.food.name}`} onPress={() => { onSelect(choice); setQuery(""); setLimit(3); }} style={({ pressed }) => ({ paddingVertical: 9, borderBottomWidth: 1, borderColor: theme.colors.border, backgroundColor: pressed ? theme.colors.primaryTint : "transparent" })}><AppText size={12} weight="bold">{choice.food.name}</AppText><AppText size={10} muted>{choice.food.per100g.calories} cal · {choice.food.per100g.protein}g protein · per 100 g</AppText></Pressable> : null) : <AppText size={11} muted>No foods found. Try another name.</AppText>}
+      {choices.length > limit ? <SecondaryButton height={34} fontSize={12} onPress={() => setLimit(value => value + 10)}>Show more foods ({choices.length - limit})</SecondaryButton> : null}
     </View> : null}
   </View>;
   const content = <>
@@ -43,6 +45,6 @@ export function FoodSearch({ entries, recipes, ready, onSelect, mode = "recent",
     </> : query.trim() || !finding ? <AppText size={12} muted>{query.trim() ? (finding ? "No common food found. Try a simpler name." : "No matching foods or recipes. Use Add food to enter something new.") : "Foods you log will appear here. Your saved recipes are searchable here too."}</AppText> : null}
   </>;
   return finding
-    ? <View style={{ gap: 8, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border }}>{content}</View>
+    ? <View {...({ dataSet: { foodLookup: "true" } } as ViewProps)} style={{ gap: 8, padding: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border }}>{content}</View>
     : <TrainingCard padding={16} gap={12}>{content}</TrainingCard>;
 }
