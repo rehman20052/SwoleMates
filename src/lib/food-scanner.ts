@@ -1,20 +1,20 @@
 export type ScannedFood = {
   name: string; calories: number | null; protein: number | null; carbs: number | null; fats: number | null;
-  basis: string; source: "barcode" | "label" | "manual";
+  basis: string; source: "barcode" | "label" | "manual"; barcode?: string;
 };
 export const nutritionKeys = ["calories", "protein", "carbs", "fats"] as const;
 export type ScanIngredient = {
   id: string; name: string; basis: string; source: ScannedFood["source"]; servings: string;
-  calories: string; protein: string; carbs: string; fats: string;
+  calories: string; protein: string; carbs: string; fats: string; barcode?: string;
 };
 export function scannedIngredient(food: ScannedFood): ScanIngredient {
   return { id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, name: food.name,
-    basis: food.basis, source: food.source, servings: "1", ...Object.fromEntries(nutritionKeys.map(key => [key, food[key] === null ? "" : String(food[key])])) } as ScanIngredient;
+    basis: food.basis, source: food.source, barcode: food.barcode, servings: "1", ...Object.fromEntries(nutritionKeys.map(key => [key, food[key] === null ? "" : String(food[key])])) } as ScanIngredient;
 }
 export function validScanIngredients(value: unknown): value is ScanIngredient[] {
   return Array.isArray(value) && value.length <= 100 && value.every(item => item &&
     ["id", "name", "basis", "servings", ...nutritionKeys].every(key => typeof item[key] === "string") &&
-    ["barcode", "label", "manual"].includes(item.source));
+    ["barcode", "label", "manual"].includes(item.source) && (item.barcode === undefined || typeof item.barcode === "string"));
 }
 export function ingredientTotals(items: ScanIngredient[]) {
   // Keep unknown values unknown, rather than quietly counting them as zero.
@@ -54,13 +54,19 @@ export function barcodeProduct(data: unknown): ScannedFood {
 }
 const barcodeCache = new Map<string, ScannedFood>();
 export async function lookupBarcode(code: string, signal?: AbortSignal): Promise<ScannedFood> {
-  if (!/^\d{8}$|^\d{12,14}$/.test(code)) throw new Error("Enter an 8, 12, 13, or 14 digit food barcode.");
-  if (barcodeCache.has(code)) return { ...barcodeCache.get(code)! };
-  const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_en,nutriments,serving_size,serving_quantity,serving_quantity_unit`, { signal });
+  const [{ normalizeBarcode }, { rememberedProduct }] = await Promise.all([import("@/scanning/barcodes"), import("@/scanning/product-memory")]);
+  const normalized = normalizeBarcode(code);
+  const key = normalized.gtin14;
+  if (barcodeCache.has(key)) return { ...barcodeCache.get(key)! };
+  const remembered = await rememberedProduct(normalized.value);
+  if (remembered) return { name: remembered.name ?? "Scanned food", calories: remembered.calories, protein: remembered.protein, carbs: remembered.carbs, fats: remembered.fat,
+    basis: remembered.basis === "per_100g" ? "100 g / 100 ml — check the package" : remembered.servingSize ? `1 serving (${remembered.servingSize})` : "1 serving — check the package", source: "barcode", barcode: key };
+  const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(normalized.value)}.json?fields=product_name,product_name_en,nutriments,serving_size,serving_quantity,serving_quantity_unit`, { signal });
   if (!response.ok) throw new Error(response.status === 429 ? "Product lookup is busy. Try again shortly or photograph the label." : "Could not look up this barcode. Check your connection or photograph the label.");
   const food = barcodeProduct(await response.json());
+  food.barcode = normalized.gtin14;
   if (barcodeCache.size >= 100) barcodeCache.delete(barcodeCache.keys().next().value!);
-  barcodeCache.set(code, food);
+  barcodeCache.set(key, food);
   return { ...food };
 }
 export function parseNutritionLabel(text: string): ScannedFood {
