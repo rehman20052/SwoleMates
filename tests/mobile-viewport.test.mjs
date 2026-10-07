@@ -75,6 +75,21 @@ test("document pageTop accounts for native document pan as well as the visual of
   assert.equal(app.styles.has("--app-viewport-top"), false);
 });
 
+test("reveals an ingredient search after its modal finishes shrinking for the keyboard", () => {
+  const app = setup();
+  const scroller = { overflow: "auto", scrollHeight: 1600, clientHeight: 700, scrollTop: 0,
+    parentElement: app.document.body, getBoundingClientRect: () => ({ top: 80, bottom: 80 + scroller.clientHeight }) };
+  app.document.activeElement = { matches: () => true, parentElement: scroller,
+    getBoundingClientRect: () => ({ top: 420 - scroller.scrollTop, bottom: 466 - scroller.scrollTop }) };
+  app.viewport.height = 500;
+  app.resize();
+  // The sheet's layout settles after the viewport event, without another resize.
+  scroller.clientHeight = 300;
+  app.settle();
+  assert.equal(scroller.scrollTop, 98);
+  assert.ok(app.document.activeElement.getBoundingClientRect().bottom <= 368);
+});
+
 test("keeps composer focus on Send but permits unrelated buttons", () => {
   const app = setup();
   const send = {};

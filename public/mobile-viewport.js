@@ -4,6 +4,7 @@
   if (!viewport) return; // CSS dynamic viewport sizing remains the fallback.
   var frame = 0;
   var revealTimer = 0;
+  var settledRevealTimer = 0;
   var restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
   var touch = null;
   var recoveryTimers = [];
@@ -67,7 +68,10 @@
     // Position surfaces without scrolling the document during keyboard events.
     // Only their inner scroller may reveal a field; no native pan/reset loop.
     clearTimeout(revealTimer);
+    clearTimeout(settledRevealTimer);
     revealTimer = setTimeout(revealField, 120);
+    // Recheck after the keyboard and modal slide have finished resizing.
+    settledRevealTimer = setTimeout(revealField, 350);
   }
 
   function schedule() {

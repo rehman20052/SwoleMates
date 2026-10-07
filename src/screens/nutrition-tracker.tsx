@@ -39,7 +39,7 @@ function macroLabel(macro: Macro) {
   return macro === "fats" ? "Fat" : macro[0].toUpperCase() + macro.slice(1);
 }
 
-export function NutritionTrackerScreen({ embedded = false, header, date, onScrolledChange }: { embedded?: boolean; header?: ReactNode; date?: string; onScrolledChange?: (scrolled: boolean) => void }) {
+export function NutritionTrackerScreen({ embedded = false, header, date }: { embedded?: boolean; header?: ReactNode; date?: string }) {
   const theme = useAppTheme();
   const frame = useWindowDimensions();
   const nav = useNavigation();
@@ -417,7 +417,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
   }
 
   const journal = (
-      <ScrollBody contentContainerStyle={[styles.body, { paddingBottom: 104 }]} onScroll={(event) => onScrolledChange?.(event.nativeEvent.contentOffset.y > 8)}>
+      <ScrollBody contentContainerStyle={[styles.body, { paddingBottom: 104 }]}>
         {!nutritionPlanReady ? <AppText muted>Loading saved daily targets...</AppText> : null}
         {nutritionPlanError ? <AppText color={theme.colors.danger}>{nutritionPlanError}</AppText> : null}
         {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
@@ -606,7 +606,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
         <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
           <Pressable style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]} onPress={() => setShowAddFood(false)}>
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-              <ScrollBody contentContainerStyle={styles.sheetBody}>
+              <ScrollBody style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={styles.sheetBody}>
                 <View style={styles.sheetHeader}>
                   <View><SectionLabel>{savingNewRecipe ? "Saved recipes" : dayLabel}</SectionLabel><AppText size={23} weight="black">{savingNewRecipe ? "Save recipe" : editingFood ? "Edit food" : "Add food"}</AppText></View>
                   <Pressable accessibilityRole="button" accessibilityLabel={savingNewRecipe ? "Close recipe form" : "Close add food"} onPress={() => setShowAddFood(false)}><AppText size={25} muted>×</AppText></Pressable>
@@ -650,7 +650,12 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                       <View style={{ flex: 1, gap: 2 }}><AppText size={14} weight="bold">Ingredients</AppText><AppText size={11} muted>Look up macros in each ingredient, or enter nutrition by hand.</AppText></View>
                     </View>
                   </View>
-                  {scannedIngredients.map((item, index) => <View key={item.id} style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
+                  {scannedIngredients.map((item, index) => {
+                    const catalogFood = item.basis === "100 g";
+                    const portionMacros = catalogFood ? ingredientTotals([item]) : null;
+                    const displayedMacro = (key: "calories" | "protein" | "carbs" | "fats") =>
+                      portionMacros ? (portionMacros[key] === null ? "" : String(portionMacros[key])) : item[key];
+                    return <View key={item.id} style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <AppText size={14} weight="bold">Ingredient {index + 1}</AppText>
                       <Pressable accessibilityRole="button" accessibilityLabel={`Remove ingredient ${index + 1}`} onPress={() => updateIngredients(scannedIngredients.filter((entry) => entry.id !== item.id))}>
@@ -660,7 +665,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                     {addFoodTab === "Food" ? <FoodSearch key={`food-lookup-${item.id}`} entries={[]} recipes={[]} ready onSelect={choice => useCommonFoodForIngredient(item.id, choice)} mode="find" /> : null}
                     <Field label="Food name"><Input bordered value={item.name} placeholder="e.g. Chicken breast" onChangeText={(value) => editManualIngredient(item.id, { name: value })} /></Field>
                     {item.basis === "100 g" ? <View style={{ gap: 8, padding: 10, borderRadius: 12, backgroundColor: theme.colors.primaryTint }}>
-                      <AppText size={11} weight="bold" primary>CATALOG MACROS ARE PER 100 G</AppText>
+                      <AppText size={11} weight="bold" primary>MACROS FOR YOUR SELECTED AMOUNT</AppText>
                       <AppText size={12} weight="bold">Amount in meal: {item.servings ? Number(item.servings) * 100 : "—"}g</AppText>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[50, 100, 150, 200].map(grams => <SecondaryButton key={grams} height={32} style={{ flexGrow: 1 }} onPress={() => { setCustomServingTarget(null); setCustomServingDraft(""); editManualIngredient(item.id, { servings: String(grams / 100) }); }}>{grams}g</SecondaryButton>)}<SecondaryButton height={32} style={{ flexGrow: 1 }} onPress={() => { setCustomServingDraft(item.servings ? String(Number(item.servings) * 100) : ""); setCustomServingTarget(item.id); }}>Custom</SecondaryButton></View>
                       {customServingTarget === item.id ? <Field label="Custom amount (g)"><Input autoFocus bordered accessibilityLabel={`Custom serving grams for ingredient ${index + 1}`} keyboardType="decimal-pad" value={customServingDraft} placeholder="Enter grams" onChangeText={(value) => {
@@ -670,14 +675,14 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                       }} /></Field> : null}
                     </View> : null}
                     <View style={styles.inputRow}>
-                      <Field label={item.basis === "100 g" ? "Calories / 100g" : "Calories"} style={styles.inputHalf}><Input bordered value={item.calories} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { calories: value })} /></Field>
-                      <Field label={item.basis === "100 g" ? "Protein / 100g" : "Protein (g)"} style={styles.inputHalf}><Input bordered value={item.protein} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { protein: value })} /></Field>
+                      <Field label="Calories" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("calories")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { calories: value })} /></Field>
+                      <Field label="Protein (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("protein")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { protein: value })} /></Field>
                     </View>
                     <View style={styles.inputRow}>
-                      <Field label={item.basis === "100 g" ? "Carbs / 100g" : "Carbs (g)"} style={styles.inputHalf}><Input bordered value={item.carbs} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { carbs: value })} /></Field>
-                      <Field label={item.basis === "100 g" ? "Fat / 100g" : "Fat (g)"} style={styles.inputHalf}><Input bordered value={item.fats} keyboardType="decimal-pad" placeholder="0" onChangeText={(value) => editManualIngredient(item.id, { fats: value })} /></Field>
+                      <Field label="Carbs (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("carbs")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { carbs: value })} /></Field>
+                      <Field label="Fat (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("fats")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { fats: value })} /></Field>
                     </View>
-                  </View>)}
+                  </View>; })}
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <SecondaryButton style={{ flex: 1 }} onPress={addManualIngredient}>Add ingredient</SecondaryButton>
                   </View>

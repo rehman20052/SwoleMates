@@ -158,7 +158,8 @@ export const ScrollBody = forwardRef<ScrollView, ScrollViewProps>(function Scrol
             const covered = Math.max(0, y + height - keyboardTop);
             setKeyboardPad((current) => (current === covered ? current : covered));
             field.measureInWindow((_fieldX, fieldY, _fieldWidth, fieldHeight) => {
-              const overlap = fieldY + fieldHeight + 20 - keyboardTop;
+              const visibleBottom = Math.min(y + height, keyboardTop);
+              const overlap = fieldY + fieldHeight + 20 - visibleBottom;
               if (overlap > 0) scroll.scrollTo({ y: scrollY.current + overlap, animated: true });
             });
           });
