@@ -32,6 +32,7 @@ import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomin
 import { socialAlertCount, subscribeSocialNotices } from '@/lib/social';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
+import { DeleteAccountScreen } from '@/screens/delete-account';
 import { supabase } from '@/lib/supabase';
 import { ChatScreen } from '@/screens/chat';
 import { DashboardScreen } from '@/screens/dashboard';
@@ -535,6 +536,8 @@ export default function App() {
         return <WorkoutScheduledScreen workoutId={route.workoutId} />;
       case 'nutrition':
         return <NutritionTrackerScreen date={route.date} />;
+      case 'delete-account':
+        return <DeleteAccountScreen />;
     }
   };
 
