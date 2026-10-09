@@ -18,7 +18,7 @@ export function liftMilestones(lift: TrackedLift) {
     if (hasBaseline && entry.weight > best) records.push({ date: entry.date, weight: entry.weight, increase: Math.round((entry.weight - best) * 100) / 100 });
     best = Math.max(best, entry.weight); hasBaseline = true;
   }
-  return { best: Math.max(best, lift.currentWeight), records, reached: lift.currentWeight >= lift.goalWeight };
+  return { best: Math.max(best, lift.currentWeight), records, reached: lift.goalWeight > 0 && lift.currentWeight >= lift.goalWeight };
 }
 
 export function weeklyRecap(today: string, offset: number, logs: SessionLog[], food: FoodLogEntry[], lifts: TrackedLift[], completedDates: string[] = []) {

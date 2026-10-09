@@ -1,8 +1,9 @@
+import { AppAlert as Alert } from "@/components/app-alert";
 import { FoodScanner } from "@/components/food-scanner";
 import { ingredientTotals, scannedIngredient, type ScanIngredient } from "@/lib/food-scanner";
 import { HomeBackdrop } from "@/components/home-backdrop";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
 import { sumFoodEntries } from "@/lib/food-journal";
@@ -49,6 +50,9 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [savingPlan, setSavingPlan] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [savingRecipe, setSavingRecipe] = useState(false);
+  const addingSavedMeal = useRef(false);
+  const [addingSavedMealId, setAddingSavedMealId] = useState<string | null>(null);
+  const [savedMealFeedback, setSavedMealFeedback] = useState<{ id: string; date: string; account: string | null; message: string; success: boolean } | null>(null);
   const [showAddFood, setShowAddFood] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [addFoodTab, setAddFoodTab] = useState<"Food" | "Recent">("Food");
@@ -374,8 +378,16 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     if (saved) closeRecipeEditor();
   }
 
-  function addSavedMeal(savedMeal: SavedMeal) {
-    void addFoodEntry({
+  async function addSavedMeal(savedMeal: SavedMeal) {
+    if (addingSavedMeal.current || !foodJournalReady) return;
+    addingSavedMeal.current = true;
+    setAddingSavedMealId(savedMeal.id);
+    setSavedMealFeedback(null);
+    const targetDate = journalDate;
+    const targetAccount = accountUserId;
+    const targetLabel = dayLabel.toLowerCase();
+    try {
+    const added = await addFoodEntry({
       scannedIngredients: savedMeal.scannedIngredients,
       artwork: savedMeal.artwork,
       meal: savedMeal.meal,
@@ -384,7 +396,16 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
       protein: savedMeal.protein,
       carbs: savedMeal.carbs,
       fats: savedMeal.fats,
-    }, journalDate);
+    }, targetDate);
+    setSavedMealFeedback({ id: savedMeal.id, date: targetDate, account: targetAccount, success: added, message: added
+      ? `Added ${savedMeal.name} (${savedMeal.calories} cal) to ${savedMeal.meal.toLowerCase()} for ${targetLabel}. Your daily intake is updated.`
+      : "Could not add this recipe. Please try again." });
+    } catch {
+      setSavedMealFeedback({ id: savedMeal.id, date: targetDate, account: targetAccount, success: false, message: "Could not add this recipe. Please try again." });
+    } finally {
+      addingSavedMeal.current = false;
+      setAddingSavedMealId(null);
+    }
   }
 
   function openGoals() {
@@ -582,8 +603,8 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   </View>
                 ) : (
                   <View style={[styles.recipeActions, { borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 12 }]}>
-                    <SecondaryButton height={34} fontSize={12} style={styles.savedAddButton} onPress={() => addSavedMeal(savedMeal)}>
-                      {isToday ? "Add to today" : "Add to this day"}
+                    <SecondaryButton height={34} fontSize={12} style={styles.savedAddButton} disabled={!foodJournalReady || addingSavedMealId !== null} onPress={() => void addSavedMeal(savedMeal)}>
+                      {addingSavedMealId === savedMeal.id ? "Adding..." : isToday ? "Add to today" : "Add to this day"}
                     </SecondaryButton>
                     <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${savedMeal.name}`} hitSlop={6} onPress={() => openRecipeEditor(savedMeal)}>
                       <AppText size={13} weight="extrabold" primary>Edit</AppText>
@@ -593,6 +614,11 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                     </Pressable>
                   </View>
                 )}
+                {savedMealFeedback?.id === savedMeal.id && savedMealFeedback.date === journalDate && savedMealFeedback.account === accountUserId ? (
+                  <View accessibilityLiveRegion="polite">
+                    <AppText size={13} weight="semibold" color={savedMealFeedback.success ? theme.colors.success : theme.colors.danger}>{savedMealFeedback.message}</AppText>
+                  </View>
+                ) : null}
               </TrainingCard>
             );
           })}

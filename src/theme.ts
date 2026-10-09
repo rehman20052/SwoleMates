@@ -9,24 +9,27 @@ export type ColorScheme = "dark" | "light";
 const THEME_KEY = "swolemates.color-scheme";
 
 // Tokens from the SwoleMates Figma file. Dark is the default.
+export const BRAND_LIME = "#D4FF00";
+
 const darkTheme = {
+  displayFont: "BebasNeue_400Regular" as string | undefined,
   isDark: true,
   colors: {
-    background: "#0A0A0C",
+    background: "#000000",
     surface: "#151518",
     surfaceRaised: "#202025",
     border: "#28282D",
     text: "#FFFFFF",
     muted: "#8E8E93",
-    primary: "#CCFF00",
-    accent: "#CCFF00",
+    primary: BRAND_LIME,
+    accent: BRAND_LIME,
     primaryText: "#0A0A0C",
-    primaryTint: "rgba(204, 255, 0, 0.16)",
+    primaryTint: "rgba(212, 255, 0, 0.16)",
     primaryDeep: "#1A2400",
     danger: "#FF3B30",
     scrim: "rgba(0, 0, 0, 0.7)",
     glass: "rgba(255, 255, 255, 0.13)",
-    canvas: "#141416",
+    canvas: "#000000",
     panelBorder: "#344148",
     borderStrong: "#46535A",
     segmentSurface: "#0E1519",
@@ -37,23 +40,23 @@ const darkTheme = {
     progressTrack: "#28282D",
     summaryProgressTrack: "#202025",
     progressStart: "#729F00",
-    progressEnd: "#CCFF00",
+    progressEnd: BRAND_LIME,
     progressHighlight: "#FFFFFF",
     carbs: "#B38542",
     fat: "#659A99",
-    success: "#CCFF00",
+    success: BRAND_LIME,
     sheetOverlay: "rgba(0,0,0,0.74)",
     modalOverlay: "rgba(0,0,0,0.72)",
     editorOverlay: "rgba(0,0,0,0.65)",
     photoText: "#FFFFFF",
     photoMuted: "#8E8E93",
-    photoAccent: "#CCFF00",
-    photoControl: "rgba(204,255,0,0.16)",
+    photoAccent: BRAND_LIME,
+    photoControl: "rgba(212,255,0,0.16)",
   },
   effects: {
     cardShadow: "0 4px 20px rgba(0,0,0,0.2)",
-    selectionShadow: "0 0 14px rgba(204,255,0,0.15)",
-    actionShadow: "0 0 20px rgba(204,255,0,0.12)",
+    selectionShadow: "0 0 14px rgba(212,255,0,0.15)",
+    actionShadow: "0 0 20px rgba(212,255,0,0.12)",
     recipeShadow: "0 0 14px rgba(195,245,20,0.12)",
     heroOpacity: 0.65,
     fuelHeroOpacity: 0.6,
@@ -61,19 +64,19 @@ const darkTheme = {
     progressHaloOpacity: 0.8,
   },
   fonts: {
-    regular: "Inter_400Regular",
-    medium: "Inter_500Medium",
-    semibold: "Inter_600SemiBold",
-    bold: "Inter_700Bold",
-    extrabold: "Inter_800ExtraBold",
-    black: "Inter_900Black",
+    regular: "Barlow_400Regular",
+    medium: "Barlow_500Medium",
+    semibold: "Barlow_600SemiBold",
+    bold: "Barlow_700Bold",
+    extrabold: "Barlow_800ExtraBold",
+    black: "Barlow_900Black",
   },
   spacing: {
-    xs: 6,
-    sm: 10,
-    md: 14,
-    lg: 18,
-    xl: 24,
+    xs: 8,
+    sm: 16,
+    md: 24,
+    lg: 32,
+    xl: 32,
   },
   radius: {
     sm: 8,
@@ -104,7 +107,7 @@ const lightTheme: AppTheme = {
     border: "#DDE1D8",
     text: "#11130F",
     muted: "#656A63",
-    primary: "#C6F500",
+    primary: BRAND_LIME,
     accent: "#476600",
     primaryText: "#11130F",
     primaryTint: "#EDF5D9",
@@ -123,7 +126,7 @@ const lightTheme: AppTheme = {
     progressTrack: "#E1E5DC",
     summaryProgressTrack: "#E1E5DC",
     progressStart: "#628B00",
-    progressEnd: "#C6F500",
+    progressEnd: BRAND_LIME,
     progressHighlight: "#FFFFFF",
     carbs: "#A66C18",
     fat: "#327E80",
@@ -219,6 +222,12 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
 export function useAppTheme() {
   return useContext(ThemeContext).theme;
+}
+
+// A local appearance override keeps section-specific designs inside their screen.
+export function ThemeScope({ theme, children }: PropsWithChildren<{ theme: AppTheme }>) {
+  const current = useContext(ThemeContext);
+  return createElement(ThemeContext.Provider, { value: { ...current, theme } }, children);
 }
 
 export function useColorScheme() {

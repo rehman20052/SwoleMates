@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { useAppData } from "@/state/app-data";
 
 // Account-scoped local recovery plus individually synchronized cloud records.
-export function useSavedDraft(id: string, restore: (content: string) => void) {
+export function useSavedDraft(id: string, restore: (content: string) => void, legacyId?: string) {
   const { accountUserId, foodJournalReady, workspaceSettings, saveWorkspaceSetting } = useAppData();
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("");
@@ -19,7 +19,12 @@ export function useSavedDraft(id: string, restore: (content: string) => void) {
     let active = true;
     setReady(false); pending.current = null;
     const remote = workspaceSettings.find(item => item.id === id)?.value;
-    void localWrites.current.catch(() => undefined).then(() => AsyncStorage.getItem(key)).then(raw => {
+    void localWrites.current.catch(() => undefined).then(async () => {
+      const raw = await AsyncStorage.getItem(key);
+      // Prefer even an empty current record: a cleared draft must never return.
+      if (raw || remote || !legacyId) return { raw, remote };
+      return { raw: await AsyncStorage.getItem(`swolemates.draft.${accountUserId}.${legacyId}`), remote: workspaceSettings.find(item => item.id === legacyId)?.value };
+    }).then(({ raw, remote }) => {
       let local: { content: string; updatedAt: number } | null = null;
       try { local = raw ? JSON.parse(raw) : null; } catch { /* Recover from cloud. */ }
       const cloud = typeof remote === "object" ? remote : null;
@@ -34,7 +39,7 @@ export function useSavedDraft(id: string, restore: (content: string) => void) {
       setReady(true);
     }).catch(() => { if (active) { setReady(true); setStatus("Local draft storage unavailable"); } });
     return () => { active = false; };
-  }, [key, foodJournalReady]);
+  }, [key, foodJournalReady, legacyId]);
   useEffect(() => {
     if (!accountUserId || !key) return;
     const owner = accountUserId;
@@ -64,6 +69,7 @@ export function useSavedDraft(id: string, restore: (content: string) => void) {
         if (pending.current === item) setStatus(content ? saved ? "Draft saved" : "Draft on this device; account sync pending" : "");
       });
     }, 800);
+    return localWrites.current;
   }
   return { ready, save, clear: () => save(""), status };
 }

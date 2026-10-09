@@ -1,9 +1,12 @@
+import { TrainText as AppText, TrainInput as Input, useTrainPalette } from "./train-ui";
+import { TrainLabel as SectionLabel, TrainSection as Card, TrainPrimary as PrimaryButton, TrainSecondary as SecondaryButton } from "./train-ui";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppText, Card, Field, Input, PrimaryButton, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
+import { Field, ScrollBody, TitleBar } from "@/components/ui";
 import { exerciseOptions, loadExerciseCatalog } from "@/lib/exercise-catalog";
 import { parseWorkoutDraft, type DraftExercise } from "@/lib/workout-drafts";
+import { prefillExercise } from "@/lib/workout-logging";
 import { useAppData } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 import { RepeatStepButton } from "@/components/repeat-step-button";
@@ -14,6 +17,7 @@ const blankRow = (exercise: string, customName = ""): DraftExercise => ({ id: ne
 
 export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
   const theme = useAppTheme();
+  const trainPalette = useTrainPalette();
   const { workspaceSettings, saveWorkspaceSetting, accountUserId } = useAppData();
   const [step, setStep] = useState<Step>("list");
   const [names, setNames] = useState<string[]>([]);
@@ -39,7 +43,7 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
   function edit(id: string) {
     const routine = routines.find(item => item.id === id); if (!routine) return;
     setEditingId(id); setTitle(routine.title); setDescription(routine.notes ?? "");
-    setRows(routine.rows.map(row => ({ ...row, id: newId(), reps: "", weight: "", restSeconds: "" })));
+    setRows(routine.rows.map(row => ({ ...row, id: newId() })));
     setConfirmDeleteId(null); setMessage(""); setStep("details");
   }
   function updateRow(id: string, patch: Partial<DraftExercise>) { setRows(current => current.map(row => row.id === id ? { ...row, ...patch } : row)); }
@@ -58,7 +62,7 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
     if (!accountUserId) { setMessage("Sign in to save templates to your account."); return; }
     setBusy(true);
     const id = editingId ?? `workout-plan:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const saved = await saveWorkspaceSetting(id, JSON.stringify({ title: title.trim(), notes: description.trim(), rows: rows.map(row => ({ ...row, reps: "", weight: "", restSeconds: "", setValues: undefined })) }), accountUserId, Date.now());
+    const saved = await saveWorkspaceSetting(id, JSON.stringify({ title: title.trim(), notes: description.trim(), rows: rows.map(row => prefillExercise(row)) }), accountUserId, Date.now());
     setBusy(false); setMessage(saved ? "Template saved." : "Could not save this template.");
     if (saved) setStep("list");
   }
@@ -74,7 +78,7 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
     setStep("list");
   }
   function deleteConfirmation(id: string, title: string) {
-    return confirmDeleteId === id ? <Card padding={14} radius={16} gap={10} style={{ borderColor: theme.colors.danger }}>
+    return confirmDeleteId === id ? <Card padding={16} radius={16} gap={16} style={{ borderColor: theme.colors.danger }}>
       <AppText weight="bold">Delete “{title}”?</AppText>
       <AppText size={12} muted>This permanently removes the workout template. This action cannot be undone.</AppText>
       <View style={{ flexDirection: "row", gap: 8 }}>
@@ -85,13 +89,13 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
   }
   const options = exerciseOptions(names, search).filter(option => option !== "Choose exercise");
 
-  if (step === "list") return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-    <TitleBar title="Workout templates" onBack={onClose} right={<Pressable accessibilityRole="button" accessibilityLabel="Create template" onPress={startNew} style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}><AppText size={22} weight="black" color={theme.colors.primaryText}>+</AppText></Pressable>} />
-    <ScrollBody contentContainerStyle={{ gap: 12, paddingHorizontal: 18, paddingBottom: 28 }}>
+  if (step === "list") return <View style={{ flex: 1, backgroundColor: trainPalette.background }}>
+    <TitleBar title="Workout templates" onBack={onClose} right={<Pressable accessibilityRole="button" accessibilityLabel="Create template" onPress={startNew} style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}><AppText size={22} weight="black" color={theme.colors.primaryText}>+</AppText></Pressable>} />
+    <ScrollBody contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 28 }}>
       <SectionLabel>My templates</SectionLabel>
       {routines.map(routine => <View key={routine.id} style={{ gap: 8 }}>
-        <Card padding={14} radius={16} gap={5} style={{ flexDirection: "row", alignItems: "center" }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${routine.title}`} onPress={() => edit(routine.id)} style={{ flex: 1, gap: 4 }}>
+        <Card padding={16} radius={16} gap={5} style={{ flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: theme.colors.border }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${routine.title}`} onPress={() => edit(routine.id)} style={{ flex: 1, gap: 8, minHeight: 44, justifyContent: "center" }}>
             <AppText size={16} weight="bold">{routine.title}</AppText><AppText size={11} muted>{routine.rows.length} exercises{routine.notes ? ` · ${routine.notes}` : ""}</AppText>
           </Pressable>
           <SecondaryButton height={34} textColor={theme.colors.danger} disabled={busy} onPress={() => setConfirmDeleteId(routine.id)}>Delete</SecondaryButton>
@@ -99,16 +103,16 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
         {deleteConfirmation(routine.id, routine.title)}
       </View>)}
       {message ? <AppText color={message.includes("deleted") ? theme.colors.success : theme.colors.danger}>{message}</AppText> : null}
-      {!routines.length ? <Card padding={18} radius={18} gap={6}><AppText weight="bold">No templates yet</AppText><AppText muted>Build a reusable workout with default sets, reps, and rest times.</AppText></Card> : null}
+      {!routines.length ? <Card padding={16} radius={18} gap={6}><AppText weight="bold">No templates yet</AppText><AppText muted>Build a reusable workout with your exercises and default sets.</AppText></Card> : null}
       <PrimaryButton onPress={startNew}>+ Create template</PrimaryButton>
     </ScrollBody>
   </View>;
 
-  return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+  return <View style={{ flex: 1, backgroundColor: trainPalette.background }}>
     <TitleBar title={step === "details" ? (editingId ? "Edit template" : "Create template") : step === "exercises" ? "Add exercises" : "Review template"} onBack={() => step === "details" ? setStep("list") : setStep(step === "review" ? "exercises" : "details")} />
-    <ScrollBody contentContainerStyle={{ gap: 14, paddingHorizontal: 18, paddingBottom: 28 }}>
-      <View style={{ flexDirection: "row", gap: 6 }}>{["Details", "Exercises", "Review"].map((label, index) => { const active = ["details", "exercises", "review"].indexOf(step) >= index; return <View key={label} style={{ flex: 1, gap: 5 }}><View style={{ height: 4, borderRadius: 2, backgroundColor: active ? theme.colors.primary : theme.colors.border }} /><AppText size={10} muted={!active} primary={active}>{label}</AppText></View>; })}</View>
-      {step === "details" ? <Card padding={16} radius={18} gap={14}>
+    <ScrollBody contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 28 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>{["Details", "Exercises", "Review"].map((label, index) => { const active = ["details", "exercises", "review"].indexOf(step) >= index; return <View key={label} style={{ flex: 1, gap: 8 }}><View style={{ height: 4, borderRadius: 2, backgroundColor: active ? theme.colors.primary : theme.colors.border }} /><AppText size={10} muted={!active} primary={active}>{label}</AppText></View>; })}</View>
+      {step === "details" ? <Card padding={16} radius={18} gap={16}>
         <Field label="Template name"><Input bordered value={title} onChangeText={setTitle} placeholder="e.g. Push Day" maxLength={100} /></Field>
         <Field label="Description (optional)"><Input bordered multiline value={description} onChangeText={setDescription} placeholder="Chest, shoulders, and triceps" maxLength={300} /></Field>
         <PrimaryButton disabled={!title.trim()} onPress={() => setStep("exercises")}>Next: Add exercises</PrimaryButton>
@@ -117,23 +121,23 @@ export function WorkoutRoutines({ onClose }: { onClose: () => void }) {
         <Input bordered placeholder="Search exercises" value={search} onChangeText={setSearch} />
         <Card padding={8} radius={16} gap={0}><ScrollView style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">{options.slice(0, 30).map(exercise => {
           const customName = exercise === "Other" ? search.trim().slice(0, 100) : "";
-          return <Pressable key={exercise} onPress={() => { setRows(current => [...current, blankRow(exercise, customName)]); setSearch(""); }} style={{ padding: 12, borderBottomWidth: 1, borderColor: theme.colors.border, flexDirection: "row", alignItems: "center" }}><AppText style={{ flex: 1 }} weight="bold">{exercise === "Other" ? customName ? `Add “${customName}” as a custom exercise` : "Custom exercise" : exercise}</AppText><View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}><AppText weight="black" color={theme.colors.primaryText}>+</AppText></View></Pressable>;
+          return <Pressable key={exercise} onPress={() => { setRows(current => [...current, blankRow(exercise, customName)]); setSearch(""); }} style={{ padding: 16, borderBottomWidth: 1, borderColor: theme.colors.border, flexDirection: "row", alignItems: "center" }}><AppText style={{ flex: 1 }} weight="bold">{exercise === "Other" ? customName ? `Add “${customName}” as a custom exercise` : "Custom exercise" : exercise}</AppText><View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}><AppText weight="black" color={theme.colors.primaryText}>+</AppText></View></Pressable>;
         })}</ScrollView></Card>
         <AppText size={15} weight="bold">Added exercises ({rows.length})</AppText>
-        {rows.map((row, index) => <Card key={row.id} padding={12} radius={14} gap={4} style={{ flexDirection: "row", alignItems: "center" }}><AppText size={12} primary weight="bold">{index + 1}</AppText><AppText style={{ flex: 1 }} weight="bold">{row.exercise === "Other" ? row.customName || "Custom exercise" : row.exercise}</AppText><SecondaryButton height={30} onPress={() => setRows(current => current.filter(item => item.id !== row.id))}>Remove</SecondaryButton></Card>)}
+        {rows.map((row, index) => <Card key={row.id} padding={16} radius={14} gap={4} style={{ flexDirection: "row", alignItems: "center" }}><AppText size={12} primary weight="bold">{index + 1}</AppText><AppText style={{ flex: 1 }} weight="bold">{row.exercise === "Other" ? row.customName || "Custom exercise" : row.exercise}</AppText><SecondaryButton height={30} onPress={() => setRows(current => current.filter(item => item.id !== row.id))}>Remove</SecondaryButton></Card>)}
         <PrimaryButton disabled={!rows.length} onPress={() => setStep("review")}>Review template</PrimaryButton>
       </> : null}
       {step === "review" ? <>
         <Card padding={15} radius={18} gap={4}><AppText size={19} weight="black">{title}</AppText><AppText muted>{description || `${rows.length} exercise template`}</AppText></Card>
-        {rows.map((row, index) => <Card key={row.id} padding={14} radius={16} gap={10}>
+        {rows.map((row, index) => <Card key={row.id} padding={16} radius={16} gap={16}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1 }}><AppText weight="bold">{index + 1}. {row.exercise === "Other" ? row.customName || "Custom exercise" : row.exercise}</AppText></View><SecondaryButton height={30} disabled={index === 0} onPress={() => move(index, -1)}>↑</SecondaryButton><SecondaryButton height={30} disabled={index === rows.length - 1} onPress={() => move(index, 1)}>↓</SecondaryButton></View>
           {row.exercise === "Other" ? <Input bordered placeholder="Exercise name" value={row.customName} onChangeText={customName => updateRow(row.id, { customName })} /> : null}
-          <View style={{ gap: 7 }}>
+          <View style={{ gap: 8 }}>
             <AppText size={14} weight="bold" muted>Number of sets</AppText>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
-              <RepeatStepButton label={`Decrease sets for ${row.exercise === "Other" ? row.customName || "custom exercise" : row.exercise}`} value={setCount(row)} min={1} max={100} direction={-1} onChange={value => updateRow(row.id, { sets: String(value) })} style={{ width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised }}><AppText size={14} weight="bold">−</AppText></RepeatStepButton>
-              <View style={{ alignItems: "center" }}><AppText size={28} weight="black">{setCount(row)}</AppText><AppText size={10} muted>{setCount(row) === 1 ? "set" : "sets"}</AppText></View>
-              <RepeatStepButton label={`Increase sets for ${row.exercise === "Other" ? row.customName || "custom exercise" : row.exercise}`} value={setCount(row)} min={1} max={100} direction={1} onChange={value => updateRow(row.id, { sets: String(value) })} style={{ width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised }}><AppText size={14} weight="bold">+</AppText></RepeatStepButton>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
+              <RepeatStepButton label={`Decrease sets for ${row.exercise === "Other" ? row.customName || "custom exercise" : row.exercise}`} value={setCount(row)} min={1} max={100} direction={-1} onChange={value => updateRow(row.id, { sets: String(value) })} style={{ width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised }}><AppText size={14} weight="bold">−</AppText></RepeatStepButton>
+              <View style={{ alignItems: "center" }}><AppText size={22} weight="bold">{setCount(row)}</AppText><AppText size={10} muted>{setCount(row) === 1 ? "set" : "sets"}</AppText></View>
+              <RepeatStepButton label={`Increase sets for ${row.exercise === "Other" ? row.customName || "custom exercise" : row.exercise}`} value={setCount(row)} min={1} max={100} direction={1} onChange={value => updateRow(row.id, { sets: String(value) })} style={{ width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised }}><AppText size={14} weight="bold">+</AppText></RepeatStepButton>
             </View>
           </View>
         </Card>)}

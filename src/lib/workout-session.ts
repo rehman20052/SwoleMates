@@ -19,5 +19,7 @@ export function validWorkoutExercises(value: unknown): value is WorkoutExercise[
 }
 
 export function exerciseSummary(rows: WorkoutExercise[]) {
-  return rows.map(row => `${row.name}: ${row.sets} × ${row.reps} at ${row.weight} ${row.unit}`).join("\n");
+  return rows.map(row => row.setDetails?.some(set => set.reps !== row.reps || set.weight !== row.weight)
+    ? `${row.name}: ${row.setDetails.map(set => `${set.reps} reps at ${set.weight} ${row.unit}`).join("; ")}`
+    : `${row.name}: ${row.sets} × ${row.reps} at ${row.weight} ${row.unit}`).join("\n");
 }

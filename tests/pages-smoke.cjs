@@ -97,11 +97,12 @@ const assert = require('node:assert/strict');
         }
         return route.fulfill({ json: messageRows });
       }
+      if (url.includes('/rpc/account_read_delta')) return route.fulfill({ status: 404, json: { code: 'PGRST202', message: 'Use the legacy snapshot fixture' } });
       if (url.includes('/rest/v1/account_records')) return route.fulfill({ json: cloud.get(new URL(url).searchParams.get('namespace')?.replace(/^eq\./, '')) ?? [] });
-      if (url.includes('/rpc/account_import_records') || url.includes('/rpc/account_save_records')) {
+      if (url.includes('/rpc/account_import_records') || url.includes('/rpc/account_save_records') || url.includes('/rpc/account_commit_operation')) {
         const body = route.request().postDataJSON();
         const rows = cloud.get(body.p_namespace) ?? [];
-        if (url.includes('/rpc/account_save_records') && failSave) return route.fulfill({ status: 503, json: { code: '503', message: 'Simulated connection failure' } });
+        if (!url.includes('/rpc/account_import_records') && failSave) return route.fulfill({ status: 503, json: { code: '503', message: 'Simulated connection failure' } });
         for (const item of body.p_records ?? body.p_changes ?? []) {
           const previous = rows.find(row => row.record_id === item.id);
           if (body.p_records && previous) continue;
@@ -119,47 +120,19 @@ const assert = require('node:assert/strict');
     await page.getByText('Weekly recap', { exact: true }).waitFor();
     const liftBar = page.getByRole('progressbar', { name: 'Smoke bench goal progress' });
     await liftBar.waitFor();
+    // Account/theme hydration can remount Home after its first paint.
+    await page.waitForFunction(() => [...document.querySelectorAll('[role=progressbar]')].filter(node => /goal progress$/.test(node.getAttribute('aria-label') || '')).length === 2);
     assert.equal(await page.getByRole('progressbar', { name: /goal progress$/ }).count(), 2, 'Home previews at most two lifts');
     assert.equal(await liftBar.getAttribute('aria-valuenow'), '60');
-    // Reaching an offscreen bar should animate then settle at the saved value.
+    // Train uses a static, restrained indicator with an accessible saved value.
     await liftBar.scrollIntoViewIfNeeded();
-    await page.waitForFunction(() => {
-      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
-      const transform = getComputedStyle(bar.firstElementChild).transform;
-      return transform !== 'none' && new DOMMatrix(transform).m22 > 1.1;
-    });
-    await page.waitForFunction(() => {
-      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
-      const svg = bar.querySelector('svg');
-      const transform = getComputedStyle(bar.firstElementChild).transform;
-      return Math.abs(svg.parentElement.getBoundingClientRect().width / svg.parentElement.parentElement.getBoundingClientRect().width - 0.6) < 0.01 && (transform === 'none' || Math.abs(new DOMMatrix(transform).m22 - 1) < 0.01);
-    });
-    await liftBar.evaluate(node => {
-      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
-        if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) { parent.scrollTop = 0; break; }
-      }
-    });
-    await page.waitForTimeout(100);
-    await liftBar.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(350);
-    assert.equal(await liftBar.evaluate(node => node.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length), 0, 'scrolling back to a lift does not replay it');
+    const ratio = await liftBar.evaluate(node => node.firstElementChild.getBoundingClientRect().width / node.getBoundingClientRect().width);
+    assert.ok(Math.abs(ratio - 0.6) < 0.01);
+    assert.equal(await liftBar.evaluate(node => node.getAnimations({ subtree: true }).length), 0);
     await page.getByRole('button', { name: 'Show Smoke bench details' }).click();
-    await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).click();
-    await page.waitForFunction(() => {
-      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
-      return new DOMMatrix(getComputedStyle(bar.firstElementChild).transform).m22 > 1.1;
-    });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.getByText('Animations paused by your device’s Reduce Motion setting.', { exact: true }).first().waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Replay Smoke bench progress animation' }).count(), 0);
-    await page.waitForFunction(() => {
-      const bar = document.querySelector('[aria-label="Smoke bench goal progress"]');
-      const svg = bar?.querySelector('svg');
-      if (!svg) return false;
-      return Math.abs(svg.parentElement.getBoundingClientRect().width / svg.parentElement.parentElement.getBoundingClientRect().width - 0.6) < 0.01;
-    });
+    assert.equal(await liftBar.getAttribute('aria-valuenow'), '60');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.getByLabel('Smoke bench: 50% checkpoint reached').waitFor();
     await page.getByRole('button', { name: 'Hide Smoke bench details' }).click();
     await page.getByPlaceholder('Search your lifts', { exact: true }).fill('deadlift');
     await keyboardViewport(430, 160); await checkKeyboardSurface(430, 160);
@@ -181,34 +154,39 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'Save lift', exact: true }).click();
     await page.getByRole('button', { name: 'Close lift editor', exact: true }).waitFor({ state: 'hidden' });
     assert.equal(cloud.get('lifts').find(row => row.record_id === 'smoke-lift').payload.history.length, 2, 'image edits do not create fake progression entries');
-    await page.getByText('Log Workout', { exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: /Use last workout/ }).count(), 0);
-    await page.getByRole('button', { name: 'Add exercise', exact: true }).click();
-    await page.getByRole('button', { name: 'Choose exercise', exact: true }).click();
+    await page.getByRole('button', { name: 'Log workout', exact: true }).click();
+    await page.getByRole('button', { name: 'Start Empty Workout', exact: true }).click();
+    await page.getByRole('button', { name: '+ Add exercise', exact: true }).click();
     await page.getByPlaceholder('Search exercises', { exact: true }).fill('Catalog cable');
     await page.getByRole('button', { name: 'Select Catalog cable press', exact: true }).waitFor();
     await page.getByPlaceholder('Search exercises', { exact: true }).fill('unknown niche lift');
     await page.getByRole('button', { name: 'Select Other', exact: true }).waitFor();
     await page.getByPlaceholder('Search exercises', { exact: true }).fill('bench');
     await page.getByRole('button', { name: 'Select Bench press', exact: true }).click();
-    await page.getByPlaceholder('Workout name, e.g. Push Day').fill('Smoke workout');
-    await page.getByLabel('Exercise 1 weight', { exact: true }).fill('145');
-    await page.getByLabel('Exercise 1 reps', { exact: true }).fill('6');
-    await page.getByLabel('Exercise 1 reps', { exact: true }).press('Tab');
+    await page.getByRole('button', { name: 'Name, notes & template', exact: true }).click();
+    await page.getByPlaceholder('Workout name (optional)').fill('Smoke workout');
+    for (let set = 1; set <= 3; set++) {
+      await page.getByLabel(`Bench press set ${set} weight`, { exact: true }).fill('145');
+      await page.getByLabel(`Bench press set ${set} reps`, { exact: true }).fill('6');
+      await page.getByRole('checkbox', { name: `Complete Bench press set ${set}`, exact: true }).click();
+    }
     await page.waitForTimeout(150);
     failSave = true;
-    await page.getByRole('button', { name: 'Save workout', exact: true }).click();
+    await page.getByRole('button', { name: 'Finish Workout', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Finish & save', exact: true }).click();
     await page.getByText(/Save failed\. Simulated connection failure/).first().waitFor();
     assert.equal(cloud.get('workout_logs').length, 1, 'failed save does not claim success or add a workout');
     failSave = false;
-    await page.getByText('Quick workout log', { exact: true }).locator('..').getByRole('button', { name: 'Try again', exact: true }).click();
+    await page.getByRole('button', { name: 'Try again', exact: true }).last().click();
     await page.getByText('Workout saved.', { exact: true }).waitFor();
-    await page.getByText('✓ Last change saved to your account', { exact: true }).first().waitFor();
+    assert.equal(await page.getByText(/Last change saved to your account/).count(), 0, 'Train hides persistent success feedback');
+    for (let attempt = 0; attempt < 100 && !cloud.get('workout_logs').some(row => row.payload.title === 'Smoke workout'); attempt++) await page.waitForTimeout(100);
     const savedWorkout = cloud.get('workout_logs').find(row => row.payload.title === 'Smoke workout');
+    assert.ok(savedWorkout, `workout synced after retry: ${JSON.stringify(cloud.get('workout_logs'))}`);
     assert.equal(savedWorkout.payload.exercises[0].weight, 145); assert.equal(savedWorkout.payload.exercises[0].reps, 6);
-    await page.getByText('Log Workout', { exact: true }).click();
-    assert.equal(await page.getByPlaceholder('Workout name, e.g. Push Day').inputValue(), '');
-    assert.equal(await page.getByLabel('Exercise 1 weight', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Log workout', exact: true }).click();
+    await page.getByRole('button', { name: 'Start Empty Workout', exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Bench press set 1 weight', { exact: true }).count(), 0);
     await page.getByText('Close Log', { exact: true }).click();
     await page.getByRole('button', { name: 'Edit workout Smoke workout', exact: true }).click();
     const editor = page.locator('[aria-modal="true"]');
@@ -219,7 +197,7 @@ const assert = require('node:assert/strict');
     await editor.getByPlaceholder('Workout notes (optional)').scrollIntoViewIfNeeded();
     const cancelAfter = await cancelEdit.boundingBox();
     assert.ok(Math.abs(cancelBefore.y - cancelAfter.y) < 1, 'cancel remains fixed above the scrolling editor');
-    await editor.getByPlaceholder('Workout name, e.g. Push Day').fill('Unsaved edit');
+    await editor.getByPlaceholder('Workout name (optional)').fill('Unsaved edit');
     await cancelEdit.click();
     assert.equal(savedWorkout.payload.title, 'Smoke workout', 'cancel does not save edits');
     await page.getByRole('button', { name: 'Calendar', exact: true }).click();
@@ -230,6 +208,11 @@ const assert = require('node:assert/strict');
     await calendar.getByText('3 × 6', { exact: true }).waitFor();
     await calendar.getByRole('button', { name: 'Close calendar', exact: true }).last().click();
     await page.waitForTimeout(350);
+    if (process.env.TRAIN_ONLY) {
+      assert.deepEqual(errors, []);
+      console.log('Train Pages regression passed: accessible static lift progress, search and full directory, reduced motion, mobile keyboard and emoji keyboard recovery, lift saving, exercise catalog, workout save failure/retry, history editing and calendar.');
+      return;
+    }
     await page.getByText('Fuel', { exact: true }).click();
     await page.getByRole('button', { name: 'Open your macro plan' }).waitFor();
     await page.getByRole('button', { name: 'Edit weight', exact: true }).click();
@@ -275,7 +258,7 @@ const assert = require('node:assert/strict');
         if (process.env.THEME_SCREENSHOT_DIR) {
           fs.mkdirSync(process.env.THEME_SCREENSHOT_DIR, { recursive: true });
           await selected.scrollIntoViewIfNeeded();
-          await page.getByText(tab === 'Fuel' ? 'Macro plan' : 'Let’s train, Smoke', { exact: true }).scrollIntoViewIfNeeded();
+          await page.getByText(tab === 'Fuel' ? 'Macro plan' : 'Training', { exact: true }).scrollIntoViewIfNeeded();
           await page.waitForTimeout(350);
           await page.screenshot({ path: path.join(process.env.THEME_SCREENSHOT_DIR, tab.toLowerCase() + '-' + scheme + '.png') });
           if (tab === 'Fuel' && scheme === 'light') {

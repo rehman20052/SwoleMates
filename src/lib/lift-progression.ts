@@ -11,7 +11,7 @@ export function validLiftDetails(value: LiftDetails) {
   return typeof value.name === "string" && value.name.trim().length > 0 && value.name.length <= 100
     && (value.unit === "lb" || value.unit === "kg")
     && Number.isFinite(value.currentWeight) && value.currentWeight >= 0
-    && Number.isFinite(value.goalWeight) && value.goalWeight > 0
+    && Number.isFinite(value.goalWeight) && value.goalWeight >= 0
     && Number.isInteger(value.minReps) && value.minReps >= 1
     && Number.isInteger(value.maxReps) && value.maxReps >= value.minReps && value.maxReps <= 100
     && validItemArtwork(value.artwork);
@@ -39,6 +39,7 @@ export function saveLiftDetails(current: TrackedLift[], id: string, details: Lif
   return existing ? current.map((lift) => lift.id === id ? next : lift) : [...current, next];
 }
 export function liftProgress(lift: Pick<TrackedLift, "currentWeight" | "goalWeight">) {
+  if (lift.goalWeight <= 0) return 0;
   return Math.max(0, Math.min(1, lift.currentWeight / lift.goalWeight));
 }
 export function createLiftStore(storage: ListStorage, userId: string) {

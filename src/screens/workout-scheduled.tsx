@@ -1,4 +1,5 @@
-import { Alert, StyleSheet, View } from "react-native";
+import { AppAlert as Alert } from "@/components/app-alert";
+import { StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Card, Divider, FieldLabel, Icon, PrimaryButton, Screen, ScrollBody, SecondaryButton } from "@/components/ui";

@@ -36,6 +36,7 @@ export function AppText({
   muted,
   primary,
   upper,
+  display,
   style,
   ...props
 }: TextProps &
@@ -46,9 +47,15 @@ export function AppText({
     muted?: boolean;
     primary?: boolean;
     upper?: boolean;
+    display?: boolean;
   }>) {
   const theme = useAppTheme();
   const tone = color ?? (primary ? theme.colors.accent : muted ? theme.colors.muted : theme.colors.text);
+  const resolvedStyle = StyleSheet.flatten(style);
+  const resolvedSize = resolvedStyle?.fontSize ?? size;
+  const styledWeight = String(resolvedStyle?.fontWeight ?? "");
+  const resolvedWeight: Weight = styledWeight === "900" ? "black" : styledWeight === "800" ? "extrabold" : styledWeight === "700" || styledWeight === "bold" ? "bold" : styledWeight === "600" ? "semibold" : styledWeight === "500" ? "medium" : styledWeight === "400" || styledWeight === "normal" ? "regular" : weight;
+  const useDisplay = display ?? (resolvedSize >= 22 || resolvedSize >= 20 && ["semibold", "bold", "extrabold", "black"].includes(resolvedWeight) || props.accessibilityRole === "header");
 
   return (
     <Text
@@ -56,11 +63,12 @@ export function AppText({
       style={[
         {
           color: tone,
-          fontFamily: theme.fonts[weight],
+          fontFamily: useDisplay && theme.displayFont ? theme.displayFont : theme.fonts[resolvedWeight],
           fontSize: size,
           textTransform: upper ? "uppercase" : "none",
         },
         style,
+        { fontWeight: "normal", fontFamily: useDisplay && theme.displayFont ? theme.displayFont : resolvedStyle?.fontFamily ?? theme.fonts[resolvedWeight] },
       ]}
     >
       {children}
@@ -230,7 +238,7 @@ export function BackButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, minWidth: 28, minHeight: 28, alignItems: "center", justifyContent: "center" })}
     >
-      <Text style={{ color: theme.colors.text, fontSize: 28, lineHeight: 30 }}>←</Text>
+      <AppText display={false} style={{ color: theme.colors.text, fontSize: 28, lineHeight: 30 }}>←</AppText>
     </Pressable>
   );
 }
@@ -240,7 +248,7 @@ export function TitleBar({ title, right, onBack }: { title: string; right?: Reac
     <View style={styles.titleBar}>
       <View style={styles.titleLeft}>
         {onBack ? <BackButton onPress={onBack} /> : null}
-        <AppText size={20} weight="extrabold">
+        <AppText size={20} weight="extrabold" display>
           {title}
         </AppText>
       </View>
@@ -304,7 +312,7 @@ export function Card({
 
 export function SectionLabel({ children, color }: PropsWithChildren<{ color?: string }>) {
   return (
-    <AppText size={13} weight="extrabold" upper primary={!color} color={color}>
+    <AppText size={17} weight="extrabold" display upper primary={!color} color={color}>
       {children}
     </AppText>
   );
@@ -518,7 +526,7 @@ export function PrimaryButton({ children, style, height = 52, fontSize = 15, ...
         style,
       ]}
     >
-      {buttonBody(children, fontSize, theme.colors.primaryText, "extrabold")}
+      {buttonBody(children, fontSize, theme.colors.primaryText, "semibold")}
     </Pressable>
   );
 }
@@ -549,7 +557,7 @@ export function SecondaryButton({
         style,
       ]}
     >
-      {buttonBody(children, fontSize, textColor, "bold")}
+      {buttonBody(children, fontSize, textColor, "semibold")}
     </Pressable>
   );
 }
@@ -949,27 +957,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   titleLeft: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
+    gap: 16,
   },
   field: {
-    gap: 6,
+    gap: 8,
   },
   input: {
     borderRadius: 10,
     borderWidth: 1,
     fontSize: 14,
     height: 44,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   inputMultiline: {
     fontSize: 13,
     height: 72,
-    paddingTop: 12,
+    paddingTop: 16,
     textAlignVertical: "top",
   },
   select: {
@@ -978,7 +986,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     height: 44,
     justifyContent: "space-between",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   selectValue: {
     alignItems: "center",
@@ -996,7 +1004,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     minHeight: 40,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   button: {
     alignItems: "center",
@@ -1004,7 +1012,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   buttonLabel: {
     flexShrink: 1,
@@ -1012,27 +1020,27 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
   },
   segmented: {
     borderRadius: 12,
     flexDirection: "row",
-    gap: 4,
-    padding: 4,
+    gap: 8,
+    padding: 8,
   },
   segment: {
     alignItems: "center",
     borderRadius: 8,
     flex: 1,
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     justifyContent: "center",
   },
   segmentBadge: {
     borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   optionRow: {
     flexDirection: "row",
@@ -1046,7 +1054,7 @@ const styles = StyleSheet.create({
   statBox: {
     borderWidth: 1,
     flex: 1,
-    gap: 2,
+    gap: 8,
   },
   progressTrack: {
     borderRadius: 4,
@@ -1084,14 +1092,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 24,
     justifyContent: "center",
-    paddingHorizontal: 2,
+    paddingHorizontal: 8,
     width: 44,
   },
   toggleOff: {
     borderRadius: 12,
     height: 24,
     justifyContent: "center",
-    paddingHorizontal: 2,
+    paddingHorizontal: 8,
     width: 44,
   },
   toggleKnob: {
