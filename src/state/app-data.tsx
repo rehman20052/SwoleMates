@@ -21,6 +21,7 @@ import { nutritionGoalSource, planWithUpdatedWeight, goalsFromProfile, type Nutr
 import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
+import { progressLiftsFromWorkout } from "@/lib/workout-lift-progression";
 import { type WorkoutExercise } from "@/lib/workout-session";
 import { validItemArtwork } from "@/lib/item-artwork";
 
@@ -78,11 +79,14 @@ export type SessionLog = {
   partnerPhoto?: string | null;
   exercises?: WorkoutExercise[];
   loggedAt?: string;
+  durationMinutes?: number;
+  workoutOrigin?: "manual" | "template";
+  sourceTemplateId?: string;
 };
 
 export type WorkoutLogDetails = Pick<
   SessionLog,
-  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto" | "exercises"
+  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto" | "exercises" | "durationMinutes" | "workoutOrigin" | "sourceTemplateId"
 >;
 
 export type NutritionTotals = {
@@ -552,10 +556,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     }, setNutritionPlanError);
     const persistRecipes = (edit: (current: SavedMeal[]) => SavedMeal[]) => persistAccount(async (stores) => ({ savedMeals: await stores.recipes.change(edit) }), setRecipeStorageError);
     const persistFood = (edit: (current: FoodLogEntry[]) => FoodLogEntry[]) => persistAccount(async (stores) => ({ foodEntries: await stores.food.change(edit) }), setFoodJournalError);
-    const persistLogs = (edit: (current: SessionLog[]) => SessionLog[]) => persistAccount(async (stores) => {
+    const persistLogs = (edit: (current: SessionLog[]) => SessionLog[], progressionLog: SessionLog) => persistAccount(async (stores) => {
       const deletedWorkoutIds = await stores.deletions.refresh();
       const logs = await stores.logs.change((current) => edit(current).filter((log) => !deletedWorkoutIds.includes(workoutLogKey(log))));
-      return { logs, deletedWorkoutIds };
+      const saved = logs.find(log => workoutLogKey(log) === workoutLogKey(progressionLog));
+      const trackedLifts = await stores.lifts.change(current => saved ? progressLiftsFromWorkout(current, saved) : current);
+      return { logs, deletedWorkoutIds, trackedLifts };
     }, setWorkoutStorageError);
 
     return {
@@ -575,7 +581,26 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       },
       ...data,
       saveFeedback,
-      retrySave: (area) => saveRetries.current[area]?.() ?? Promise.resolve(false),
+      retrySave: (area) => {
+        const retry = saveRetries.current[area];
+        if (retry) return retry();
+        const setError = area === "food" ? setFoodJournalError : area === "recipes" ? setRecipeStorageError : area === "plan" ? setNutritionPlanError : area === "lifts" ? setLiftStorageError : area === "drafts" ? setDraftStorageError : setWorkoutStorageError;
+        return persistAccount(async stores => {
+          const store = area === "food" ? stores.food : area === "recipes" ? stores.recipes : area === "plan" ? stores.plan : area === "lifts" ? stores.lifts : area === "drafts" ? stores.settings : stores.logs;
+          await store.retry();
+          if (store.status().phase === "error") throw new Error(store.status().message ?? "Could not sync this change. Please try again.");
+          if (area === "food") return { foodEntries: await stores.food.cached() ?? [] };
+          if (area === "recipes") return { savedMeals: await stores.recipes.cached() ?? [] };
+          if (area === "lifts") return { trackedLifts: await stores.lifts.cached() ?? [] };
+          if (area === "drafts") return { workspaceSettings: await stores.settings.cached() ?? [] };
+          if (area === "plan") {
+            const plan = (await stores.plan.cached())?.[0];
+            if (!plan) throw new Error("Could not read your saved nutrition plan.");
+            return { nutrition: { ...defaultNutrition, ...plan.goals }, nutritionProfile: plan.profile, nutritionGoalSource: nutritionGoalSource(plan) };
+          }
+          return { logs: mergeVerifiedLogs(await stores.logs.cached() ?? [], data.logs.filter(log => log.checkedIn && log.plannedWorkoutId), data.deletedWorkoutIds) };
+        }, setError);
+      },
       liftStorageError,
       accountSyncError: syncError,
       retryAccountSync: () => setRetrySync((current) => current + 1),
@@ -811,7 +836,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       },
       logWorkout(title = "Solo workout", notes, date = daysFromToday(0), details = {}, recordId) {
         const log: SessionLog = { id: recordId ?? "log-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8), date, title, notes, loggedAt: new Date().toISOString(), verified: details.verified ?? false, ...details };
-        return persistLogs((current) => current.some((saved) => saved.id === log.id || (details.plannedWorkoutId && saved.plannedWorkoutId === details.plannedWorkoutId && saved.date === date)) ? current : [log, ...current]);
+        return persistLogs((current) => current.some((saved) => saved.id === log.id || (details.plannedWorkoutId && saved.plannedWorkoutId === details.plannedWorkoutId && saved.date === date)) ? current : [log, ...current], log);
       },
       syncVerifiedWorkoutLogs(logs) {
         if (!dashboardHydrated) return;
@@ -826,7 +851,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           const key = workoutLogKey(shown);
           const exists = current.some((log) => workoutLogKey(log) === key);
           return exists ? current.map((log) => workoutLogKey(log) === key ? { ...log, ...updates } : log) : [...current, { ...shown, ...updates }];
-        });
+        }, { ...shown, ...updates });
       },
       async deleteWorkoutLog(logId) {
         const log = data.logs.find((item) => item.id === logId);

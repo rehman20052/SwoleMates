@@ -13,7 +13,7 @@ function isSetting(value: unknown): value is AccountSetting {
   if (!value || typeof value !== "object") return false;
   const item = value as AccountSetting;
   if (item.id === "weekly-workout-goal") return typeof item.value === "number" && Number.isInteger(item.value) && item.value >= 1 && item.value <= 7;
-  return /^(draft|workout-plan|favorite-food|nutrition-day):/.test(item.id) && typeof item.value === "object" && item.value !== null && Number.isFinite(item.value.updatedAt) && typeof item.value.content === "string" && item.value.content.length <= 50000;
+  return /^(draft|workout-plan|workout-split|favorite-food|nutrition-day):/.test(item.id) && typeof item.value === "object" && item.value !== null && Number.isFinite(item.value.updatedAt) && typeof item.value.content === "string" && item.value.content.length <= 50000;
 }
 function isRecipe(value: unknown): value is SavedMeal {
   return isFoodEntry({ ...(value as object), date: "2000-01-01" });
@@ -23,7 +23,8 @@ export function isWorkoutLog(value: unknown): value is SessionLog {
   const log = value as SessionLog;
   return typeof log.id === "string" && typeof log.title === "string"
     && typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date) && typeof log.verified === "boolean"
-    && (log.exercises === undefined || validWorkoutExercises(log.exercises));
+    && (log.exercises === undefined || validWorkoutExercises(log.exercises))
+    && (log.durationMinutes === undefined || Number.isInteger(log.durationMinutes) && log.durationMinutes >= 1 && log.durationMinutes <= 1440);
 }
 export function createAccountStores(userId: string) {
   return {

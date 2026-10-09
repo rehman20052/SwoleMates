@@ -1,6 +1,7 @@
+import { AppAlert as Alert } from "@/components/app-alert";
 import { useSavedDraft } from "@/lib/use-saved-draft";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";

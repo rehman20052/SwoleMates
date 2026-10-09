@@ -1,12 +1,13 @@
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-  Inter_900Black,
+  Barlow_400Regular,
+  Barlow_500Medium,
+  Barlow_600SemiBold,
+  Barlow_700Bold,
+  Barlow_800ExtraBold,
+  Barlow_900Black,
   useFonts,
-} from "@expo-google-fonts/inter";
+} from "@expo-google-fonts/barlow";
+import { BebasNeue_400Regular } from "@expo-google-fonts/bebas-neue";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -22,6 +23,7 @@ import { ThemeProvider, useAppTheme } from "@/theme";
 import { PresenceProvider } from "@/lib/presence";
 import { PasswordRecovery } from "@/components/password-recovery";
 import { AppErrorBoundary } from "@/components/error-boundary";
+import { AppAlertHost } from "@/components/app-alert";
 import { clearDiagnosticsPreference } from "@/lib/diagnostics";
 import { supabase } from "@/lib/supabase";
 
@@ -50,12 +52,13 @@ function RootShell({ recoveryAccepted }: { recoveryAccepted: boolean }) {
   const theme = useAppTheme();
   const [fontWaitExpired, setFontWaitExpired] = useState(false);
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    Inter_800ExtraBold,
-    Inter_900Black,
+    Barlow_400Regular,
+    Barlow_500Medium,
+    Barlow_600SemiBold,
+    Barlow_700Bold,
+    Barlow_800ExtraBold,
+    Barlow_900Black,
+    BebasNeue_400Regular,
   });
   const ready = fontsLoaded || !!fontError || fontWaitExpired;
 
@@ -96,6 +99,7 @@ function RootShell({ recoveryAccepted }: { recoveryAccepted: boolean }) {
             </PasswordRecovery>
           </PhoneFrame>
           <VideoCompressorHost />
+          <AppAlertHost />
           <StatusBar style={theme.isDark ? "light" : "dark"} />
         </PresenceProvider>
       </AppDataProvider>

@@ -1,3 +1,5 @@
+import { BRAND_LIME } from "@/theme";
+import { TrainAppearance, TrainPrototype } from "@/components/train-prototype";
 import { HomeBackdrop } from "@/components/home-backdrop";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -18,12 +20,11 @@ import {
   SectionLabel,
   TitleBar,
 } from "@/components/ui";
-import { LiftProgression } from "@/components/lift-progression";
 import { QuickWorkoutLog } from "@/components/quick-workout-log";
 import { WorkoutRoutines } from "@/components/workout-routines";
-import { WeeklyRecap } from "@/components/weekly-recap";
 import { SaveFeedback } from "@/components/save-feedback";
 import { exerciseSummary } from "@/lib/workout-session";
+import { comparePerformanceLogs } from "@/lib/workout-logging";
 import { type UserProfile } from "@/lib/profile";
 import {
   completeWorkout as checkInWorkout,
@@ -47,7 +48,7 @@ import {
 } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 import { icons } from "@/assets";
-import { TrainingCard } from "@/components/training-card";
+import { trainingSummary, trainingVolume, TrainIconBadge, TrainNumber, TrainText, useTrainPalette, TrainSecondary, TrainSection as TrainingCard, TrainSaveFeedback } from "@/components/train-ui";
 
 type DashboardProfile = Pick<
   UserProfile,
@@ -116,8 +117,8 @@ function weekKey(date: Date) {
   return toIsoDate(startOfWeek(date));
 }
 
-function sortByDateDesc<T extends { date: string }>(a: T, b: T) {
-  return b.date.localeCompare(a.date);
+function sortByDateDesc<T extends { date: string; loggedAt?: string }>(a: T, b: T) {
+  return comparePerformanceLogs(a, b);
 }
 
 function countWorkoutDaysForWeek(logs: SessionLog[], weekStart: Date) {
@@ -156,8 +157,10 @@ function SegmentSwitch<T extends string>({
   options: { id: T; label: string }[];
 }) {
   const theme = useAppTheme();
+  const palette = useTrainPalette();
+  const training = value === "train";
   return (
-    <View style={[styles.segment, { backgroundColor: theme.colors.segmentSurface, borderColor: theme.colors.panelBorder, borderRadius: 18 }]}>
+    <View style={[styles.segment, { backgroundColor: training ? palette.field : theme.colors.segmentSurface, borderColor: training ? palette.border : theme.colors.panelBorder, borderRadius: training ? 12 : 18 }]}>
       {options.map((option) => {
         const selected = value === option.id;
         return (
@@ -166,10 +169,10 @@ function SegmentSwitch<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected }}
             onPress={() => onChange(option.id)}
-            style={[styles.segmentOption, { minHeight: 46, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, borderRadius: 14 }, selected && { backgroundColor: theme.colors.primary, boxShadow: theme.effects.selectionShadow }]}
+            style={[styles.segmentOption, { minHeight: 46, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, borderRadius: training ? 8 : 14 }, selected && { backgroundColor: training ? palette.field : theme.colors.primary, borderBottomWidth: training ? 2 : 0, borderBottomColor: BRAND_LIME, boxShadow: training ? "none" : theme.effects.selectionShadow }]}
           >
-            <Icon source={option.label === "Train" ? icons.training : icons.fuel} size={20} tint={selected ? theme.colors.primaryText : theme.colors.muted} />
-            <AppText size={15} weight="extrabold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+            <Icon source={option.label === "Train" ? icons.training : icons.fuel} size={20} tint={selected ? training ? palette.text : theme.colors.primaryText : theme.colors.muted} />
+            <AppText size={15} weight="extrabold" color={selected ? training ? palette.text : theme.colors.primaryText : theme.colors.muted}>
               {option.label}
             </AppText>
           </Pressable>
@@ -183,13 +186,13 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const theme = useAppTheme();
   const nav = useNavigation();
   const [notice, setNotice] = useState<string | null>(null);
-  const [showLogForm, setShowLogForm] = useState(false);
-  const [showAllActivities, setShowAllActivities] = useState(false);
+  const trainPalette = useTrainPalette();
   const [showCalendar, setShowCalendar] = useState(false);
   const [showGoalEditor, setShowGoalEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showRoutines, setShowRoutines] = useState(false);
   const [homeMode, setHomeMode] = useState<HomeMode>(savedHomeMode);
+  const [fuelDate, setFuelDate] = useState<string | undefined>();
   const [showRecipes, setShowRecipes] = useState(savedShowRecipes);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
@@ -197,6 +200,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [calendarLogOpen, setCalendarLogOpen] = useState(false);
   const [deletingCalendarLogId, setDeletingCalendarLogId] = useState<string | null>(null);
   const [goalDraft, setGoalDraft] = useState(3);
+  const [savingGoal, setSavingGoal] = useState(false);
   const {
     deleteWorkoutLog,
     foodEntries,
@@ -248,9 +252,6 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const weeklyLogs = logs.filter((log) => log.date >= weekStartIso && log.date <= weekEndIso);
   const weeklyWorkoutDays = new Set(weeklyLogs.map((log) => log.date)).size;
   const weeklyStreak = getWeeklyStreak(logs, weeklyWorkoutGoal);
-  const weeklyProgress = Math.min(weeklyWorkoutDays / weeklyWorkoutGoal, 1);
-  const sortedLogs = [...logs].sort(sortByDateDesc);
-  const visibleLogs = showAllActivities ? sortedLogs : sortedLogs.slice(0, 2);
   const selectedDayLogs = [...(logsByDate.get(selectedCalendarDate) ?? [])].sort(sortByDateDesc);
   const selectedDayFood = foodEntries.filter((entry) => entry.date === selectedCalendarDate);
   const selectedDayNutrition = selectedDayFood.length
@@ -287,9 +288,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   }
 
   async function saveWeeklyGoal() {
-    if (!await updateWeeklyWorkoutGoal(goalDraft)) return;
-    setShowGoalEditor(false);
-    showNotice(`Weekly goal set to ${goalDraft} workout day${goalDraft === 1 ? "" : "s"}.`);
+    if (savingGoal || !foodJournalReady) return;
+    setSavingGoal(true);
+    try {
+      if (await updateWeeklyWorkoutGoal(goalDraft)) setShowGoalEditor(false);
+    } finally { setSavingGoal(false); }
   }
 
   function openCalendarDay(iso: string) {
@@ -315,8 +318,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   if (showRoutines) return <WorkoutRoutines onClose={() => setShowRoutines(false)} />;
 
   return (
-    <Screen>
-      {!theme.isDark ? <Image accessible={false} pointerEvents="none" source={require("../../assets/brand/home-light.svg")} contentFit="fill" style={StyleSheet.absoluteFill} /> : null}
+    <TrainAppearance active={homeMode === "train"}><Screen style={homeMode === "train" ? { backgroundColor: "#080a0b" } : undefined}>
+      {!theme.isDark && homeMode === "fuel" ? <Image accessible={false} pointerEvents="none" source={require("../../assets/brand/home-light.svg")} contentFit="fill" style={StyleSheet.absoluteFill} /> : null}
       <TitleBar
         title="Home"
         right={
@@ -332,6 +335,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         <SegmentSwitch
           value={homeMode}
           onChange={(next) => {
+            if (next === "fuel") setFuelDate(undefined);
             savedHomeMode = next;
             setHomeMode(next);
           }}
@@ -356,6 +360,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
             />
           ) : (
             <NutritionTrackerScreen
+              key={fuelDate ?? "today"}
+              date={fuelDate}
               embedded
               header={
                 <Pressable
@@ -388,178 +394,13 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
           )}
         </View>
       ) : (
-        <ScrollBody contentContainerStyle={styles.body}>
-        <View style={[styles.hero, { minHeight: theme.isDark ? 90 : 108, padding: theme.isDark ? 0 : 12, justifyContent: "center", overflow: "hidden", borderRadius: 16 }]}>
-          <HomeBackdrop source={require("../../assets/brand/train-gym.jpg")} opacity={theme.effects.heroOpacity} />
-          <AppText size={29} weight="black" color={theme.colors.photoText}>
-            Let’s train, {firstName(profile.fullName)}
-          </AppText>
-          <View pointerEvents="none" style={{ width: 105, height: 3, marginTop: 5, borderRadius: 2, backgroundColor: theme.colors.primary, transform: [{ rotate: "-3deg" }] }} />
-          <AppText color={theme.colors.photoMuted} style={{ lineHeight: 20 }}>
-            {profile.primaryGym || "Your next workout starts here."}
-          </AppText>
-        </View>
-
-        <View style={[styles.quickActions, { gap: 12 }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={showLogForm ? "Close workout log" : "Log workout"} onPress={() => setShowLogForm(current => !current)} style={({ pressed }) => ({ flex: 1, minHeight: 62, borderRadius: 18, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: theme.colors.primary, boxShadow: theme.effects.actionShadow, opacity: pressed ? 0.8 : 1 })}>
-            <Icon source={icons.plusWhite} size={20} tint={theme.colors.primaryText} />
-            <AppText size={14} weight="extrabold" color={theme.colors.primaryText}>{showLogForm ? "Close Log" : "Log Workout"}</AppText>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Find a workout partner" onPress={() => nav.setTab("Discover")} style={({ pressed }) => ({ flex: 1, minHeight: 62, borderRadius: 18, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: theme.colors.panelBorder, backgroundColor: theme.colors.actionSurface, opacity: pressed ? 0.8 : 1 })}>
-            <Icon source={icons.partners} size={20} tint={theme.colors.text} />
-            <AppText size={14} weight="bold">Find partner</AppText>
-          </Pressable>
-        </View>
-        {showLogForm ? (
-          <QuickWorkoutLog onManageRoutines={() => setShowRoutines(true)} onSaved={() => { setShowLogForm(false); showNotice("Workout saved."); }} />
-        ) : null}
-
-        <CheckInPanel />
-        <SaveFeedback area="workouts" />
-
-        {notice ? (
-          <View style={[styles.notice, { backgroundColor: theme.colors.primaryTint, borderColor: theme.colors.primary }]}>
-            <AppText size={12} weight="bold" primary>
-              {notice}
-            </AppText>
-          </View>
-        ) : null}
-
-        <TrainingCard padding={18} gap={16}>
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Icon source={icons.bars} size={25} tint={theme.colors.accent} />
-              <View style={{ gap: 4 }}>
-              <AppText size={16} weight="bold">
-                This week
-              </AppText>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Icon source={icons.flame} size={14} tint={theme.colors.accent} /><AppText size={12} muted>{weeklyStreak ? `${weeklyStreak}-week streak` : "Build your streak"}</AppText></View>
-              </View>
-            </View>
-            <View style={{ flexDirection: "row", gap: 6 }}><SecondaryButton height={38} fontSize={11} onPress={() => setShowCalendar(true)}>Calendar</SecondaryButton><SecondaryButton height={38} fontSize={11} onPress={openGoalEditor}>Edit goal</SecondaryButton></View>
-          </View>
-
-          <View style={{ gap: 8 }}>
-            <View style={styles.sectionHeader}>
-              <View style={{ gap: 2 }}>
-                <AppText size={13} muted>
-                  Weekly goal
-                </AppText>
-                <AppText size={22} weight="black">{weeklyWorkoutDays}/{weeklyWorkoutGoal}<AppText size={13} weight="bold"> days trained</AppText></AppText>
-              </View>
-            </View>
-            <ProgressBar progress={weeklyProgress} />
-            <AppText size={12} muted>
-              {weeklyWorkoutDays >= weeklyWorkoutGoal
-                ? "Weekly goal reached ✓"
-                : `${weeklyWorkoutGoal - weeklyWorkoutDays} more workout day${
-                    weeklyWorkoutGoal - weeklyWorkoutDays === 1 ? "" : "s"
-                  } to reach your goal.`}
-            </AppText>
-          </View>
-
-          <View style={styles.weekRow}>
-            {weekDays.map((day, index) => {
-              const iso = toIsoDate(day);
-              const logged = loggedDates.has(iso);
-              const hasFood = foodEntries.some((entry) => entry.date === iso);
-              const today = iso === todayIso;
-              return (
-                <Pressable
-                  key={iso}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${calendarDayTitle(iso)} activity`}
-                  onPress={() => openCalendarDay(iso)}
-                  style={[
-                    styles.weekDay,
-                    {
-                      backgroundColor: logged ? theme.colors.primary : theme.colors.surfaceRaised,
-                      borderColor: today ? theme.colors.primary : theme.colors.border,
-                    },
-                  ]}
-                >
-                  <AppText size={10} weight="bold" color={logged ? theme.colors.primaryText : theme.colors.muted}>
-                    {weekdayLabels[index]}
-                  </AppText>
-                  <AppText size={14} weight="black" color={logged ? theme.colors.primaryText : theme.colors.text}>
-                    {day.getDate()}
-                  </AppText>
-                  <View style={{ minHeight: 12, flexDirection: "row", alignItems: "center", gap: 3 }}>
-                    {logged ? <AppText accessibilityLabel="Workout logged" size={10} weight="bold" color={theme.colors.primaryText}>✓</AppText> : null}
-                    {hasFood ? <View accessibilityLabel="Nutrition logged" style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: logged ? theme.colors.primaryText : theme.colors.muted }} /> : null}
-                    {!logged && !hasFood ? <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 1.5, borderColor: theme.colors.muted }} /> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </TrainingCard>
-
-        <LiftProgression />
-
-        <WeeklyRecap />
-
-        <TrainingCard padding={16} gap={14}>
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon source={icons.clock} size={22} tint={theme.colors.accent} /><AppText size={16} weight="bold">Recent workouts</AppText></View>
-            {logs.length > 2 ? (
-              <SecondaryButton
-                height={34}
-                fontSize={12}
-                style={styles.smallButton}
-                onPress={() => setShowAllActivities((current) => !current)}
-              >
-                {showAllActivities ? "Show Less" : "See All"}
-              </SecondaryButton>
-            ) : null}
-          </View>
-
-          {visibleLogs.length ? (
-            <View style={{ gap: 12 }}>
-              {visibleLogs.map((log) => (
-                <View key={log.id} style={{ padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.panelBorder, backgroundColor: theme.colors.insetSurface, gap: 12 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <View style={[styles.dateChip, { backgroundColor: theme.colors.primaryTint }]}>
-                    <AppText size={11} weight="extrabold" primary>
-                      {formatShortDate(log.date)}
-                    </AppText>
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <AppText weight="bold" numberOfLines={1}>
-                      {log.title}
-                    </AppText>
-                    <AppText size={12} muted numberOfLines={log.notes ? 2 : 1}>
-                      {log.exercises?.length ? exerciseSummary(log.exercises) : log.notes || (log.verified ? "Verified partner session" : "Self-logged workout")}
-                    </AppText>
-                  </View>
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 10, justifyContent: "flex-end", borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 10 }}>
-                  <SecondaryButton
-                    height={38}
-                    fontSize={12}
-                    style={styles.editButton}
-                    onPress={() => {
-                      const lines = [log.title, formatShortDate(log.date), log.notes].filter(Boolean);
-                      queueSocialDraft(lines.join("\n"));
-                      nav.setTab("Social");
-                    }}
-                  >
-                    Share
-                  </SecondaryButton>
-                  <SecondaryButton accessibilityLabel={`Edit workout ${log.title}`} height={38} fontSize={12} style={styles.editButton} onPress={() => beginEditLog(log)}>
-                    Edit
-                  </SecondaryButton>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <AppText muted style={{ lineHeight: 20 }}>
-              Your logged workouts will appear here.
-            </AppText>
-          )}
-        </TrainingCard>
-      </ScrollBody>
+        <TrainPrototype onCalendar={openCalendarDay} onEditLog={beginEditLog} onGoal={openGoalEditor} onEditFoods={(date) => {
+          setFuelDate(date);
+          savedShowRecipes = false;
+          setShowRecipes(false);
+          savedHomeMode = "fuel";
+          setHomeMode("fuel");
+        }} checkIn={<CheckInPanel />} />
       )}
 
       <WorkoutEditor visible={!!editingLogId} log={logs.find(log => log.id === editingLogId)} onClose={() => setEditingLogId(null)} onDelete={handleDeleteEditedLog} onSaved={() => { setEditingLogId(null); showNotice("Workout updated."); }} />
@@ -567,16 +408,16 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
       <Modal animationType="slide" transparent visible={showCalendar} onRequestClose={closeCalendar}>
         <View style={[styles.modalOverlay, { backgroundColor: theme.colors.modalOverlay }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Close calendar" style={styles.modalBackdrop} onPress={closeCalendar} />
-          <View style={[styles.calendarSheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.calendarSheetContent}>
+          <View style={[styles.calendarSheet, { backgroundColor: trainPalette.background, borderColor: theme.colors.border }]}>
+            <ScrollBody contentContainerStyle={styles.calendarSheetContent}>
               <View style={styles.sheetHeader}>
-                <View style={{ gap: 4 }}>
-                  <AppText size={28} weight="black">
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                  <TrainText size={22} weight="bold">
                     {weeklyStreak ? `${weeklyStreak}-week streak` : "No streak yet"} 🔥
-                  </AppText>
-                  <AppText size={13} muted>
+                  </TrainText>
+                  <TrainText size={13} muted>
                     Tap any day to review workouts and nutrition.
-                  </AppText>
+                  </TrainText>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -584,13 +425,13 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                   onPress={closeCalendar}
                   style={[styles.closeButton, { backgroundColor: theme.colors.surfaceRaised }]}
                 >
-                  <AppText size={24} weight="bold">
+                  <TrainText size={24} weight="bold">
                     ×
-                  </AppText>
+                  </TrainText>
                 </Pressable>
               </View>
 
-              <Card padding={14} radius={24} gap={14}>
+              <TrainingCard padding={0} gap={12}>
                 <View style={styles.monthHeader}>
                   <Pressable
                     accessibilityRole="button"
@@ -598,30 +439,30 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     onPress={() => setCalendarMonth((current) => addMonths(current, -1))}
                     style={styles.monthButton}
                   >
-                    <AppText size={24} weight="black" primary>
+                    <TrainText size={24} weight="black" primary>
                       ‹
-                    </AppText>
+                    </TrainText>
                   </Pressable>
-                  <AppText size={18} weight="black">
+                  <TrainText size={18} weight="black">
                     {monthTitle(calendarMonth)}
-                  </AppText>
+                  </TrainText>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Next month"
                     onPress={() => setCalendarMonth((current) => addMonths(current, 1))}
                     style={styles.monthButton}
                   >
-                    <AppText size={24} weight="black" muted>
+                    <TrainText size={24} weight="black" muted>
                       ›
-                    </AppText>
+                    </TrainText>
                   </Pressable>
                 </View>
 
                 <View style={styles.calendarWeekLabels}>
                   {weekdayLabels.map((day) => (
-                    <AppText key={day} size={12} weight="extrabold" muted style={styles.calendarWeekLabel}>
+                    <TrainText key={day} size={12} weight="extrabold" muted style={styles.calendarWeekLabel}>
                       {day[0]}
-                    </AppText>
+                    </TrainText>
                   ))}
                 </View>
 
@@ -658,26 +499,26 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                           },
                         ]}
                       >
-                        <AppText size={15} weight="black" color={dayTextColor}>
+                        <TrainText size={15} weight="black" color={dayTextColor}>
                           {day.getDate()}
-                        </AppText>
-                        {hasActivity ? <View style={{ position: "absolute", bottom: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>{hasWorkout ? <AppText accessibilityLabel="Workout logged" size={8} weight="bold" color={dayTextColor}>✓</AppText> : null}{hasNutrition ? <View accessibilityLabel="Food logged" style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: dayTextColor }} /> : null}</View> : null}
+                        </TrainText>
+                        {hasActivity ? <View style={{ position: "absolute", bottom: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>{hasWorkout ? <TrainText accessibilityLabel="Workout logged" size={8} weight="bold" color={dayTextColor}>✓</TrainText> : null}{hasNutrition ? <View accessibilityLabel="Food logged" style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: dayTextColor }} /> : null}</View> : null}
                       </Pressable>
                     );
                   })}
                 </View>
-              </Card>
+              </TrainingCard>
 
               <Card padding={16} radius={22} gap={12}>
-                {workoutStorageError ? <AppText size={13} color={theme.colors.danger}>{workoutStorageError}</AppText> : null}
-                {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
-                <View style={styles.sectionHeader}>
+                {workoutStorageError ? <TrainText size={13} color={theme.colors.danger}>{workoutStorageError}</TrainText> : null}
+                {foodJournalError ? <TrainText size={13} color={theme.colors.danger}>{foodJournalError}</TrainText> : null}
+                <View style={[styles.sectionHeader, { flexWrap: "wrap", gap: 8 }]}>
                   <SectionLabel>{calendarDayTitle(selectedCalendarDate)}</SectionLabel>
                   {selectedCalendarDate === todayIso ? (
                     <View style={[styles.pill, { backgroundColor: theme.colors.primaryTint }]}>
-                      <AppText size={11} weight="bold" primary>
+                      <TrainText size={11} weight="bold" primary>
                         Today
-                      </AppText>
+                      </TrainText>
                     </View>
                   ) : null}
                 </View>
@@ -692,16 +533,16 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                             {log.partnerName ? (
                               <PartnerFace name={log.partnerName} photo={log.partnerPhoto ?? null} size={42} />
                             ) : (
-                              <AppText size={18}>🏋️</AppText>
+                              <TrainText size={18}>🏋️</TrainText>
                             )}
                             <View style={{ flex: 1, gap: 3 }}>
-                              <AppText weight="bold">{log.title}</AppText>
+                              <TrainText weight="bold">{log.title}</TrainText>
                               {log.partnerName ? (
-                                <AppText size={12} weight="bold" primary>
+                                <TrainText size={12} weight="bold" primary>
                                   With {log.partnerName}
-                                </AppText>
+                                </TrainText>
                               ) : null}
-                              <AppText size={12} muted>{log.exercises?.length ? `${log.exercises.length} exercise${log.exercises.length === 1 ? "" : "s"}` : log.notes || (log.checkedIn ? "Checked in" : log.verified ? "Partner workout" : "Logged workout")}</AppText>
+                              <TrainText size={12} muted>{log.exercises?.length ? `${log.exercises.length} exercise${log.exercises.length === 1 ? "" : "s"}` : log.notes || (log.checkedIn ? "Checked in" : log.verified ? "Partner workout" : "Logged workout")}</TrainText>
                             </View>
                             <Pressable
                               accessibilityRole="button"
@@ -710,17 +551,19 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                               onPress={() => setDeletingCalendarLogId(log.id)}
                               style={[styles.calendarDeleteButton, { borderColor: theme.colors.danger }]}
                             >
-                              <AppText size={12} weight="bold" color={theme.colors.danger}>
+                              <TrainText size={12} weight="bold" color={theme.colors.danger}>
                                 Delete
-                              </AppText>
+                              </TrainText>
                             </Pressable>
                           </View>
 
                           {log.exercises?.length ? <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, gap: 10 }}>
                             {log.exercises.map((exercise, index) => <View key={exercise.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-                              <AppText size={11} muted style={{ width: 16 }}>{index + 1}</AppText>
-                              <AppText size={12} weight="bold" style={{ flex: 1 }}>{exercise.name}</AppText>
-                              <View style={{ alignItems: "flex-end", gap: 2 }}><AppText size={12} weight="bold">{exercise.weight} {exercise.unit}</AppText><AppText size={11} muted>{exercise.sets} × {exercise.reps}</AppText></View>
+                              <TrainText size={11} muted style={{ width: 16 }}>{index + 1}</TrainText>
+                              <TrainText size={12} weight="bold" style={{ flex: 1 }}>{exercise.name}</TrainText>
+                              <View style={{ alignItems: "flex-end", gap: 2 }}>{exercise.setDetails?.some(set => set.weight !== exercise.weight || set.reps !== exercise.reps)
+                                ? exercise.setDetails.map((set, setIndex) => <TrainText key={setIndex} size={11} muted>{set.weight} {exercise.unit} × {set.reps}</TrainText>)
+                                : <><TrainText size={12} weight="bold">{exercise.weight} {exercise.unit}</TrainText><TrainText size={11} muted>{exercise.sets} × {exercise.reps}</TrainText></>}</View>
                             </View>)}
                           </View> : null}
 
@@ -730,21 +573,21 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                               style={[styles.deleteConfirmation, { borderColor: theme.colors.danger }]}
                             >
                               <View style={{ flex: 1, gap: 2 }}>
-                                <AppText size={13} weight="bold">
+                                <TrainText size={13} weight="bold">
                                   Delete this workout?
-                                </AppText>
-                                <AppText size={11} muted>
+                                </TrainText>
+                                <TrainText size={11} muted>
                                   Your weekly progress will be recalculated.
-                                </AppText>
+                                </TrainText>
                               </View>
                               <Pressable
                                 accessibilityRole="button"
                                 onPress={() => setDeletingCalendarLogId(null)}
                                 style={styles.confirmationButton}
                               >
-                                <AppText size={12} weight="bold" muted>
+                                <TrainText size={12} weight="bold" muted>
                                   Cancel
-                                </AppText>
+                                </TrainText>
                               </Pressable>
                               <Pressable
                                 accessibilityRole="button"
@@ -752,9 +595,9 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                                 onPress={() => deleteCalendarWorkout(log)}
                                 style={[styles.confirmationButton, { backgroundColor: theme.colors.danger }]}
                               >
-                                <AppText size={12} weight="bold" color="#FFFFFF">
+                                <TrainText size={12} weight="bold" color="#FFFFFF">
                                   Delete
-                                </AppText>
+                                </TrainText>
                               </Pressable>
                             </View>
                           ) : null}
@@ -764,20 +607,20 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
 
                     {selectedDayNutrition ? (
                       <View style={[styles.dayDetailRow, { backgroundColor: theme.colors.surfaceRaised }]}>
-                        <AppText size={18}>🍽️</AppText>
+                        <TrainText size={18}>🍽️</TrainText>
                         <View style={{ flex: 1, gap: 3 }}>
-                          <AppText weight="bold">Consumed {selectedDayNutrition.calories.toLocaleString()} calories</AppText>
-                          <AppText size={12} muted>
+                          <TrainText weight="bold">Consumed {selectedDayNutrition.calories.toLocaleString()} calories</TrainText>
+                          <TrainText size={12} muted>
                             {selectedDayNutrition.protein}g protein • {selectedDayNutrition.carbs}g carbs • {selectedDayNutrition.fats}g fats
-                          </AppText>
+                          </TrainText>
                         </View>
                       </View>
                     ) : null}
                   </View>
                 ) : (
-                  <AppText muted style={{ lineHeight: 20 }}>
+                  <TrainText muted style={{ lineHeight: 20 }}>
                     No workout or nutrition has been logged for this day yet.
-                  </AppText>
+                  </TrainText>
                 )}
 
                 {selectedCalendarDate <= todayIso ? (
@@ -813,48 +656,50 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
               </Card>
 
               <Card padding={16} radius={22} gap={8} style={{ backgroundColor: theme.colors.primaryDeep }}>
-                <AppText size={12} muted>
+                <TrainText size={12} muted>
                   Current week
-                </AppText>
-                <AppText size={18} weight="black">
+                </TrainText>
+                <TrainText size={18} weight="black">
                   {weeklyWorkoutDays >= weeklyWorkoutGoal
                     ? "You're on fire. You've secured your streak for the week."
                     : `${weeklyWorkoutGoal - weeklyWorkoutDays} more workout day${
                         weeklyWorkoutGoal - weeklyWorkoutDays === 1 ? "" : "s"
                       } to secure this week.`}
-                </AppText>
+                </TrainText>
               </Card>
-            </ScrollView>
+            </ScrollBody>
           </View>
         </View>
       </Modal>
 
-      <Modal animationType="fade" transparent visible={showGoalEditor} onRequestClose={() => setShowGoalEditor(false)}>
+      <Modal animationType="fade" transparent visible={showGoalEditor} onRequestClose={() => { if (!savingGoal) setShowGoalEditor(false); }}>
         <View style={[styles.modalOverlay, { backgroundColor: theme.colors.modalOverlay }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close weekly goal editor"
+            disabled={savingGoal}
             style={styles.modalBackdrop}
             onPress={() => setShowGoalEditor(false)}
           />
-          <View style={[styles.goalSheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+          <View style={[styles.goalSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: 8 }]}>
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1, gap: 4 }}>
                 <SectionLabel>Weekly goal</SectionLabel>
-                <AppText size={24} weight="black">
-                  Choose your workout days
-                </AppText>
-                <AppText size={13} muted style={{ lineHeight: 19 }}>
+                <TrainText size={24} weight="black">
+                  Set your weekly goal
+                </TrainText>
+                <TrainText size={13} muted style={{ lineHeight: 19 }}>
                   Each day with a workout log counts once. Partner workouts count after both people check in.
-                </AppText>
+                </TrainText>
               </View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close weekly goal editor"
+                disabled={savingGoal}
                 onPress={() => setShowGoalEditor(false)}
                 style={[styles.closeButton, { backgroundColor: theme.colors.surfaceRaised }]}
               >
-                <AppText size={24} weight="bold">×</AppText>
+                <TrainText size={24} weight="bold">×</TrainText>
               </Pressable>
             </View>
 
@@ -867,33 +712,36 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
                     accessibilityLabel={`${goal} workout day${goal === 1 ? "" : "s"} per week`}
+                    disabled={savingGoal}
                     onPress={() => setGoalDraft(goal)}
                     style={[
                       styles.goalOption,
                       {
                         backgroundColor: selected ? theme.colors.primary : theme.colors.surfaceRaised,
                         borderColor: selected ? theme.colors.primary : theme.colors.border,
+                        borderRadius: 8,
                       },
                     ]}
                   >
-                    <AppText size={22} weight="black" color={selected ? theme.colors.primaryText : theme.colors.text}>
+                    <TrainText size={22} weight="black" color={selected ? theme.colors.primaryText : theme.colors.text}>
                       {goal}
-                    </AppText>
-                    <AppText size={10} weight="bold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
+                    </TrainText>
+                    <TrainText size={10} weight="bold" color={selected ? theme.colors.primaryText : theme.colors.muted}>
                       {goal === 1 ? "DAY" : "DAYS"}
-                    </AppText>
+                    </TrainText>
                   </Pressable>
                 );
               })}
             </View>
 
-            <PrimaryButton height={48} onPress={saveWeeklyGoal}>
-              Save weekly goal
+            <SaveFeedback area="workouts" onRetried={() => setShowGoalEditor(false)} />
+            <PrimaryButton height={48} disabled={savingGoal || !foodJournalReady} style={{ borderRadius: 8 }} onPress={saveWeeklyGoal}>
+              {savingGoal ? "Saving…" : "Save weekly goal"}
             </PrimaryButton>
           </View>
         </View>
       </Modal>
-    </Screen>
+    </Screen></TrainAppearance>
   );
 }
 
@@ -979,6 +827,7 @@ function CheckInPanel() {
   }, []);
 
   async function checkIn(item: CheckInWorkout) {
+
     if (busyId) return;
     setBusyId(item.plan.id);
     setMessage(null);
@@ -1069,7 +918,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   body: {
-    gap: 14,
+    gap: 16,
   },
   hero: {
     gap: 4,
@@ -1110,12 +959,12 @@ const styles = StyleSheet.create({
   },
   weekRow: {
     flexDirection: "row",
-    gap: 7,
+    gap: 8,
     justifyContent: "space-between",
   },
   weekDay: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     flex: 1,
     gap: 3,
@@ -1174,17 +1023,17 @@ const styles = StyleSheet.create({
     top: 0,
   },
   calendarSheet: {
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    borderWidth: 1,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderWidth: 0,
     maxHeight: "88%",
     maxWidth: 430,
     overflow: "hidden",
     width: "100%",
   },
   goalSheet: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     borderWidth: 1,
     gap: 18,
     maxWidth: 430,
@@ -1208,7 +1057,8 @@ const styles = StyleSheet.create({
   },
   calendarSheetContent: {
     gap: 14,
-    padding: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 6,
     paddingBottom: 26,
   },
   sheetHeader: {
@@ -1231,35 +1081,34 @@ const styles = StyleSheet.create({
   },
   monthButton: {
     alignItems: "center",
-    height: 40,
+    height: 44,
     justifyContent: "center",
-    width: 40,
+    width: 44,
   },
   calendarWeekLabels: {
     alignSelf: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    width: 308,
+    width: "100%",
   },
   calendarWeekLabel: {
     textAlign: "center",
-    width: 38,
+    width: "14.285714%",
   },
   calendarGrid: {
     alignSelf: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 7,
-    justifyContent: "center",
-    width: 308,
+    justifyContent: "flex-start",
+    width: "100%",
   },
   calendarDay: {
     alignItems: "center",
-    borderRadius: 19,
-    borderWidth: 2,
-    height: 38,
+    borderRadius: 6,
+    borderWidth: 1,
+    height: 44,
     justifyContent: "center",
-    width: 38,
+    width: "14.285714%",
   },
   dayDetailRow: {
     alignItems: "center",

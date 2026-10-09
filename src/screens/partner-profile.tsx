@@ -1,6 +1,7 @@
+import { AppAlert as Alert } from "@/components/app-alert";
 import { Image } from "expo-image";
 import { PropsWithChildren, ReactNode } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { icons } from "@/assets";
 import { AppText, BackButton, Card, Icon, IconButton, PhotoScrim, Screen, ScrollBody, SectionLabel, StatBox } from "@/components/ui";

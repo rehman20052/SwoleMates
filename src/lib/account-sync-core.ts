@@ -68,7 +68,7 @@ export function createAccountList<T>(options: {
   async function flush(force = false) {
     while (state.operations.length) {
       const op = state.operations[0];
-      if (op.phase === "conflict" || op.phase === "error" || (!force && op.retryAt > Date.now())) break;
+      if (op.phase === "conflict" || (op.phase === "error" && !force) || (!force && op.retryAt > Date.now())) break;
       let savedRows: AccountRecord[] | undefined;
       try {
         await remote.save(namespace, op.changes, op.id);

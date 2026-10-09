@@ -41,6 +41,18 @@ function backend() {
   return { state, remote };
 }
 const valid = (item) => item && typeof item.id === 'string';
+test('explicit retry resends a cached server error once without replacing its record ID', async () => {
+  const server = backend(), local = storage(), base = server.remote('alice');
+  let failed = true;
+  const remote = { ...base, async save(...args) { if (failed) throw { code: '503', message: 'Service unavailable' }; return base.save(...args); } };
+  const store = createAccountList({ userId: 'alice', namespace: 'workout_logs', local, remote, identify: item => item.id, validate: valid });
+  await store.load([]); await store.change(() => [{ id: 'stable-workout', title: 'Push' }]);
+  assert.equal(store.status().phase, 'error'); assert.equal((await base.read('workout_logs')).length, 0);
+  failed = false; await store.retry();
+  assert.equal(store.status().phase, 'saved'); assert.equal(store.status().pending, 0);
+  assert.equal((await base.read('workout_logs'))[0].id, 'stable-workout');
+  await store.retry(); assert.equal(server.state.saves, 1);
+});
 test('explicit food undo restores its tombstone without removing another device addition', async () => {
   const server = backend(), a = device(server, 'alice', 'food');
   const original = { id: 'meal', calories: 400 };
