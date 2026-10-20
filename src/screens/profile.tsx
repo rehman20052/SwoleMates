@@ -8,6 +8,7 @@ import {
   Card,
   Field,
   Input,
+  Icon,
   PhotoScrim,
   PrimaryButton,
   Screen,
@@ -16,6 +17,7 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import { experienceLevels } from "@/data/partners";
+import { icons } from "@/assets";
 import { photoDisplayUri } from "@/lib/heic-media";
 import { pickProfileMedia } from "@/lib/pick-photo";
 import { moveProfileMedia } from "@/lib/profile-media-order";
@@ -1039,13 +1041,17 @@ export function ProfilePreview({
   const [hero, ...morePhotos] = profile.photos;
   const headline = [profile.fullName.trim() || "Your name", profile.age.trim()].filter(Boolean).join(", ");
   const subtitle = [profile.experienceLevel, profile.gender].filter(Boolean).join(" • ");
-  const facts = [distanceLabel, profile.hometown.trim(), profile.primaryGym.trim()].filter(Boolean);
+  const facts = [
+    { key: "distance", text: distanceLabel, icon: icons.location },
+    { key: "town", text: profile.hometown.trim(), icon: icons.location },
+    { key: "gym", text: profile.primaryGym.trim(), icon: icons.training },
+  ].filter(fact => fact.text);
   const days = profile.availabilityDays.join(", ");
   const times = profile.availabilityTimes.join(", ");
   const answered = (profile.prompts ?? []).filter((row) => row.prompt.trim() && row.answer.trim());
   const betweenPrompts = [
     <Card key="about">
-      <SectionLabel>About</SectionLabel>
+      <AppText display upper primary size={20} accessibilityRole="header">About</AppText>
       <AppText weight="semibold" style={{ lineHeight: 22 }}>
         {profile.about.trim() || "No bio yet."}
       </AppText>
@@ -1136,9 +1142,10 @@ export function ProfilePreview({
           {facts.length > 0 ? (
             <View style={styles.factRow}>
               {facts.map((fact) => (
-                <View key={fact} style={styles.fact}>
-                  <AppText size={12} weight="medium" color="#FFFFFF">
-                    {fact}
+                <View key={fact.key} style={[styles.fact, { flexDirection: "row", alignItems: "center", gap: 7, maxWidth: "100%" }]}>
+                  <Icon source={fact.icon} size={16} tint={theme.colors.accent} />
+                  <AppText display={false} size={12} weight="semibold" color="#FFFFFF" style={{ flexShrink: 1 }}>
+                    {fact.text}
                   </AppText>
                 </View>
               ))}
@@ -1227,7 +1234,7 @@ function ProfileClip({ uri, play }: { uri: string; play: boolean }) {
 function PromptAnswer({ prompt, answer }: { prompt: string; answer: string }) {
   return (
     <Card>
-      <AppText size={13} weight="bold" primary>
+      <AppText display upper size={20} primary accessibilityRole="header">
         {prompt}
       </AppText>
       <AppText weight="semibold" style={{ lineHeight: 22 }}>

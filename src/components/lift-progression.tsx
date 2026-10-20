@@ -99,7 +99,7 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
   const directoryLifts = activeGroup ? filteredLifts.filter(lift => activeGroup.liftIds.includes(lift.id)) : filteredLifts;
   const renderLift = (lift: TrackedLift) => <LiftProgressRow key={lift.id} prototype={prototype} lift={lift} recordLabel={trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).length > 1 ? `Record ${trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).findIndex(item => item.id === lift.id) + 1} / ${lift.minReps}-${lift.maxReps} reps / Since ${lift.history[0]?.date ?? "today"}` : undefined} onUpdate={() => openEditor(lift)} onRemove={() => { setDirectory(false); setConfirmDelete(lift); }} />;
   return <>
-    <TrainingCard padding={16} gap={16} style={prototype ? { padding: 24, borderWidth: 1, borderRadius: 8, backgroundColor: "#111314", borderColor: "#2a2e30" } : undefined}>
+    <TrainingCard padding={16} gap={16} style={prototype ? { padding: 24, borderWidth: 1, borderRadius: 8, backgroundColor: trainPalette.surface, borderColor: trainPalette.border } : undefined}>
       <View style={[styles.header, { flexWrap: "wrap", gap: 8 }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>{!prototype ? <Icon source={icons.progress} size={20} tint={theme.colors.accent} /> : null}<AppText size={prototype ? 23 : 16} weight="bold">Lift progression</AppText></View>
         <SecondaryButton height={34} fontSize={12} disabled={!foodJournalReady} onPress={() => openEditor()}>Add lift</SecondaryButton>
@@ -112,7 +112,7 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
       {!directory ? filteredLifts.slice(0, prototype ? 3 : 2).map(renderLift) : null}
       {trackedLifts.length > 0 && !filteredLifts.length ? <AppText muted>No lifts match that search.</AppText> : null}
       {filteredLifts.length > (prototype ? 3 : 2) ? <SecondaryButton height={38} fontSize={12} onPress={() => setDirectory(true)}>{liftQuery.trim() ? `View all ${filteredLifts.length} matches` : `View all ${trackedLifts.length} lifts`}</SecondaryButton> : null}
-      {prototype ? <View style={{ borderTopWidth: 1, borderColor: "#2a2e30", paddingTop: 20, flexDirection: "row", alignItems: "center", gap: 10 }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#bdf40b" }} /><AppText size={13} muted>One good rep closer to your goals.</AppText></View> : null}
+      {prototype ? <View style={{ borderTopWidth: 1, borderColor: trainPalette.border, paddingTop: 20, flexDirection: "row", alignItems: "center", gap: 10 }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.colors.accent }} /><AppText size={13} muted>One good rep closer to your goals.</AppText></View> : null}
       <SaveFeedback area="lifts" />
       {liftStorageError ? <AppText color={theme.colors.danger}>{liftStorageError}</AppText> : null}
     </TrainingCard>

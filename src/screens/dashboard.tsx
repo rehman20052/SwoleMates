@@ -318,7 +318,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   if (showRoutines) return <WorkoutRoutines onClose={() => setShowRoutines(false)} />;
 
   return (
-    <TrainAppearance active={homeMode === "train"}><Screen style={homeMode === "train" ? { backgroundColor: "#080a0b" } : undefined}>
+    <TrainAppearance active={homeMode === "train"}><Screen>
       {!theme.isDark && homeMode === "fuel" ? <Image accessible={false} pointerEvents="none" source={require("../../assets/brand/home-light.svg")} contentFit="fill" style={StyleSheet.absoluteFill} /> : null}
       <TitleBar
         title="Home"
