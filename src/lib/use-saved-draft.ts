@@ -28,7 +28,7 @@ export function useSavedDraft(id: string, restore: (content: string) => void, le
       let local: { content: string; updatedAt: number } | null = null;
       try { local = raw ? JSON.parse(raw) : null; } catch { /* Recover from cloud. */ }
       const cloud = typeof remote === "object" ? remote : null;
-      const latest = local && typeof local.content === "string" && Number.isFinite(local.updatedAt) && (!cloud || local.updatedAt > cloud.updatedAt) ? local : cloud;
+      const latest = local && typeof local.content === "string" && Number.isFinite(local.updatedAt) && (!cloud || local.updatedAt >= cloud.updatedAt) ? local : cloud;
       if (!active) return;
       if (latest?.content) restoreRef.current(latest.content);
       if (latest) pending.current = latest;
@@ -58,7 +58,9 @@ export function useSavedDraft(id: string, restore: (content: string) => void, le
   }, [id, accountUserId, key]);
   function save(content: string) {
     if (!ready || !key || !accountUserId) return;
-    const item = { content, updatedAt: Date.now() };
+    const remote = workspaceSettings.find(setting => setting.id === id)?.value;
+    const remoteUpdatedAt = typeof remote === "object" && Number.isFinite(remote.updatedAt) ? remote.updatedAt : 0;
+    const item = { content, updatedAt: Math.max(Date.now(), (pending.current?.updatedAt ?? 0) + 1, remoteUpdatedAt + 1) };
     pending.current = item;
     setStatus(content ? "Saving draft..." : "");
     localWrites.current = localWrites.current.catch(() => undefined).then(() => AsyncStorage.setItem(key, JSON.stringify(item))).catch(() => setStatus("Could not save draft on this device"));

@@ -3,6 +3,7 @@
 export const icons = {
   chef: require("../assets/figma/icons/chef.svg"),
   training: require("../assets/figma/icons/training.svg"),
+  location: require("../assets/figma/icons/location.svg"),
   fuel: require("../assets/figma/icons/fuel.svg"),
   progress: require("../assets/figma/icons/progress.svg"),
   bars: require("../assets/figma/icons/bars.svg"),

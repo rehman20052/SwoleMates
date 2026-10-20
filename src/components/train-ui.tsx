@@ -25,14 +25,17 @@ export function useTrainPalette() {
   const { isDark } = useAppTheme();
   const prototype = useContext(TrainPrototypeContext);
   return prototype
-    ? { surface: "#111314", background: "#080a0b", text: "#FFFFFF", muted: "#859099", field: "#1b1e20", border: "#2a2e30", separator: "#2a2e30", track: "#1b1e20", action: "#E2E5E7", actionText: "#171B1E", complete: "#212b13" }
+    ? isDark
+      ? { surface: "#111314", background: "#080a0b", text: "#FFFFFF", muted: "#859099", field: "#1b1e20", border: "#2a2e30", separator: "#2a2e30", track: "#1b1e20", action: "#E2E5E7", actionText: "#171B1E", complete: "#212b13" }
+      : { surface: "#FFFFFF", background: "#F5F6F2", text: "#252C31", muted: "#606A72", field: "#EBEEF0", border: "#D6DCE0", separator: "#D6DCE0", track: "#D6DCE0", action: "#252C31", actionText: "#FFFFFF", complete: "#E8EEE3" }
     : isDark ? { surface: "#111114", background: "#000000", text: "#FFFFFF", muted: "#A0A6AB", field: "#18181b", border: "#1c1c1e", separator: "#1c1c1e", track: "#18181b", action: "#E2E5E7", actionText: "#171B1E", complete: "#17251B" }
     : { surface: "#FFFFFF", background: "#F5F6F7", text: "#252C31", muted: "#606A72", field: "#EBEEF0", border: "#D6DCE0", separator: "#D6DCE0", track: "#D6DCE0", action: "#252C31", actionText: "#FFFFFF", complete: "#E8EEE3" };
 }
 export function TrainText({ weight, muted, color, size, ...props }: ComponentProps<typeof AppText>) {
+  const theme = useAppTheme();
   const palette = useTrainPalette();
   const prototype = useContext(TrainPrototypeContext);
-  return <AppText {...props} size={trainTextSize(size)} muted={muted} weight={weight} color={color ?? (props.primary ? prototype ? "#bdf40b" : undefined : muted ? palette.muted : palette.text)} />;
+  return <AppText {...props} size={trainTextSize(size)} muted={muted} weight={weight} color={color ?? (props.primary ? prototype && !theme.isDark ? "#476600" : prototype ? "#bdf40b" : undefined : muted ? palette.muted : palette.text)} />;
 }
 export function TrainInput({ style, ...props }: ComponentProps<typeof BaseInput>) {
   const palette = useTrainPalette();
