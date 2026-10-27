@@ -206,3 +206,56 @@ test('hide, show, and hide again intentionally restore only the hidden-chat flag
   assert.equal((await device(server, 'alice', 'workout_logs').store.load([])).length, 0);
   assert.equal((await device(server, 'bob', 'settings').store.load([])).length, 0);
 });
+// Pauses the next save until the returned release() is called, so another device can save first.
+function pauseNextSave(server) {
+  let release; const gate = new Promise((resolve) => { release = resolve; });
+  let paused; const entered = new Promise((resolve) => { paused = resolve; });
+  let once = true;
+  server.state.pauseSave = async () => { if (once) { once = false; paused(); await gate; } };
+  return { entered, release: () => release() };
+}
+test('a rejected save stays a conflict even when the device cannot store it, so it is never re-sent', async () => {
+  const server = backend(); const a = device(server); const b = device(server);
+  await a.store.load([{ id: 'r', name: 'Original' }]); await b.store.load([]);
+  const pause = pauseNextSave(server);
+  const pending = a.store.change((rows) => rows.map((row) => ({ ...row, name: 'Older edit' })));
+  await pause.entered;
+  await b.store.change((rows) => rows.map((row) => ({ ...row, name: 'Newer edit' })));
+  a.local.failWrite = true; // the device can't store the failure
+  pause.release(); await pending.catch(() => undefined);
+  assert.equal(a.store.status().phase, 'conflict');
+  a.local.failWrite = false;
+  const saves = server.state.saves;
+  for (let i = 0; i < 5; i++) {
+    await a.store.refresh().catch(() => undefined);
+    await a.store.change((rows) => rows).catch(() => undefined);
+  }
+  assert.equal(server.state.saves, saves, 'a conflicted save must not be sent again');
+});
+test('settings conflicts settle on their own: the copy edited last wins and nothing loops', async () => {
+  const server = backend();
+  const newest = (local, remote) => !remote || (local.payload?.value?.updatedAt ?? 0) >= (remote.payload?.value?.updatedAt ?? 0) ? 'local' : 'server';
+  const make = () => { const local = storage(); return { local, store: createAccountList({ userId: 'alice', namespace: 'settings', local, remote: server.remote('alice'), identify: (item) => item.id, validate: valid, resolveConflict: newest }) }; };
+  const a = make(); const b = make();
+  await a.store.load([{ id: 'draft', value: { content: 'v1', updatedAt: 1 } }]); await b.store.load([]);
+  // An older laptop edit loses to a newer phone edit that saved first.
+  let pause = pauseNextSave(server);
+  let pending = a.store.change(() => [{ id: 'draft', value: { content: 'laptop', updatedAt: 20 } }]);
+  await pause.entered;
+  await b.store.change(() => [{ id: 'draft', value: { content: 'phone', updatedAt: 30 } }]);
+  pause.release(); await pending;
+  assert.equal(a.store.status().phase, 'saved');
+  assert.equal((await a.store.refresh())[0].value.content, 'phone');
+  // A newer laptop edit is re-sent once on top of the phone's copy and wins.
+  pause = pauseNextSave(server);
+  pending = a.store.change(() => [{ id: 'draft', value: { content: 'laptop newest', updatedAt: 50 } }]);
+  await pause.entered;
+  await b.store.change(() => [{ id: 'draft', value: { content: 'phone 2', updatedAt: 40 } }]);
+  pause.release(); await pending;
+  assert.equal(a.store.status().phase, 'saved');
+  assert.equal((await b.store.refresh())[0].value.content, 'laptop newest');
+  server.state.pauseSave = null;
+  const saves = server.state.saves;
+  for (let i = 0; i < 5; i++) await a.store.refresh();
+  assert.equal(server.state.saves, saves);
+});
