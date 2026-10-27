@@ -163,9 +163,10 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         {people.map((person) => (
           <View key={person.userId} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             {person.photo ? <Avatar source={{ uri: person.photo }} size={44} /> : <View style={[styles.face, { backgroundColor: theme.colors.surfaceRaised }]} />}
-            <AppText weight="semibold" numberOfLines={1} style={{ flex: 1 }}>
-              {person.name}
-            </AppText>
+            <View style={{ flex: 1, gap: 4 }}>
+              <AppText weight="semibold" numberOfLines={1}>{person.name}</AppText>
+              <AppText size={11} muted>Account {person.userId.slice(-8)}</AppText>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Unblock ${person.name}`}

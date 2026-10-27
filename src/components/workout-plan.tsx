@@ -5,7 +5,7 @@ import { AppText, PrimaryButton, SecondaryButton } from "@/components/ui";
 import { acceptWindowClosed, cancelWorkoutRequest, respondToWorkout, type PlannedWorkout } from "@/lib/workouts";
 import { formatDate } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
-import { SharedWorkoutSession } from "./shared-workout-session";
+import { useNavigation } from "@/navigation";
 
 export function WorkoutPlanCard({
   plan,
@@ -19,7 +19,9 @@ export function WorkoutPlanCard({
   onChange: () => void;
 }) {
   const theme = useAppTheme();
+  const nav = useNavigation();
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"accept" | "decline" | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -41,9 +43,8 @@ export function WorkoutPlanCard({
       await cancelWorkoutRequest(plan);
       onChange();
     } catch (err) {
-      setBusy(false);
       setError(err instanceof Error ? err.message : "Could not cancel that workout.");
-    }
+    } finally { setBusy(false); }
   }
 
   async function respond(accept: boolean) {
@@ -54,9 +55,8 @@ export function WorkoutPlanCard({
       await respondToWorkout(plan, accept);
       onChange();
     } catch (err) {
-      setBusy(false);
       setError(err instanceof Error ? err.message : "Could not update that workout.");
-    }
+    } finally { setBusy(false); setConfirm(null); }
   }
 
   const statusLine = expired
@@ -64,17 +64,17 @@ export function WorkoutPlanCard({
     : plan.status === "completed"
       ? "Completed"
       : plan.status === "scheduled"
-        ? "Scheduled. Check in from Home after it starts."
+        ? "Scheduled · Check in on Home"
         : plan.status === "cancelled"
           ? "Canceled"
           : accepted
             ? `Waiting for ${partnerName} to accept`
-            : `${partnerName} proposed this. Accept to schedule it.`;
+            : `From ${partnerName}`;
 
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <AppText size={12} weight="extrabold" primary upper>
-        Workout request
+        {plan.status === 'scheduled' ? 'Scheduled workout' : 'Workout invite'}
       </AppText>
       <AppText size={16} weight="extrabold">
         {plan.focus}
@@ -86,7 +86,11 @@ export function WorkoutPlanCard({
       <AppText size={13} muted>
         {statusLine}
       </AppText>
-      <SharedWorkoutSession plan={plan} me={me} />
+      {plan.location ? <AppText size={12} muted>{plan.location}</AppText> : null}
+      {plan.routine ? <AppText size={12} muted>{plan.routine.title} · {plan.routine.exercises.length} exercises</AppText> : null}
+      {plan.routine ? <SecondaryButton height={38} onPress={() => setPreview(!preview)}>{preview ? 'Hide routine' : 'View routine'}</SecondaryButton> : null}
+      {preview && plan.routine ? <View style={{ gap: 10, paddingVertical: 8 }}>{plan.routine.exercises.map((exercise, index) => <View key={index} style={{ flexDirection: 'row', gap: 10 }}><AppText size={13} style={{ flex: 1 }}>{exercise.name}</AppText><AppText size={13} muted>{exercise.sets} × {exercise.reps}</AppText></View>)}</View> : null}
+      {plan.status === "scheduled" ? <SecondaryButton height={40} onPress={() => nav.setTab("Home")}>View on Home</SecondaryButton> : null}
       {error ? (
         <AppText size={12} color={theme.colors.danger}>
           {error}
@@ -97,7 +101,7 @@ export function WorkoutPlanCard({
           <SecondaryButton style={styles.action} height={40} fontSize={13} disabled={busy} onPress={() => setConfirm("decline")}>
             Decline
           </SecondaryButton>
-          <PrimaryButton style={styles.action} height={40} fontSize={13} disabled={busy} onPress={() => setConfirm("accept")}>
+          <PrimaryButton style={styles.action} height={40} fontSize={13} disabled={busy} onPress={() => void respond(true)}>
             Accept
           </PrimaryButton>
         </View>

@@ -1,5 +1,6 @@
 import { deleteMatchMessage, listConnections, notifyChatAlerts, sendMatchMessage } from "@/lib/matches";
 import { supabase } from "@/lib/supabase";
+import { parseRoutine, type RoutinePlan } from './partner-routines';
 
 export const workoutPlanMarker = "workout-plan:";
 
@@ -47,6 +48,7 @@ export type PlannedWorkout = {
   acceptedBy: string[];
   attendedBy: string[];
   cancelledBy: string | null;
+  routine?: RoutinePlan | null;
 };
 
 type PlanRow = {
@@ -145,11 +147,6 @@ export function occupiedTimeLabels(plans: PlannedWorkout[], date: string) {
   return plans.filter((plan) => stillPlanned(plan) && plan.date === date).map((plan) => plan.time);
 }
 
-function focusName(value: string) {
-  const text = value.trim().replace(/\s+/g, " ").slice(0, 40);
-  return text && text.toLowerCase() !== "other" ? text : "";
-}
-
 function cancelledById(notes: string | null) {
   try {
     const parsed = JSON.parse(notes ?? "") as { cancelledBy?: unknown };
@@ -190,6 +187,7 @@ function fromRow(row: PlanRow): PlannedWorkout {
     acceptedBy: acceptedIds(row.notes, createdBy),
     attendedBy: [],
     cancelledBy: cancelledById(row.notes),
+    routine: (() => { try { return parseRoutine(JSON.parse(row.notes ?? '{}').routine); } catch { return null; } })(),
   };
 }
 
@@ -264,6 +262,17 @@ export async function listMatchWorkouts(matchId: string) {
     .order("created_at", { ascending: true });
   if (error) throw planError(error, "Could not load workouts for this chat.");
   return settleShownUp(await withAttendance(((data ?? []) as PlanRow[]).map(fromRow)));
+}
+
+export async function listIncomingWorkoutRequests(matchIds: string[]) {
+  if (!matchIds.length) return [];
+  const me = await currentUserId();
+  const { data, error } = await supabase.from('planned_workout')
+    .select('planned_workout_id, match_id, created_by, title, focus, workout_date, start_time, location, status, notes')
+    .in('match_id', matchIds).eq('status', 'proposed').neq('created_by', me)
+    .order('workout_date', { ascending: true }).order('start_time', { ascending: true });
+  if (error) throw planError(error, 'Could not load workout requests.');
+  return ((data ?? []) as PlanRow[]).map(fromRow).filter(plan => plan.createdBy !== me && plan.status === 'proposed' && !plan.acceptedBy.includes(me) && !acceptWindowClosed({ status: plan.status, date: plan.date, startTime: plan.time }));
 }
 
 export type CheckInWorkout = {
@@ -376,14 +385,14 @@ export async function listScheduledWorkouts() {
 export async function proposeWorkout(input: {
   matchId: string;
   partnerName: string;
-  focus: string;
   date: string;
   timeLabel: string;
   location: string;
+  routine?: RoutinePlan | null;
 }) {
   const me = await currentUserId();
-  const focus = focusName(input.focus);
-  if (!focus) throw new Error("Enter the workout you want to do.");
+  const routine = parseRoutine(input.routine);
+  const focus = routine?.title || 'Workout';
   if (acceptWindowClosed({ status: "proposed", date: input.date, startTime: input.timeLabel })) {
     throw new Error("Pick a time at least 30 minutes from now.");
   }
@@ -402,7 +411,7 @@ export async function proposeWorkout(input: {
       workout_date: input.date,
       start_time: toSqlTime(input.timeLabel),
       focus,
-      notes: JSON.stringify({ acceptedBy: [me] }),
+      notes: JSON.stringify({ acceptedBy: [me], routine }),
       status: "proposed",
     })
     .select("planned_workout_id")
@@ -411,7 +420,7 @@ export async function proposeWorkout(input: {
   const when = new Date(`${input.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   await sendMatchMessage(
     input.matchId,
-    `Proposed a ${focus} workout for ${when} at ${input.timeLabel}.\n${workoutPlanMarker}${data.planned_workout_id}`,
+    `Proposed ${routine ? `a ${routine.title} workout` : 'a workout'} for ${when} at ${input.timeLabel}.\n${workoutPlanMarker}${data.planned_workout_id}`,
   );
   return data.planned_workout_id as string;
 }
@@ -495,7 +504,7 @@ export async function respondToWorkout(plan: PlannedWorkout, accept: boolean) {
     throw new Error("This request expired. They need to send a new one.");
   }
   if (!accept) {
-    const notes = JSON.stringify({ acceptedBy: plan.acceptedBy, cancelledBy: me });
+    const notes = JSON.stringify({ acceptedBy: plan.acceptedBy, cancelledBy: me, routine: plan.routine ?? null });
     const { error } = await supabase
       .from("planned_workout")
       .update({ status: "cancelled", notes })
@@ -509,7 +518,7 @@ export async function respondToWorkout(plan: PlannedWorkout, accept: boolean) {
   const { error } = await supabase
     .from("planned_workout")
     .update({
-      notes: JSON.stringify({ acceptedBy }),
+      notes: JSON.stringify({ acceptedBy, routine: plan.routine ?? null }),
       status: acceptedBy.length >= 2 ? "scheduled" : "proposed",
     })
     .eq("planned_workout_id", plan.id)

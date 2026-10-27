@@ -28,9 +28,44 @@ async function fixture() {
   await db.exec(script('reliability-safety'));await db.exec(script('reliability-safety'));
   await db.exec(script('reliability-sync'));await db.exec(script('reliability-sync'));
   await db.exec(script('shared-sessions'));await db.exec(script('account-controls'));
+  await db.exec(script('blocked-people'));await db.exec(script('blocked-people'));
+  await db.exec(script('partner-routines'));await db.exec(script('partner-routines'));
   return db;
 }
 async function as(db,id) {await db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}';`);}
+
+test('partners can preview only saved routine targets; strangers and blocked contacts cannot', async () => {
+  const db = await fixture(); try {
+    const draft = { title: 'Push A', notes: 'private note', rows: [{ exercise: 'Bench press', sets: '3', reps: '8', weight: '225', unit: 'lb' }] };
+    await db.query("insert into public.account_records(user_id,namespace,record_id,payload) values($1,'settings','workout-plan:test',$2),($1,'settings','draft:private',$2)", [b, { id: 'workout-plan:test', value: { content: JSON.stringify(draft) } }]);
+    await db.query("insert into public.match_requests(from_user_id,to_user_id,status,requested_by) values($1,$2,'accepted',$1)", [a,b]);
+    await as(db,a);
+    const rows = (await db.query('select * from public.partner_workout_routines($1)', [b])).rows;
+    assert.equal(rows.length, 1);
+    assert.deepEqual(rows[0].routine, { title: 'Push A', exercises: [{ name: 'Bench press', sets: 3, reps: 8 }] });
+    assert.ok(!JSON.stringify(rows).includes('225')); assert.ok(!JSON.stringify(rows).includes('private note'));
+    await as(db,c); await assert.rejects(db.query('select * from public.partner_workout_routines($1)', [b]), /Not an available partner/);
+    await as(db,a); await db.query('select public.block_contact($1)', [b]);
+    await assert.rejects(db.query('select * from public.partner_workout_routines($1)', [b]), /Not an available partner/);
+    await db.exec('reset role;set role anon');
+    await assert.rejects(db.query('select * from public.partner_workout_routines($1)', [b]), /permission denied/);
+  } finally { await db.close(); }
+});
+
+test('blocked identities remain visible only to their blocker with minimal profile fields', async () => {
+  const db = await fixture(); try {
+    await db.query('insert into public.discover_profiles(id,profile) values($1,$2),($3,$4)', [b, { fullName: 'Jamie', photos: ['jamie.png'], birthDate: 'private', zipCode: 'private' }, c, { fullName: 'Taylor', photos: [] }]);
+    await as(db, a); await db.query('select public.block_contact($1)', [b]); await db.query('select public.block_contact($1)', [c]);
+    const rows = (await db.query('select * from public.my_blocked_people()')).rows;
+    assert.deepEqual(rows.map(row => row.profile.fullName), ['Jamie', 'Taylor']);
+    assert.equal(rows[0].user_id, b);
+    assert.equal(rows[0].profile.birthDate, undefined); assert.equal(rows[0].profile.zipCode, undefined);
+    assert.equal((await db.query('select * from public.my_connections()')).rows.length, 0);
+    await as(db, b); assert.equal((await db.query('select * from public.my_blocked_people()')).rows.length, 0, 'incoming blocks are private');
+    await db.exec('reset role; set role anon');
+    await assert.rejects(db.query('select * from public.my_blocked_people()'), /permission denied/i);
+  } finally { await db.close(); }
+});
 test('RPC transitions require membership, preserve participants and never autoaccept old declined requests',async()=>{
   const db=await fixture();try{
     await as(db,a);await db.query('select public.send_match_request($1)',[b]);

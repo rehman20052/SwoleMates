@@ -1,5 +1,5 @@
 import { BRAND_LIME } from "@/theme";
-import { TrainAppearance, TrainPrototype } from "@/components/train-prototype";
+import { TrainAppearance, TrainPrototype, PrototypeWorkout } from "@/components/train-prototype";
 import { HomeBackdrop } from "@/components/home-backdrop";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -21,6 +21,8 @@ import {
   TitleBar,
 } from "@/components/ui";
 import { QuickWorkoutLog } from "@/components/quick-workout-log";
+import { usePartnerWorkoutProgress } from '@/lib/use-partner-workout-progress';
+
 import { WorkoutRoutines } from "@/components/workout-routines";
 import { SaveFeedback } from "@/components/save-feedback";
 import { exerciseSummary } from "@/lib/workout-session";
@@ -635,7 +637,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                 {selectedCalendarDate <= todayIso ? (
                   calendarLogOpen ? (
                     <View style={{ gap: 10 }}>
-                      <QuickWorkoutLog key={selectedCalendarDate} date={selectedCalendarDate} onSaved={() => { setCalendarLogOpen(false); showNotice("Workout saved to this day."); }} />
+                      <QuickWorkoutLog key={selectedCalendarDate} date={selectedCalendarDate} onDiscard={() => setCalendarLogOpen(false)} onSaved={() => { setCalendarLogOpen(false); showNotice("Workout saved to this day."); }} />
                       <View style={styles.quickActions}>
                         <SecondaryButton
                           height={42}
@@ -759,7 +761,7 @@ function WorkoutEditor({ visible, log, onClose, onDelete, onSaved }: { visible: 
           <SecondaryButton height={44} fontSize={13} disabled={deleting} onPress={onClose}>Cancel</SecondaryButton>
         </View>
         <ScrollBody contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {log ? <QuickWorkoutLog key={log.id} existing={log} onSaved={onSaved} /> : <AppText muted>This workout is no longer available.</AppText>}
+          {log ? <QuickWorkoutLog key={log.id} existing={log} onDiscard={onClose} onSaved={onSaved} /> : <AppText muted>This workout is no longer available.</AppText>}
         </ScrollBody>
         <View style={{ paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderColor: theme.colors.border, gap: 8 }}>
           {confirmDelete ? <><AppText size={13}>Delete this workout?</AppText><View style={{ flexDirection: "row", gap: 12 }}><SecondaryButton style={{ flex: 1 }} disabled={deleting} onPress={() => setConfirmDelete(false)}>Keep</SecondaryButton><PrimaryButton style={{ flex: 1 }} disabled={deleting} onPress={async () => { setDeleting(true); await onDelete(); setDeleting(false); }}>{deleting ? "Deleting…" : "Delete workout"}</PrimaryButton></View></> : <SecondaryButton height={44} textColor={theme.colors.danger} onPress={() => setConfirmDelete(true)}>Delete workout</SecondaryButton>}
@@ -796,12 +798,14 @@ function PartnerFace({ name, photo, size }: { name: string; photo: string | null
 
 function CheckInPanel() {
   const theme = useAppTheme();
-  const { syncVerifiedWorkoutLogs } = useAppData();
+  const { syncVerifiedWorkoutLogs, accountUserId, logs } = useAppData();
+  const [loggingPlan, setLoggingPlan] = useState<PlannedWorkout | null>(null);
   const [items, setItems] = useState<CheckInWorkout[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const partnerProgress = usePartnerWorkoutProgress(items.map(item => item.plan.id), loggingPlan?.id ?? null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 15000);
@@ -824,7 +828,7 @@ function CheckInPanel() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [now]);
 
   async function checkIn(item: CheckInWorkout) {
 
@@ -846,12 +850,9 @@ function CheckInPanel() {
 
   return (
     <View style={{ gap: 14 }}>
-      {items.length ? <View style={{ gap: 4 }}><AppText size={16} weight="bold">Partner workouts</AppText><AppText size={12} muted>Both partners check in to count toward your goal.</AppText></View> : null}
+      {items.length ? <AppText size={16} weight="bold">Partner workouts</AppText> : null}
       {status === "loading" ? <AppText muted>Loading workouts...</AppText> : null}
       {status === "error" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
-      {status === "ready" && items.length === 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Icon source={icons.calendarMuted} size={16} tint={theme.colors.muted} /><AppText size={12} muted>No upcoming partner workouts</AppText></View>
-      ) : null}
       {items.map((item) => {
         const { plan, partnerName, checkedIn, partnerCheckedIn } = item;
         const both = plan.status === "completed" || (checkedIn && partnerCheckedIn);
@@ -881,7 +882,8 @@ function CheckInPanel() {
                 </AppText>
               </View>
             </View>
-            {ready ? null : (
+            <AppText size={12} muted>{plan.location}</AppText>
+            {ready ? <AppText size={13} muted>{partnerCheckedIn ? `${partnerName} checked in` : "Check-in open"}</AppText> : (
               <AppText size={13} muted>
                 {detail}
               </AppText>
@@ -891,10 +893,12 @@ function CheckInPanel() {
                 {busyId === plan.id ? "Checking in..." : "Check in"}
               </PrimaryButton>
             ) : null}
+            {accountUserId && checkedIn ? <PrimaryButton height={46} onPress={() => setLoggingPlan(plan)}>{logs.some(log => log.plannedWorkoutId === plan.id && log.exercises?.length) ? "View / edit workout" : partnerProgress.has(plan.id) ? "Resume workout" : "Log workout"}</PrimaryButton> : null}
           </Card>
         );
       })}
       {status === "ready" && message ? <AppText color={theme.colors.danger}>{message}</AppText> : null}
+      {loggingPlan ? <PrototypeWorkout key={loggingPlan.id} date={loggingPlan.date} templates={[]} plannedWorkout={loggingPlan} partnerName={items.find(item => item.plan.id === loggingPlan.id)?.partnerName} partnerPhoto={items.find(item => item.plan.id === loggingPlan.id)?.partnerPhoto} onClose={() => setLoggingPlan(null)} /> : null}
     </View>
   );
 }

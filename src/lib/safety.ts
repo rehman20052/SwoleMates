@@ -50,27 +50,17 @@ export async function blockedUserIds() {
 }
 
 export async function listBlockedPeople(): Promise<BlockedPerson[]> {
-  const me = await signedInUserId();
-  const { data, error } = await supabase.from("block").select("blocked_id").eq("user_id", me);
-  if (error) throw safetyError(error, "Could not load blocked people.") ?? new Error("Could not load blocked people.");
-  const ids = (data ?? []).map((row) => row.blocked_id).filter((id): id is string => Boolean(id));
-  if (ids.length === 0) return [];
-
-  const connections = await supabase.rpc("my_connections");
-  const names = new Map<string, { name: string; photo: string | null }>();
-  for (const row of (connections.data ?? []) as { other_user_id?: string; profile?: unknown }[]) {
-    if (!row.other_user_id) continue;
+  await signedInUserId();
+  const { data, error } = await supabase.rpc("my_blocked_people");
+  if (error) throw new Error(error.code === "PGRST202" || error.code === "42883"
+    ? "Blocked-user details need the supabase/blocked-people.sql update."
+    : "Could not load blocked people. Reconnect and try again.");
+  return ((data ?? []) as { user_id: string; profile: unknown }[]).map(row => {
     const profile = normalizeProfile(row.profile);
     const photo =
       profile?.photos.map(photoUrl).find((url, index) => url && profile.photoMedia[index] !== "video") ?? null;
-    names.set(row.other_user_id, { name: profile?.fullName?.trim() || "Blocked user", photo });
-  }
-
-  return ids.map((userId) => ({
-    userId,
-    name: names.get(userId)?.name ?? "Blocked user",
-    photo: names.get(userId)?.photo ?? null,
-  }));
+    return { userId: row.user_id, name: profile?.fullName?.trim() || `Account ${row.user_id.slice(-8)}`, photo };
+  });
 }
 
 export async function blockPerson(userId: string) {

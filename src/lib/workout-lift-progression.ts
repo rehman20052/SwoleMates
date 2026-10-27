@@ -1,6 +1,36 @@
 import type { TrackedLift } from "./lift-progression";
 import { validWorkoutExercises, type WorkoutExercise } from "./workout-session";
 
+type ProgressionLog = { id: string; date: string; exercises?: WorkoutExercise[] };
+
+// Rebuild workout contributions, retaining manually entered progression and goals.
+// Old records did not have provenance, so recognize their exact date/weight/reps once.
+export function reconcileWorkoutLifts(current: TrackedLift[], logs: ProgressionLog[], previous: ProgressionLog[], changed: ProgressionLog) {
+  const before = previous.find(log => log.id === changed.id);
+  const names = [...(before?.exercises ?? []), ...(changed.exercises ?? [])].map(row => row.name);
+  const seeded = progressLiftsFromWorkout(current, changed);
+  return seeded.map(lift => {
+    if (!names.some(name => matchTrackedLift(seeded, name)?.id === lift.id)) return lift;
+    const contributions = (source: ProgressionLog[]) => source.flatMap(log => {
+      if (!log.exercises?.length || !validWorkoutExercises(log.exercises)) return [];
+      const sets = log.exercises.filter(row => matchTrackedLift(seeded, row.name)?.id === lift.id).flatMap(row => {
+        const factor = row.unit === lift.unit ? 1 : lift.unit === "kg" ? 0.45359237 : 1 / 0.45359237;
+        return (row.setDetails ?? [{ weight: row.weight, reps: row.reps }]).map(set => ({ ...set, weight: Math.round(set.weight * factor * 100) / 100 }));
+      });
+      if (!sets.length) return [];
+      const weight = Math.max(...sets.map(set => set.weight));
+      const reps = sets.filter(set => set.weight === weight).map(set => set.reps);
+      return [{ date: log.date, weight, minReps: Math.min(...reps), maxReps: Math.max(...reps), workoutLogId: log.id }];
+    });
+    const legacy = contributions([...previous, ...logs]);
+    const manual = lift.history.filter(entry => !entry.workoutLogId && !legacy.some(old => old.date === entry.date
+      && Math.abs(old.weight - entry.weight) < 0.01 && old.minReps === entry.minReps && old.maxReps === entry.maxReps));
+    const history = [...manual, ...contributions(logs)].sort((a, b) => a.date.localeCompare(b.date));
+    const best = history.reduce<(typeof history)[number] | undefined>((best, entry) => !best || entry.weight >= best.weight ? entry : best, undefined);
+    return { ...lift, history, currentWeight: best?.weight ?? 0, minReps: best?.minReps ?? lift.minReps, maxReps: best?.maxReps ?? lift.maxReps };
+  });
+}
+
 export function liftNameKey(name: string) {
   return name.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).sort().join(" ");
 }

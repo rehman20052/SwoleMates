@@ -1,59 +1,108 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
-import { AppText, PrimaryButton, SecondaryButton } from "./ui";
+import { AppText, PrimaryButton, SecondaryButton, SelectField } from "./ui";
 import { QuickWorkoutLog } from "./quick-workout-log";
 import { type PlannedWorkout } from "@/lib/workouts";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/state/app-data";
-import { parseWorkoutDraft } from "@/lib/workout-drafts";
+import { parseWorkoutDraft, uniqueWorkoutTemplates } from "@/lib/workout-drafts";
+import { sharedExercises } from "@/lib/shared-workout-plan";
+import { useAppTheme } from "@/theme";
+
 export type SharedExercise = { name: string; sets: number; reps: number };
-type Session = { plan: SharedExercise[]; locked: boolean; states: Record<string,string> };
-export function SharedWorkoutSession({ plan, me }: { plan: PlannedWorkout; me: string }) {
+type Session = { plan: SharedExercise[]; locked: boolean; states: Record<string, string> };
+
+export function SharedWorkoutSession({ plan, me, home = false }: { plan: PlannedWorkout; me: string; home?: boolean }) {
   const { logs, workspaceSettings } = useAppData();
-  const [session,setSession] = useState<Session | null>(null); const [available,setAvailable] = useState(false);
-  const [error,setError] = useState<string | null>(null); const [busy,setBusy] = useState(false); const [logging,setLogging] = useState(false);
+  const theme = useAppTheme();
+  const [session, setSession] = useState<Session | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [choosing, setChoosing] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [logging, setLogging] = useState(false);
+  const [initialPlan, setInitialPlan] = useState<SharedExercise[]>([]);
+  const active = ["proposed", "scheduled", "completed"].includes(plan.status);
+
   async function action(action: string, exercisePlan?: SharedExercise[]) {
-    const {data,error} = await supabase.rpc("workout_session_action",{workout_id:plan.id,action,exercise_plan:exercisePlan ?? null});
+    const { data, error } = await supabase.rpc("workout_session_action", { workout_id: plan.id, action, exercise_plan: exercisePlan ?? null });
     if (error) throw new Error(error.message);
-    setSession(data as Session); return data as Session;
+    setSession(data as Session);
+    return data as Session;
   }
   useEffect(() => {
-    let active=true;
-    void supabase.rpc("shared_session_available").then(async ({data,error}) => {
-      if (!active || error || !data) return;
-      setAvailable(true); try { await action("read"); } catch (error) { if (active) setError(error instanceof Error ? error.message : "Session unavailable."); }
-    });
-    return () => {active=false;};
-  },[plan.id,plan.status]);
-  useEffect(() => {
-    if (!available) return;
-    let active = true;
-    const refresh = async () => {
-      const { data, error } = await supabase.rpc("workout_session_action", { workout_id: plan.id, action: "read", exercise_plan: null });
-      if (!active) return;
-      if (error) setError("Reconnect to refresh the shared session.");
-      else { setSession(data as Session); setError(null); }
-    };
-    const wake = () => { void refresh().catch(() => { if (active) setError("Reconnect to refresh the shared session."); }); };
-    const timer = setInterval(wake, 60000);
+    if (!active) return;
+    let mounted = true;
+    async function refresh() {
+      try {
+        const { data, error } = await supabase.rpc("workout_session_action", { workout_id: plan.id, action: "read", exercise_plan: null });
+        if (!mounted) return;
+        if (error || !data) { setAvailable(false); return; }
+        setSession(data as Session); setAvailable(true);
+      } catch { if (mounted) setAvailable(false); }
+    }
+    void refresh();
+    const wake = () => { void refresh(); };
+    const timer = setInterval(wake, 15000);
     if (typeof window !== "undefined") { window.addEventListener("focus", wake); window.addEventListener("online", wake); }
     return () => {
-      active = false; clearInterval(timer);
+      mounted = false; clearInterval(timer);
       if (typeof window !== "undefined") { window.removeEventListener("focus", wake); window.removeEventListener("online", wake); }
     };
-  }, [available, plan.id]);
-  const templates = workspaceSettings.flatMap(item => { if (!item.id.startsWith("workout-plan:") || typeof item.value!=="object") return []; const draft=parseWorkoutDraft(item.value.content); return draft ? [{id:item.id,draft}] : []; });
-  async function run(operation: () => Promise<void>) { if (busy) return; setBusy(true);setError(null); try { await operation(); } catch (error) { setError(error instanceof Error ? error.message : "Reconnect to update the shared session."); } finally { setBusy(false); } }
-  if (!available) return null;
-  const existing = logs.find(log => log.plannedWorkoutId===plan.id);
-  return <View style={{gap:10}}><AppText weight="bold">Shared training plan</AppText><AppText size={12} muted>{session?.locked ? "Plan locked when training started." : "The proposer can edit until anyone starts."} Personal weights, reps, notes and drafts stay private.</AppText>
-    {session?.plan.map((exercise,index) => <AppText key={index} size={12}>{exercise.name} · {exercise.sets} sets · {exercise.reps} target reps</AppText>)}
-    {session && !session.plan.length ? <AppText size={12} muted>No shared exercises yet. You can log your own workout.</AppText> : null}
-    {me===plan.createdBy && !session?.locked ? templates.map(({id,draft}) => <SecondaryButton key={id} disabled={busy} onPress={() => void run(async () => { await action("edit",draft.rows.map(row => ({name:row.exercise==="Other" ? row.customName : row.exercise,sets:Number(row.sets),reps:Number(row.reps)}))); })}>Share {draft.title} exercises</SecondaryButton>) : null}
-    {session ? <AppText size={12} muted>{Object.entries(session.states).map(([id,state]) => `${id===me ? "You" : "Partner"}: ${state}`).join(" · ") || "No participants ready yet."}</AppText> : null}
-    {plan.status==="scheduled" ? <><SecondaryButton disabled={busy} onPress={() => void run(async () => { await action("ready"); })}>Join · Ready</SecondaryButton><PrimaryButton disabled={busy || session?.states[me]==="finished"} onPress={() => void run(async () => { await action("training");setLogging(true); })}>Start training with this plan</PrimaryButton></> : null}
-    {logging && session ? <QuickWorkoutLog date={plan.date} existing={existing} plannedWorkoutId={plan.id} initialPlan={session.plan} initialTitle={plan.title} onSaved={() => {setLogging(false);void run(async () => {await action("finished");});}} /> : null}
-    {existing && session?.states[me]!=="finished" ? <SecondaryButton disabled={busy} onPress={() => void run(async () => { await action("finished"); })}>Share finished status</SecondaryButton> : null}
-    {error ? <AppText size={12}>{error}</AppText> : null}
+  }, [active, plan.id, plan.status]);
+
+  const templates = uniqueWorkoutTemplates(workspaceSettings.flatMap(item => {
+    if (!item.id.startsWith("workout-plan:") || typeof item.value !== "object") return [];
+    const draft = parseWorkoutDraft(item.value.content);
+    return draft?.rows.length ? [{ ...draft, id: item.id }] : [];
+  }));
+  const existing = logs.find(log => log.plannedWorkoutId === plan.id);
+  const hasLog = !!existing?.exercises?.length;
+  const canChoose = me === plan.createdBy && !session?.locked && plan.status !== "completed";
+  async function run(operation: () => Promise<void>) {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError(null);
+    try { await operation(); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not update this workout. Try again."); }
+    finally { busyRef.current = false; setBusy(false); }
+  }
+  const chosenExercises = () => selected === "" ? [] : selected === "shared" ? session?.plan ?? []
+    : sharedExercises(templates.find(template => template.id === selected)?.rows ?? []);
+
+  if (!active) return null;
+  if (home && logging) return <View style={{ gap: 12 }}>
+    <QuickWorkoutLog date={plan.date} existing={existing} plannedWorkoutId={plan.id} initialPlan={initialPlan} initialTitle={plan.focus} onSaved={() => {
+      setLogging(false); setChoosing(false);
+      if (available && plan.status === "scheduled" && session?.states[me] === "training") void run(async () => { await action("finished"); });
+    }} />
+    <SecondaryButton onPress={() => setLogging(false)}>Back to check-in</SecondaryButton>
+  </View>;
+
+  return <View style={{ gap: 10 }}>
+    {!home ? <>
+      <AppText size={13} weight="bold">Workout plan</AppText>
+      {session?.plan.length ? <AppText size={12} muted>{session.plan.map(exercise => `${exercise.name} · ${exercise.sets} × ${exercise.reps}`).join("\n")}</AppText>
+        : <AppText size={12} muted>{available === null ? "Loading workout plan…" : "Choose a routine or log your own exercises on Home."}</AppText>}
+      {available && canChoose ? <SecondaryButton height={40} disabled={busy} onPress={() => setChoosing(!choosing)}>{choosing ? "Close routine picker" : session?.plan.length ? "Change routine" : "Choose routine"}</SecondaryButton> : null}
+      {session?.locked ? <AppText size={12} muted>Routine locked. Training has started.</AppText> : null}
+    </> : <PrimaryButton height={44} disabled={busy || available === null} onPress={() => {
+      if (hasLog) { setLogging(true); return; }
+      setSelected(session?.plan.length ? "shared" : ""); setChoosing(!choosing);
+    }}>{hasLog ? "View / edit logged sets" : "Log this workout"}</PrimaryButton>}
+    {choosing ? <View style={{ gap: 10 }}>
+      <SelectField value={selected} options={[...(home && session?.plan.length ? ["shared"] : []), "", ...templates.map(template => template.id)]} onChange={setSelected}
+        renderLabel={id => id === "shared" ? "Shared routine" : id === "" ? home ? "Start with no exercises" : "No shared routine" : templates.find(template => template.id === id)?.title ?? "Routine"} />
+      <AppText size={12} muted>{home ? "Check off your sets as you train. Your weights and notes stay private." : "Only exercise names, sets and target reps are shared. Check in and record your sets on Home."}</AppText>
+      <PrimaryButton disabled={busy} onPress={() => void run(async () => {
+        const exercises = chosenExercises();
+        if (home) {
+          if (available && plan.status === "scheduled" && session?.states[me] !== "finished") await action("training");
+          setInitialPlan(exercises); setLogging(true);
+        } else { await action("edit", exercises); setChoosing(false); }
+      })}>{busy ? "Saving…" : home ? "Start logging sets" : "Use this routine"}</PrimaryButton>
+    </View> : null}
+    {error ? <AppText size={12} accessibilityRole="alert" color={theme.colors.danger}>{error}</AppText> : null}
   </View>;
 }
