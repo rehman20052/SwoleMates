@@ -12,6 +12,9 @@ export function useSavedDraft(id: string, restore: (content: string) => void, le
   const saveRef = useRef(saveWorkspaceSetting); saveRef.current = saveWorkspaceSetting;
   const pending = useRef<{ content: string; updatedAt: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The last content sent to the account. Unchanged content is never re-sent, so a re-render
+  // after a failed save can't turn into a retry loop.
+  const lastSent = useRef<string | null>(null);
   const localWrites = useRef<Promise<unknown>>(Promise.resolve());
   const key = accountUserId ? `swolemates.draft.${accountUserId}.${id}` : null;
   useEffect(() => {
@@ -62,11 +65,13 @@ export function useSavedDraft(id: string, restore: (content: string) => void, le
     const remoteUpdatedAt = typeof remote === "object" && Number.isFinite(remote.updatedAt) ? remote.updatedAt : 0;
     const item = { content, updatedAt: Math.max(Date.now(), (pending.current?.updatedAt ?? 0) + 1, remoteUpdatedAt + 1) };
     pending.current = item;
-    setStatus(content ? "Saving draft..." : "");
+    if (content !== lastSent.current) setStatus(content ? "Saving draft..." : "");
     localWrites.current = localWrites.current.catch(() => undefined).then(() => AsyncStorage.setItem(key, JSON.stringify(item))).catch(() => setStatus("Could not save draft on this device"));
     if (timer.current) clearTimeout(timer.current);
+    if (content === lastSent.current) return localWrites.current;
     const owner = accountUserId;
     timer.current = setTimeout(() => {
+      lastSent.current = content;
       void saveRef.current(id, content, owner, item.updatedAt).then(saved => {
         if (pending.current === item) setStatus(content ? saved ? "Draft saved" : "Draft on this device; account sync pending" : "");
       });

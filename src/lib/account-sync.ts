@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
-import { createAccountList, type AccountRemote, type AccountRecord } from "./account-sync-core";
+import { createAccountList, type AccountRemote, type AccountRecord, type RecordChange } from "./account-sync-core";
 
 export function accountSyncError(error: unknown) {
   const value = error as { code?: string; message?: string };
@@ -66,8 +66,21 @@ export function accountRemote(userId: string): AccountRemote {
     },
   };
 }
+// Drafts, routines and other settings carry an updatedAt time. When two devices saved the same
+// one, the copy edited last wins, the same rule saveWorkspaceSetting uses locally.
+function settingTime(payload: unknown) {
+  const value = (payload as { value?: { updatedAt?: unknown } } | null)?.value;
+  return typeof value === "object" && value && typeof value.updatedAt === "number" ? value.updatedAt : null;
+}
+function newestSetting(local: RecordChange, server: AccountRecord | undefined): "local" | "server" {
+  if (!server) return "local";
+  const mine = settingTime(local.payload), theirs = settingTime(server.payload);
+  if (mine == null || theirs == null) return "local";
+  return mine >= theirs ? "local" : "server";
+}
 export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T) {
-  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats" });
+  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats",
+    resolveConflict: namespace === "settings" ? newestSetting : undefined });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
 // may import them; signing into a second account never inherits the first one's data.

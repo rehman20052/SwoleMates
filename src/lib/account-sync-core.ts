@@ -28,6 +28,10 @@ export function createAccountList<T>(options: {
   userId: string; namespace: string; local: ListStorage; remote: AccountRemote;
   identify: (item: T) => string; validate: (value: unknown) => value is T;
   onCacheError?: () => void; allowRestore?: boolean;
+  // Lets a list settle a rejected save on its own instead of waiting for the user, e.g. drafts
+  // keep whichever copy was edited last. "local" re-sends the change on top of the server copy;
+  // "server" drops it.
+  resolveConflict?: (local: RecordChange, server: AccountRecord | undefined) => "local" | "server";
 }) {
   const { userId, namespace, local, remote, identify, validate } = options;
   const cacheKey = `swolemates.account-cache.${userId}.${namespace}`;
@@ -65,7 +69,29 @@ export function createAccountList<T>(options: {
     }
     return true;
   }
+  // Settles a rejected save once using options.resolveConflict. Returns false when it can't,
+  // so the operation stays a conflict and is never re-sent automatically.
+  async function settleConflict(op: Operation) {
+    if (!options.resolveConflict) return false;
+    let rows: AccountRecord[];
+    try { rows = await remote.read(namespace); } catch { return false; }
+    const server = new Map(rows.map(row => [row.id, row]));
+    const revisions = new Map(rows.map(row => [row.id, row.revision]));
+    const kept = op.changes.filter(change => options.resolveConflict!(change, server.get(change.id)) === "local");
+    // Every queued change is rebased on the server's current revisions.
+    const rebase = (change: RecordChange) => {
+      const revision = revisions.get(change.id) ?? 0; revisions.set(change.id, revision + 1);
+      return { ...change, expectedRevision: revision };
+    };
+    const operations = [
+      ...(kept.length ? [{ ...op, id: newOperationId(), phase: "pending" as const, attempts: 0, retryAt: 0, message: undefined, changes: kept.map(rebase) }] : []),
+      ...state.operations.slice(1).map(next => ({ ...next, changes: next.changes.map(rebase) })),
+    ];
+    await persist({ ...state, rows, operations });
+    return true;
+  }
   async function flush(force = false) {
+    const settled = new Set<string>();
     while (state.operations.length) {
       const op = state.operations[0];
       if (op.phase === "conflict" || (op.phase === "error" && !force) || (!force && op.retryAt > Date.now())) break;
@@ -75,9 +101,20 @@ export function createAccountList<T>(options: {
         savedRows = await remote.readRecords?.(namespace, op.changes.map(change => change.id));
       }
       catch (error) {
-        await persist({ ...state, operations: [{ ...op, phase: failure(error), attempts: op.attempts + 1,
+        const phase = failure(error);
+        // Each rejected save is settled at most once per flush, so a second rejection stops here.
+        if (phase === "conflict" && !settled.has(op.id) && await settleConflict(op).catch(() => false)) {
+          settled.add(op.id);
+          if (state.operations[0]) settled.add(state.operations[0].id);
+          continue;
+        }
+        const next: Cache = { ...state, operations: [{ ...op, phase, attempts: op.attempts + 1,
           retryAt: Date.now() + Math.min(60000, 1000 * 2 ** Math.min(op.attempts, 6)),
-          message: (error as { message?: string }).message ?? "Waiting for connection" }, ...state.operations.slice(1)] });
+          message: (error as { message?: string }).message ?? "Waiting for connection" }, ...state.operations.slice(1)] };
+        // If the device can't store the failure (e.g. its storage is full), still remember it in
+        // memory. Otherwise the same rejected save stays "pending" and is re-sent on every change,
+        // which is how one stale draft ended up hitting the database every second.
+        try { await persist(next); } catch { state = next; }
         break;
       }
       const rows = new Map(state.rows.map(row => [row.id, row]));
