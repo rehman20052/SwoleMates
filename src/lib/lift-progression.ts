@@ -1,7 +1,7 @@
 import { createDurableList, type ListStorage } from "./durable-list";
 import { validItemArtwork, type ItemArtwork } from "./item-artwork";
 
-export type LiftEntry = { date: string; weight: number; minReps: number; maxReps: number };
+export type LiftEntry = { date: string; weight: number; minReps: number; maxReps: number; workoutLogId?: string };
 export type TrackedLift = {
   id: string; name: string; unit: "lb" | "kg"; currentWeight: number;
   minReps: number; maxReps: number; goalWeight: number; history: LiftEntry[]; artwork?: ItemArtwork;

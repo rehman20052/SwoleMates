@@ -21,7 +21,7 @@ import { nutritionGoalSource, planWithUpdatedWeight, goalsFromProfile, type Nutr
 import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
-import { progressLiftsFromWorkout } from "@/lib/workout-lift-progression";
+import { reconcileWorkoutLifts } from "@/lib/workout-lift-progression";
 import { type WorkoutExercise } from "@/lib/workout-session";
 import { validItemArtwork } from "@/lib/item-artwork";
 
@@ -183,7 +183,7 @@ type AppDataContextValue = AppData & {
   updateWeeklyWorkoutGoal: (goal: number) => Promise<boolean>;
   logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>, recordId?: string) => Promise<boolean>;
   syncVerifiedWorkoutLogs: (logs: SessionLog[]) => void;
-  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes" | "exercises">>) => Promise<boolean>;
+  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes" | "exercises" | "durationMinutes">>) => Promise<boolean>;
   deleteWorkoutLog: (logId: string) => Promise<boolean>;
   workoutStorageError: string | null;
   resetDeck: () => void;
@@ -556,13 +556,19 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     }, setNutritionPlanError);
     const persistRecipes = (edit: (current: SavedMeal[]) => SavedMeal[]) => persistAccount(async (stores) => ({ savedMeals: await stores.recipes.change(edit) }), setRecipeStorageError);
     const persistFood = (edit: (current: FoodLogEntry[]) => FoodLogEntry[]) => persistAccount(async (stores) => ({ foodEntries: await stores.food.change(edit) }), setFoodJournalError);
-    const persistLogs = (edit: (current: SessionLog[]) => SessionLog[], progressionLog: SessionLog) => persistAccount(async (stores) => {
-      const deletedWorkoutIds = await stores.deletions.refresh();
-      const logs = await stores.logs.change((current) => edit(current).filter((log) => !deletedWorkoutIds.includes(workoutLogKey(log))));
-      const saved = logs.find(log => workoutLogKey(log) === workoutLogKey(progressionLog));
-      const trackedLifts = await stores.lifts.change(current => saved ? progressLiftsFromWorkout(current, saved) : current);
-      return { logs, deletedWorkoutIds, trackedLifts };
-    }, setWorkoutStorageError);
+    const persistLogs = (edit: (current: SessionLog[]) => SessionLog[], progressionLog: SessionLog) => {
+      let previous: SessionLog[] | undefined;
+      return persistAccount(async (stores) => {
+        const deletedWorkoutIds = await stores.deletions.refresh();
+        const logs = await stores.logs.change((current) => {
+          previous ??= current;
+          return edit(current).filter((log) => !deletedWorkoutIds.includes(workoutLogKey(log)));
+        });
+        const saved = logs.find(log => workoutLogKey(log) === workoutLogKey(progressionLog));
+        const trackedLifts = await stores.lifts.change(current => saved ? reconcileWorkoutLifts(current, logs, previous ?? [], saved) : current);
+        return { logs, deletedWorkoutIds, trackedLifts };
+      }, setWorkoutStorageError);
+    };
 
     return {
       async resolveSave(area, choice) {
@@ -856,11 +862,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       async deleteWorkoutLog(logId) {
         const log = data.logs.find((item) => item.id === logId);
         if (!log) return true;
+        let previous: SessionLog[] | undefined;
         return persistAccount(async (stores) => {
           const key = workoutLogKey(log);
           const deletedWorkoutIds = await stores.deletions.change((current) => current.includes(key) ? current : [...current, key]);
-          const logs = await stores.logs.change((current) => current.filter((item) => !deletedWorkoutIds.includes(workoutLogKey(item))));
-          return { logs, deletedWorkoutIds };
+          const logs = await stores.logs.change((current) => {
+            previous ??= current;
+            return current.filter((item) => !deletedWorkoutIds.includes(workoutLogKey(item)));
+          });
+          const trackedLifts = await stores.lifts.change(current => reconcileWorkoutLifts(current, logs, previous ?? [], { ...log, exercises: [] }));
+          return { logs, deletedWorkoutIds, trackedLifts };
         }, setWorkoutStorageError);
       },
       resetDeck() {

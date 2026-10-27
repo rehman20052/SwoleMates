@@ -81,11 +81,11 @@ export function trainingVolume(logs: SessionLog[]) {
   return (["lb", "kg"] as const).filter(unit => totals[unit] > 0).map(unit => Math.round(totals[unit]).toLocaleString() + " " + unit).join(" + ");
 }
 
-export function TrainSetInput({ style, ...props }: ComponentProps<typeof BaseInput>) {
+export function TrainSetInput({ style, completed = false, ...props }: ComponentProps<typeof BaseInput> & { completed?: boolean }) {
   const palette = useTrainPalette();
   const theme = useAppTheme();
   return <View style={[{ height: 44, justifyContent: "center" }, style]}>
-    <BaseInput {...props} hitSlop={{ top: 2, bottom: 2 }} style={[ledgerStyles.input, { borderColor: theme.isDark ? "#27272a" : palette.border, color: palette.text, fontFamily: theme.fonts.bold }]} />
+    <BaseInput {...props} hitSlop={{ top: 2, bottom: 2 }} style={[ledgerStyles.input, { borderColor: completed ? theme.colors.success : theme.isDark ? "#27272a" : palette.border, color: completed ? palette.muted : palette.text, backgroundColor: completed ? theme.colors.surfaceRaised : "transparent", fontFamily: theme.fonts.bold }]} />
   </View>;
 }
 export function TrainTelemetry({ children }: { children: string }) {

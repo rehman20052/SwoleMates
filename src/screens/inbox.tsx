@@ -3,12 +3,13 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-
 
 import { AppText, Avatar, PrimaryButton, SecondaryButton, Screen, TitleBar } from "@/components/ui";
 import { SwipeChatRow, type ChatAction } from "@/components/swipe-chat-row";
+import { WorkoutPlanCard } from '@/components/workout-plan';
 import { chatReadTimes, clearUnopenedMatchReads, latestMessageBodies, listConnections, notifyChatAlerts, subscribeChatAlerts, syncIncomingReadCursors, unmatch, type MatchConnection } from "@/lib/matches";
 import { useOnlineUsers } from "@/lib/presence";
 import { blockPerson, blockedUserIds } from "@/lib/safety";
 import { loadAccountHiddenChats, setAccountChatHidden } from "@/lib/account-markers";
 import { supabase } from "@/lib/supabase";
-import { answeredIncomingWorkoutIds, clearCanceledWorkoutPreviews, workoutPlanId } from "@/lib/workouts";
+import { answeredIncomingWorkoutIds, clearCanceledWorkoutPreviews, workoutPlanId, listIncomingWorkoutRequests, type PlannedWorkout } from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 
@@ -31,6 +32,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set());
   const [readTimes, setReadTimes] = useState<Record<string, string>>({});
   const [answeredWorkouts, setAnsweredWorkouts] = useState<Set<string>>(new Set());
+  const [workoutRequests, setWorkoutRequests] = useState<PlannedWorkout[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [requestTab, setRequestTab] = useState<RequestTab>(savedRequestTab);
@@ -55,10 +57,11 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
         const acceptedIds = people.filter((person) => person.status === "accepted").map((person) => person.requestId);
         await clearCanceledWorkoutPreviews(acceptedIds);
         await syncIncomingReadCursors(acceptedIds);
-        const [reads, latest, answered] = await Promise.all([
+        const [reads, latest, answered, invites] = await Promise.all([
           chatReadTimes(),
           latestMessageBodies(acceptedIds),
           answeredIncomingWorkoutIds(acceptedIds),
+          listIncomingWorkoutRequests(acceptedIds),
         ]);
         const withMessages = people.map((person) => {
           const message = latest.get(person.requestId);
@@ -66,11 +69,12 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
         });
         await clearUnopenedMatchReads(withMessages.filter((person) => person.status === "accepted" && !person.lastMessage).map((person) => person.requestId));
         const blocked = await blockedUserIds();
-        return { people: withMessages.filter((person) => !blocked.has(person.userId)), reads: await chatReadTimes(), answered, hidden, viewer };
+        return { people: withMessages.filter((person) => !blocked.has(person.userId)), reads: await chatReadTimes(), answered, hidden, viewer, invites };
       })
-      .then(({ people, reads, answered, hidden, viewer }) => {
+      .then(({ people, reads, answered, hidden, viewer, invites }) => {
         if (!active) return;
         setConnections(people);
+        setWorkoutRequests(invites.filter(plan => people.some(person => person.requestId === plan.matchId && person.status === 'accepted')));
         if (version === hiddenVersion.current) setHiddenIds(hidden);
         setViewerId(viewer);
         setReadTimes(reads);
@@ -160,6 +164,19 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
         empty
       ) : (
         <ScrollView nativeID="chat-scroll" style={styles.scroll} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {workoutRequests.length && viewerId ? <View style={styles.section}>
+            <AppText size={18} weight="bold">Workout requests ({workoutRequests.length})</AppText>
+            {workoutRequests.map(plan => {
+              const person = connections.find(person => person.requestId === plan.matchId);
+              return <View key={plan.id} style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {person?.photo ? <Avatar source={{ uri: person.photo }} size={36} /> : null}
+                  <AppText weight="bold">{person?.name ?? 'Your partner'}</AppText>
+                </View>
+                <WorkoutPlanCard plan={plan} me={viewerId} partnerName={person?.name ?? 'your partner'} onChange={() => { setWorkoutRequests(current => current.filter(item => item.id !== plan.id)); load(true); }} />
+              </View>;
+            })}
+          </View> : null}
           {requests.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.requestTabs}>

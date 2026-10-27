@@ -8,7 +8,8 @@ import Svg, { Path } from "react-native-svg";
 
 import { appFrameSize } from "@/components/phone-frame";
 import { NotificationMedia } from "@/components/notification-media";
-import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
+import { AppText, Avatar, Card, Icon, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
+import { icons } from "@/assets";
 import { MAX_MEDIA_BYTES } from "@/lib/media-limits";
 import { useOnlineUsers } from "@/lib/presence";
 import { prepareVideo } from "@/lib/prepare-video";
@@ -1786,9 +1787,9 @@ function PostCard({ post }: { post: Post }) {
             </AppText>
           </Pressable>
         ) : null}
-        {!author.isMe && !menu ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Post actions" onPress={() => setMenu("menu")} hitSlop={8}>
-            <AppText size={15} weight="bold" muted>More</AppText>
+        {!author.isMe ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Post actions" accessibilityState={{ expanded: !!menu }} onPress={() => setMenu(menu ? null : "menu")} hitSlop={8} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+            <Icon source={icons.moreHorizontal} size={22} tint={theme.colors.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -1912,19 +1913,21 @@ function PostSafety({
   const { run } = useSocial();
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
+  const [sending, setSending] = useState(false);
+  const reportBusy = useRef(false);
   const author = usePerson(post.authorId);
+  useEffect(() => {
+    if (menu !== "report") { setReason(""); setDetails(""); }
+  }, [menu]);
   if (!menu) return null;
+  if (menu === "menu") return <View style={{ alignSelf: "flex-end", minWidth: 180, padding: 8, gap: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
+    <SecondaryButton height={44} onPress={() => onMenu("report")}>Report</SecondaryButton>
+    <SecondaryButton height={44} textColor={theme.colors.danger} onPress={() => onMenu("block")}>Block</SecondaryButton>
+    <SecondaryButton height={44} onPress={() => onMenu(null)}>Close menu</SecondaryButton>
+  </View>;
 
   return (
     <View style={[styles.confirm, { backgroundColor: theme.colors.surfaceRaised, flexWrap: "wrap" }]}>
-      {menu === "menu" ? (
-        <>
-          <AppText size={13} weight="semibold" style={{ flex: 1 }}>What do you want to do?</AppText>
-          <TextAction label="Report" onPress={() => onMenu("report")} />
-          <TextAction label="Block" onPress={() => onMenu("block")} color={theme.colors.danger} />
-          <TextAction label="Cancel" onPress={() => onMenu(null)} />
-        </>
-      ) : null}
       {menu === "block" ? (
         <>
           <AppText size={13} weight="semibold" style={{ flex: 1 }}>Block {firstName(author.name)}? Their posts will disappear.</AppText>
@@ -1940,35 +1943,40 @@ function PostSafety({
         </>
       ) : null}
       {menu === "report" ? (
-        <View style={{ gap: 8, width: "100%" }}>
-          <AppText size={13} weight="semibold">Report {firstName(author.name)}. They won't be told.</AppText>
-          <View style={styles.reasonRow}>
+        <View style={styles.reportForm}>
+          <View style={{ gap: 6 }}>
+            <AppText size={17} weight="extrabold">Report {firstName(author.name)}</AppText>
+            <AppText size={12} muted>Your report is private. They won't be told who reported them.</AppText>
+          </View>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Report reason" style={styles.reportReasons}>
+            <AppText size={13} weight="bold">Choose a reason</AppText>
             {reportReasons.map((item) => (
-              <Pressable key={item} accessibilityRole="button" onPress={() => setReason(item)}>
-                <AppText size={12} weight={reason === item ? "bold" : "medium"} primary={reason === item}>
+              <Pressable key={item} accessibilityRole="radio" accessibilityLabel={item} aria-checked={reason === item} accessibilityState={{ checked: reason === item, disabled: sending }} disabled={sending} onPress={() => setReason(item)}
+                style={({ pressed }) => [styles.reportReason, { borderColor: reason === item ? theme.colors.primary : theme.colors.border, backgroundColor: reason === item ? theme.colors.primaryTint : theme.colors.surface, opacity: pressed ? 0.75 : 1 }]}>
+                <View style={[styles.reportRadio, { borderColor: reason === item ? theme.colors.primary : theme.colors.muted }]}>
+                  {reason === item ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary }} /> : null}
+                </View>
+                <AppText size={14} weight={reason === item ? "bold" : "medium"} style={{ flex: 1 }}>
                   {item}
                 </AppText>
               </Pressable>
             ))}
           </View>
-          <Input
-            placeholder="What happened"
-            value={details}
-            onChangeText={setDetails}
-            maxLength={420}
-          />
-          <View style={styles.commentMeta}>
-            <TextAction label="Cancel" onPress={() => onMenu(null)} />
-            <TextAction
-              label="Send report"
-              color={theme.colors.primary}
-              onPress={() => {
-                if (!reason) return;
+          <View style={{ gap: 8 }}>
+            <AppText size={13} weight="bold">Additional details <AppText size={12} muted>(optional)</AppText></AppText>
+            <Input bordered multiline accessibilityLabel="Report details (optional)" placeholder="What happened" value={details} onChangeText={setDetails} editable={!sending} maxLength={420} style={styles.reportDetails} />
+            <AppText size={11} muted style={{ textAlign: "right" }}>{details.length}/420</AppText>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <SecondaryButton height={46} fontSize={13} style={{ flex: 1 }} disabled={sending} onPress={() => onMenu(null)}>Cancel</SecondaryButton>
+            <PrimaryButton height={46} fontSize={13} style={{ flex: 1 }} disabled={!reason || sending} onPress={async () => {
+                if (!reason || reportBusy.current) return;
+                reportBusy.current = true; setSending(true);
                 const note = `Post ${post.id}. ${details.trim()}`.trim().slice(0, 500);
-                onMenu(null);
-                void run(() => reportPerson(post.authorId, reason, note), false);
-              }}
-            />
+                try {
+                  if (await run(() => reportPerson(post.authorId, reason, note), false)) onMenu(null);
+                } finally { reportBusy.current = false; setSending(false); }
+              }}>{sending ? "Sending…" : "Send report"}</PrimaryButton>
           </View>
         </View>
       ) : null}
@@ -2554,11 +2562,14 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: 10,
   },
-  reasonRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+  reportForm: { gap: 18, width: "100%", paddingVertical: 6 },
+  reportReasons: { gap: 8 },
+  reportReason: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    minHeight: 50, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12,
   },
+  reportRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reportDetails: { minHeight: 96, textAlignVertical: "top", paddingTop: 12 },
   comments: {
     borderTopWidth: 1,
     gap: 10,

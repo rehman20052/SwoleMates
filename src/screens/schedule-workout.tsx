@@ -10,6 +10,7 @@ import {
   Field,
   Input,
   PrimaryButton,
+  SecondaryButton,
   Screen,
   ScrollBody,
   SelectField,
@@ -18,6 +19,8 @@ import {
 import { getPartner, gyms, WorkoutFocus, workoutFocuses } from "@/data/partners";
 import { listConnections } from "@/lib/matches";
 import { isAccountId } from "@/lib/discover";
+import { loadProfile } from '@/lib/profile';
+import { listPartnerRoutines, localRoutines, type PartnerRoutine } from '@/lib/partner-routines';
 import { listMatchWorkouts, occupiedTimeLabels, proposeWorkout, upcomingTimeSlots, type PlannedWorkout } from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { daysFromToday, formatDate, relativeDay, useAppData } from "@/state/app-data";
@@ -25,7 +28,6 @@ import { daysFromToday, formatDate, relativeDay, useAppData } from "@/state/app-
 const timeSlots = ["6:00 AM", "7:00 AM", "8:00 AM", "12:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "8:00 PM"] as const;
 const dateOptions = Array.from({ length: 14 }, (_, index) => daysFromToday(index + 1));
 const matchDateOptions = Array.from({ length: 14 }, (_, index) => daysFromToday(index));
-const workoutTypeOptions = [...workoutFocuses, "Other"] as const;
 
 export function ScheduleWorkoutScreen({ partnerId: presetPartner }: { partnerId?: string }) {
   if (presetPartner && isAccountId(presetPartner)) return <MatchSchedule partnerId={presetPartner} />;
@@ -34,12 +36,22 @@ export function ScheduleWorkoutScreen({ partnerId: presetPartner }: { partnerId?
 
 function MatchSchedule({ partnerId }: { partnerId: string }) {
   const nav = useNavigation();
+  const { workspaceSettings, accountUserId } = useAppData();
   const [partnerName, setPartnerName] = useState("");
   const [matchId, setMatchId] = useState<string | null>(null);
   const [plans, setPlans] = useState<PlannedWorkout[]>([]);
-  const [location, setLocation] = useState("Gym");
-  const [type, setType] = useState<(typeof workoutTypeOptions)[number]>("Push");
-  const [customType, setCustomType] = useState("");
+  const [myGym, setMyGym] = useState('');
+  const [partnerGym, setPartnerGym] = useState('');
+  const [place, setPlace] = useState('mine');
+  const [otherPlace, setOtherPlace] = useState('');
+  const location = place === 'mine' ? myGym : place === 'partner' ? partnerGym : otherPlace;
+  const [partnerRoutines, setPartnerRoutines] = useState<PartnerRoutine[]>([]);
+  const [routineError, setRoutineError] = useState('');
+  const [routineId, setRoutineId] = useState('none');
+  const [preview, setPreview] = useState(false);
+  const routines = [...localRoutines(workspaceSettings, accountUserId ?? ''), ...partnerRoutines];
+  const routineKey = (r: PartnerRoutine) => `${r.ownerId}:${r.id}`;
+  const routine = routines.find(r => routineKey(r) === routineId);
   const [date, setDate] = useState(matchDateOptions[0]);
   const [now, setNow] = useState(() => new Date());
   const timeOptions = useMemo(() => {
@@ -49,6 +61,13 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
   const [time, setTime] = useState(() => upcomingTimeSlots(matchDateOptions[0])[0] ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadProfile().then(profile => { if (active) { setMyGym(profile?.primaryGym ?? ''); if (!profile?.primaryGym) setPlace('other'); } }).catch(() => { if (active) setPlace('other'); });
+    void listPartnerRoutines(partnerId).then(rows => { if (active) setPartnerRoutines(rows); }).catch(error => { if (active) setRoutineError(error.message); });
+    return () => { active = false; };
+  }, [partnerId]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 15000);
@@ -68,7 +87,7 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
       if (!person) return;
       setPartnerName(person.name.split(/\s+/)[0] || person.name);
       setMatchId(person.requestId);
-      if (person.gym) setLocation(person.gym);
+      setPartnerGym(person.gym || '');
       const workouts = await listMatchWorkouts(person.requestId).catch(() => []);
       if (!active) return;
       setPlans(workouts);
@@ -80,11 +99,10 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
 
   async function send() {
     if (busy || !matchId || !timeOptions.includes(time)) return;
-    const focus = type === "Other" ? customType : type;
     setBusy(true);
     setError(null);
     try {
-      await proposeWorkout({ matchId, partnerName: partnerName || "them", focus, date, timeLabel: time, location });
+      await proposeWorkout({ matchId, partnerName: partnerName || "them", date, timeLabel: time, location, routine: routine ?? null });
       nav.back();
     } catch (err) {
       setBusy(false);
@@ -98,14 +116,17 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
       <KeyboardAvoidingView enabled={Platform.OS !== "web"} style={{ flex: 1 }} behavior="padding">
         <ScrollBody>
           <Card gap={14}>
-            <Field label="Workout type">
-              <SelectField value={type} options={workoutTypeOptions} onChange={setType} />
+            <AppText size={13} muted>With {partnerName || 'your partner'}</AppText>
+            <Field label="Where">
+              <SelectField value={place} options={[...(myGym ? ['mine'] : []), ...(partnerGym ? ['partner'] : []), 'other']} onChange={setPlace} renderLabel={id => id === 'mine' ? `Your gym · ${myGym}` : id === 'partner' ? `${partnerName}'s gym · ${partnerGym}` : 'Other'} />
+              {place === 'other' ? <Input accessibilityLabel="Workout location" placeholder="Gym or meeting place" value={otherPlace} onChangeText={setOtherPlace} maxLength={120} /> : null}
             </Field>
-            {type === "Other" ? (
-              <Field label="Your workout">
-                <Input placeholder="Yoga, arms, or whatever you train" value={customType} onChangeText={setCustomType} />
-              </Field>
-            ) : null}
+            <Field label="Routine · optional">
+              <SelectField value={routineId} options={['none', ...routines.map(routineKey)]} onChange={id => { setRoutineId(id); setPreview(false); }} renderLabel={id => { const found = routines.find(r => routineKey(r) === id); return found ? `${found.ownerId === accountUserId ? 'You' : partnerName} · ${found.title}` : 'No routine'; }} />
+              {routine ? <SecondaryButton height={40} onPress={() => setPreview(!preview)}>{preview ? 'Hide routine' : 'View routine'}</SecondaryButton> : null}
+              {preview && routine ? <View style={{ gap: 12, paddingVertical: 8 }}>{routine.exercises.map((e, i) => <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}><AppText style={{ flex: 1 }}>{e.name}</AppText><AppText muted>{e.sets} × {e.reps}</AppText></View>)}</View> : null}
+              {routineError ? <View style={{ gap: 8 }}><AppText size={12} muted>{routineError}</AppText><SecondaryButton height={38} onPress={() => { setRoutineError(''); void listPartnerRoutines(partnerId).then(setPartnerRoutines).catch(error => setRoutineError(error.message)); }}>Retry partner routines</SecondaryButton></View> : null}
+            </Field>
             <Field label="Date">
               <SelectField value={date} options={matchDateOptions} onChange={setDate} renderLabel={formatDate} />
             </Field>
@@ -124,8 +145,8 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
             <AppText muted>No open times that day. Pick another day, or a time at least 30 minutes from now.</AppText>
           ) : null}
           {!matchId ? <AppText muted>This chat is not an accepted match yet.</AppText> : null}
-          <PrimaryButton disabled={busy || !matchId || !timeOptions.includes(time)} onPress={() => void send()}>
-            {busy ? "Sending..." : "Send request"}
+          <PrimaryButton disabled={busy || !matchId || !timeOptions.includes(time) || !location.trim()} onPress={() => void send()}>
+            {busy ? "Sending..." : "Send invite"}
           </PrimaryButton>
         </ScrollBody>
       </KeyboardAvoidingView>

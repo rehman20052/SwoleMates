@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTs } from './helpers/load-ts.mjs';
-const { progressLiftsFromWorkout, matchTrackedLift, workoutLiftGroups } = loadTs('src/lib/workout-lift-progression.ts');
+const { progressLiftsFromWorkout, matchTrackedLift, workoutLiftGroups, reconcileWorkoutLifts } = loadTs('src/lib/workout-lift-progression.ts');
 const { isLift, liftProgress } = loadTs('src/lib/lift-progression.ts');
 const exercise = (name, weight, unit = 'lb') => ({ id: name, name, weight, unit, sets: 2, reps: 8, setDetails: [{ weight: weight - 5, reps: 10 }, { weight, reps: 8 }] });
 const log = (...exercises) => ({ date: '2026-10-09', exercises });
@@ -67,4 +67,40 @@ test('legacy exercises without per-set details also populate progression', () =>
   const lifts = progressLiftsFromWorkout([], log(row));
   assert.equal(lifts[0].currentWeight, 135);
   assert.equal(lifts[0].history[0].maxReps, 8);
+});
+
+test('calendar corrections replace legacy records up or down, retaining goals and other sessions', () => {
+  const first = { id: 'first', date: '2026-10-08', exercises: [exercise('Bench press', 100)] };
+  const second = { id: 'second', date: '2026-10-09', exercises: [exercise('Bench press', 150)] };
+  const current = progressLiftsFromWorkout(progressLiftsFromWorkout([], first), second);
+  current[0].goalWeight = 200;
+  const corrected = { ...second, exercises: [exercise('Bench press', 90)] };
+  const next = reconcileWorkoutLifts(current, [first, corrected], [first, second], corrected);
+  assert.equal(next[0].currentWeight, 100);
+  assert.equal(next[0].goalWeight, 200);
+  assert.equal(next[0].history.length, 2);
+  assert.equal(next[0].history.some(entry => entry.weight === 150), false);
+  const higher = { ...corrected, exercises: [exercise('Bench press', 170)] };
+  const raised = reconcileWorkoutLifts(next, [first, higher], [first, corrected], higher);
+  assert.equal(raised[0].currentWeight, 170);
+  assert.equal(raised[0].history.find(entry => entry.workoutLogId === 'second').weight, 170);
+  assert.equal(reconcileWorkoutLifts(raised, [first, higher], [first, corrected], higher)[0].history.length, 2, 'retry is idempotent');
+});
+
+test('same-day sessions, unit conversion, manual entries and renamed or deleted exercises reconcile independently', () => {
+  const old = { id: 'a', date: '2026-10-08', exercises: [exercise('Squat', 100, 'kg')] };
+  const other = { ...old, id: 'b', exercises: [exercise('Squat', 230)] };
+  const current = progressLiftsFromWorkout(progressLiftsFromWorkout([], old), other);
+  current[0].history.unshift({ date: '2026-10-01', weight: 80, minReps: 5, maxReps: 5 });
+  const corrected = { ...other, exercises: [exercise('Squat', 180)] };
+  const next = reconcileWorkoutLifts(current, [old, corrected], [old, other], corrected);
+  assert.equal(next[0].currentWeight, 100);
+  assert.equal(next[0].history.length, 3);
+  const renamed = { ...corrected, exercises: [exercise('Bench press', 60)] };
+  const changed = reconcileWorkoutLifts(next, [old, renamed], [old, corrected], renamed);
+  assert.equal(changed[0].history.length, 2);
+  assert.equal(changed[1].name, 'Bench press');
+  const deleted = reconcileWorkoutLifts(changed, [renamed], [old, renamed], { ...old, exercises: [] });
+  assert.equal(deleted[0].currentWeight, 80, 'manual baseline survives deletion');
+  assert.equal(deleted[1], changed[1], 'unrelated lift is untouched');
 });
