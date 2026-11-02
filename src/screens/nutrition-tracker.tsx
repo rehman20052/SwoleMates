@@ -4,10 +4,11 @@ import { ingredientTotals, scannedIngredient, type ScanIngredient } from "@/lib/
 import { HomeBackdrop } from "@/components/home-backdrop";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
-import { AppText, Card, Field, Input, PrimaryButton, ProgressBar, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
+import { AppText, Card, Field, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
 import { sumFoodEntries } from "@/lib/food-journal";
-import { daysFromToday, type FoodLogEntry, type NutritionTotals, type SavedMeal, useAppData } from "@/state/app-data";
+import { daysFromToday, type FoodLogEntry, type SavedMeal, useAppData } from "@/state/app-data";
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
 import { SaveFeedback } from "@/components/save-feedback";
 import { FoodSearch } from "@/components/food-search";
@@ -17,20 +18,12 @@ import { useNavigation } from "@/navigation";
 import { Image } from "expo-image";
 import { TrainingCard } from "@/components/training-card";
 import { saveArtworkPhoto, type ArtworkDraft } from "@/lib/artwork-photo";
-import { Icon } from "@/components/ui";
-import { icons } from "@/assets";
 import { useAppTheme } from "@/theme";
 
 type Meal = FoodLogEntry["meal"];
 type Macro = "protein" | "carbs" | "fats";
 
 const meals: Meal[] = ["Breakfast", "Lunch", "Dinner", "Snack"];
-const macroGoals: Record<Macro, keyof NutritionTotals> = {
-  protein: "proteinGoal",
-  carbs: "carbGoal",
-  fats: "fatGoal",
-};
-
 function numberFrom(value: string) {
   const parsed = Number(value.trim().replace(",", "."));
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -38,6 +31,130 @@ function numberFrom(value: string) {
 
 function macroLabel(macro: Macro) {
   return macro === "fats" ? "Fat" : macro[0].toUpperCase() + macro.slice(1);
+}
+
+const journalTabs = [
+  { value: "Journal", label: "Today" },
+  { value: "Plan", label: "Plan" },
+  { value: "Recipes", label: "Recipes" },
+] as const;
+
+function FuelMacroRow({ label, current, target, color }: { label: string; current: number; target: number; color: string }) {
+  const theme = useAppTheme();
+  const progress = Math.min(1, current / Math.max(1, target));
+  return (
+    <View style={styles.fuelMacroRow}>
+      <View style={styles.fuelMacroMeta}>
+        <View style={[styles.fuelMacroDot, { backgroundColor: color }]} />
+        <AppText size={13} weight="semibold" style={{ flex: 1 }}>{label}</AppText>
+        <AppText size={13} weight="bold" style={{ fontVariant: ["tabular-nums"] }}>
+          {Math.round(current)}<AppText size={11} muted> / {target}g</AppText>
+        </AppText>
+      </View>
+      <View
+        accessibilityRole="progressbar"
+        accessibilityLabel={`${label} progress`}
+        accessibilityValue={{ min: 0, max: target, now: Math.min(Math.round(current), target) }}
+        style={[styles.fuelMacroTrack, { backgroundColor: theme.colors.progressTrack }]}
+      >
+        <View style={[styles.fuelMacroFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein, proteinGoal, carbs, carbGoal, fats, fatGoal, onEditGoals }: {
+  dayLabel: string;
+  entryCount: number;
+  calories: number;
+  calorieGoal: number;
+  protein: number;
+  proteinGoal: number;
+  carbs: number;
+  carbGoal: number;
+  fats: number;
+  fatGoal: number;
+  onEditGoals: () => void;
+}) {
+  const theme = useAppTheme();
+  const overGoal = calories > calorieGoal;
+  const progress = Math.min(1, calories / Math.max(1, calorieGoal));
+  const remaining = Math.abs(Math.round(calorieGoal - calories));
+  const ringSize = 108;
+  const ringRadius = 45;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringColor = overGoal ? theme.colors.warning : theme.colors.primary;
+  const macros = [
+    { label: "Protein", current: protein, target: proteinGoal, color: theme.colors.protein },
+    { label: "Carbs", current: carbs, target: carbGoal, color: theme.colors.carbs },
+    { label: "Fat", current: fats, target: fatGoal, color: theme.colors.fat },
+  ];
+
+  return (
+    <View style={[styles.fuelSummary, { backgroundColor: theme.colors.surface, borderColor: theme.colors.panelBorder, boxShadow: theme.effects.cardShadow }]}>
+      <View style={styles.sectionHeader}>
+        <View style={{ gap: 2 }}>
+          <AppText size={12} weight="bold" muted upper>{dayLabel}</AppText>
+          <AppText size={22} weight="extrabold">Daily fuel</AppText>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Edit nutrition goals"
+          onPress={onEditGoals}
+          style={({ pressed }) => [styles.fuelEditGoals, { backgroundColor: theme.colors.actionSurface, opacity: pressed ? 0.68 : 1 }]}
+        >
+          <AppText size={12} weight="bold" primary>Edit goals</AppText>
+        </Pressable>
+      </View>
+
+      <View style={styles.fuelEnergyRow}>
+        <View style={{ flex: 1, gap: 5 }}>
+          <AppText size={12} muted>{entryCount ? `${entryCount} food${entryCount === 1 ? "" : "s"} logged` : "Ready when you are"}</AppText>
+          <AppText size={42} weight="black" style={{ fontVariant: ["tabular-nums"] }}>
+            {Math.round(calories).toLocaleString()}
+          </AppText>
+          <AppText size={12} muted>of {calorieGoal.toLocaleString()} kcal</AppText>
+        </View>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Daily calorie progress"
+          aria-valuemin={0}
+          aria-valuemax={calorieGoal}
+          aria-valuenow={Math.min(Math.round(calories), calorieGoal)}
+          accessibilityValue={{ min: 0, max: calorieGoal, now: Math.min(Math.round(calories), calorieGoal), text: `${Math.round(calories)} of ${calorieGoal} calories consumed` }}
+          style={[styles.fuelRing, { backgroundColor: overGoal ? theme.colors.warningTint : theme.colors.insetSurface }]}
+        >
+          <Svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={StyleSheet.absoluteFill}>
+            <Circle cx={ringSize / 2} cy={ringSize / 2} r={ringRadius} fill="none" stroke={theme.colors.progressTrack} strokeWidth={8} />
+            <Circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={ringRadius}
+              fill="none"
+              stroke={ringColor}
+              strokeWidth={8}
+              strokeLinecap="round"
+              strokeDasharray={`${ringCircumference} ${ringCircumference}`}
+              strokeDashoffset={ringCircumference * (1 - progress)}
+              rotation={-90}
+              origin={`${ringSize / 2}, ${ringSize / 2}`}
+            />
+          </Svg>
+          <AppText size={22} weight="black" color={ringColor} style={{ fontVariant: ["tabular-nums"] }}>{remaining.toLocaleString()}</AppText>
+          <AppText size={9} weight="bold" color={ringColor} upper>{overGoal ? "over" : "left"}</AppText>
+        </View>
+      </View>
+
+      <View style={[styles.fuelDivider, { backgroundColor: theme.colors.border }]} />
+      <View style={{ gap: 14 }}>
+        <View style={styles.sectionHeader}>
+          <AppText size={12} weight="bold" muted upper>Macro progress</AppText>
+          <AppText size={11} muted>{Math.round(progress * 100)}% calories</AppText>
+        </View>
+        {macros.map((macro) => <FuelMacroRow key={macro.label} {...macro} />)}
+      </View>
+    </View>
+  );
 }
 
 export function NutritionTrackerScreen({ embedded = false, header, date }: { embedded?: boolean; header?: ReactNode; date?: string }) {
@@ -81,17 +198,23 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const { accountUserId, workspaceSettings, saveWorkspaceSetting, restoreFoodEntry, copyFoodMeal } = useAppData();
   const [undo, setUndo] = useState<{ entry: FoodLogEntry; until: number } | null>(null);
   const [copying, setCopying] = useState(false);
+  const [copyingMeal, setCopyingMeal] = useState(false);
   const [copySource, setCopySource] = useState<Meal>("Breakfast");
   const [copyDestination, setCopyDestination] = useState<Meal>("Breakfast");
+  const [savingDayComplete, setSavingDayComplete] = useState(false);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [journalNotice, setJournalNotice] = useState<string | null>(null);
   useEffect(() => { if (!undo) return; const timer = setTimeout(() => setUndo(null), Math.max(0, undo.until - Date.now())); return () => clearTimeout(timer); }, [undo]);
-  useEffect(() => { setUndo(null); setShortcutError(null); }, [accountUserId]);
+  useEffect(() => { setUndo(null); setCopying(false); setShortcutError(null); setJournalNotice(null); }, [accountUserId, date]);
   const favorites = workspaceSettings.flatMap(item => {
     if (!item.id.startsWith("favorite-food:") || typeof item.value !== "object" || !item.value.content) return [];
     try { const food = JSON.parse(item.value.content) as FoodLogEntry; return [{ settingId: item.id, food }]; } catch { return []; }
   });
   async function saveShortcut(id: string, content: string) {
-    if (!accountUserId) return false;
+    if (!accountUserId) {
+      setShortcutError("Sign in to save this change.");
+      return false;
+    }
     const saved = await saveWorkspaceSetting(id, content, accountUserId, Date.now());
     setShortcutError(saved ? null : "Could not save this change."); return saved;
   }
@@ -112,6 +235,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     () => foodEntries.filter((entry) => entry.date === journalDate),
     [foodEntries, journalDate],
   );
+  const yesterdayMealOptions = useMemo(
+    () => meals.filter((mealName) => foodEntries.some((entry) => entry.date === yesterdayDate && entry.meal === mealName)),
+    [foodEntries, yesterdayDate],
+  );
 
   const entriesByMeal = useMemo(
     () => meals.map((mealName) => ({ meal: mealName, entries: todayEntries.filter((entry) => entry.meal === mealName) })),
@@ -120,9 +247,61 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
   if (!nutrition) return null;
   const currentNutrition = { ...nutrition, ...sumFoodEntries(foodEntries, journalDate) };
-  const caloriesOverGoal = currentNutrition.calories > currentNutrition.calorieGoal;
-  const overGoalColor = theme.isDark ? "#F5B942" : "#98620D";
-  const overGoalSurface = theme.isDark ? "rgba(245,185,66,0.16)" : "#F7EBD2";
+  const dayCanBeChanged = foodJournalReady && journalDate <= daysFromToday(0) && Boolean(accountUserId) && (dayComplete || todayEntries.length > 0);
+  const canRepeatYesterday = foodJournalReady && yesterdayMealOptions.length > 0;
+
+  async function toggleDayComplete() {
+    if (savingDayComplete || !dayCanBeChanged) return;
+    setSavingDayComplete(true);
+    setShortcutError(null);
+    setJournalNotice(null);
+    try {
+      const saved = await saveShortcut(`nutrition-day:${journalDate}`, dayComplete ? "" : "complete");
+      if (saved) setJournalNotice(dayComplete ? "Day reopened. You can keep logging food." : "Day marked complete.");
+    } finally {
+      setSavingDayComplete(false);
+    }
+  }
+
+  function toggleMealCopy() {
+    setShortcutError(null);
+    setJournalNotice(null);
+    if (copying) {
+      setCopying(false);
+      return;
+    }
+    const firstAvailableMeal = yesterdayMealOptions[0];
+    if (!firstAvailableMeal) {
+      setShortcutError("There are no meals logged yesterday to repeat.");
+      return;
+    }
+    setCopySource(firstAvailableMeal);
+    setCopyDestination(firstAvailableMeal);
+    setCopying(true);
+  }
+
+  async function repeatMeal() {
+    if (copyingMeal) return;
+    const sourceCount = foodEntries.filter((entry) => entry.date === yesterdayDate && entry.meal === copySource).length;
+    if (!sourceCount) {
+      setShortcutError("That meal no longer has any foods to copy.");
+      return;
+    }
+    setCopyingMeal(true);
+    setShortcutError(null);
+    setJournalNotice(null);
+    try {
+      const saved = await copyFoodMeal(yesterdayDate, copySource, journalDate, copyDestination);
+      if (!saved) {
+        setShortcutError("Could not copy that meal. Try again.");
+        return;
+      }
+      setCopying(false);
+      setJournalNotice(`${copySource} copied to ${copyDestination} (${sourceCount} item${sourceCount === 1 ? "" : "s"}).`);
+    } finally {
+      setCopyingMeal(false);
+    }
+  }
 
   function resetForm() {
     setAddFoodTab("Food");
@@ -145,6 +324,11 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setEditingFood(null);
     setFormError(null);
     setShowAddFood(true);
+  }
+
+  function openBarcodeForm() {
+    openFoodForm(false);
+    setShowScanner(true);
   }
 
   function openScanner() {
@@ -448,35 +632,61 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   }
 
   const journal = (
-      <ScrollBody contentContainerStyle={[styles.body, { paddingBottom: 104 }]}>
+      <ScrollBody key={journalTab} contentContainerStyle={styles.body}>
+        <View style={styles.fuelIntro}>
+          <View style={{ flex: 1, minWidth: 220, gap: 8 }}>
+            <AppText size={frame.width > 700 ? 44 : 34} weight="black">
+              Fuel<AppText size={frame.width > 700 ? 44 : 34} weight="black" primary>.</AppText>
+            </AppText>
+            <AppText size={15} muted>Eat with intent. Recover. Come back stronger.</AppText>
+          </View>
+          <View style={styles.fuelIntroActions}>
+            {Platform.OS === "web" ? (
+              <SecondaryButton
+                accessibilityLabel="Scan a food barcode"
+                disabled={!foodJournalReady}
+                height={46}
+                style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
+                onPress={openBarcodeForm}
+              >
+                Scan barcode
+              </SecondaryButton>
+            ) : null}
+            <PrimaryButton
+              accessibilityLabel="Log food"
+              disabled={!foodJournalReady}
+              height={46}
+              style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
+              onPress={() => openFoodForm(false)}
+            >
+              Log food
+            </PrimaryButton>
+          </View>
+        </View>
         {!nutritionPlanReady ? <AppText muted>Loading saved daily targets...</AppText> : null}
         {nutritionPlanError ? <AppText color={theme.colors.danger}>{nutritionPlanError}</AppText> : null}
         {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
         {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
 
-        <View accessibilityRole="tablist" style={[styles.viewTabs, { backgroundColor: theme.colors.surfaceRaised }]}>
-          {(["Plan", "Journal", "Recipes"] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: journalTab === tab }} onPress={() => setJournalTab(tab)} style={[styles.viewTab, { backgroundColor: journalTab === tab ? theme.colors.primaryTint : "transparent" }]}><AppText size={13} weight="bold" primary={journalTab === tab} muted={journalTab !== tab}>{tab}</AppText></Pressable>)}
+        <View accessibilityRole="tablist" style={[styles.viewTabs, { backgroundColor: theme.colors.segmentSurface, borderColor: theme.colors.panelBorder }]}>
+          {journalTabs.map(tab => {
+            const selected = journalTab === tab.value;
+            return <Pressable key={tab.value} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setJournalTab(tab.value)} style={({ pressed }) => [styles.viewTab, selected && { backgroundColor: theme.colors.surfaceRaised }, pressed && { opacity: 0.72 }]}><AppText size={13} weight={selected ? "extrabold" : "semibold"} primary={selected} muted={!selected}>{tab.label}</AppText></Pressable>;
+          })}
         </View>
-        {journalTab === "Journal" ? <TrainingCard padding={16} gap={14}>
-          <View style={styles.sectionHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}><View style={[styles.intakeIcon, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><Icon source={icons.flame} size={20} tint={caloriesOverGoal ? overGoalColor : theme.colors.accent} /></View><View style={{ gap: 2 }}><AppText size={16} weight="extrabold">Daily intake</AppText><AppText size={12} muted>{dayLabel} · {todayEntries.length} foods logged</AppText></View></View>
-            <Pressable accessibilityRole="button" onPress={openGoals} style={[styles.goalPill, { backgroundColor: theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary>Edit goals</AppText></Pressable>
-          </View>
-          <View style={[styles.calorieSummary, { backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border, borderWidth: 1 }]}>
-            <View style={styles.sectionHeader}>
-              <View><AppText size={34} weight="black">{Math.round(currentNutrition.calories).toLocaleString()}<AppText size={13} weight="semibold" muted> kcal</AppText></AppText><AppText size={12} muted>of {currentNutrition.calorieGoal.toLocaleString()} kcal goal</AppText></View>
-              <View style={[styles.remainingPill, { backgroundColor: caloriesOverGoal ? overGoalSurface : theme.colors.primaryTint }]}><AppText size={18} weight="extrabold" color={caloriesOverGoal ? overGoalColor : theme.colors.accent}>{Math.abs(Math.round(currentNutrition.calorieGoal - currentNutrition.calories)).toLocaleString()}</AppText><AppText size={10} weight="bold" color={caloriesOverGoal ? overGoalColor : theme.colors.accent}>{caloriesOverGoal ? "OVER" : "LEFT"}</AppText></View>
-            </View>
-            <ProgressBar progress={currentNutrition.calories / Math.max(1, currentNutrition.calorieGoal)} />
-          </View>
-          <View style={{ gap: 8 }}><AppText size={12} weight="bold" muted>MACRO PROGRESS</AppText><View style={styles.macroRow}>{(["protein", "carbs", "fats"] as Macro[]).map((macro, index) => {
-            const colors = theme.isDark ? ["#83A92B", "#D69A28", "#5799A1"] : [theme.colors.accent, theme.colors.carbs, theme.colors.fat];
-            const current = currentNutrition[macro];
-            const target = currentNutrition[macroGoals[macro]];
-            return <View key={macro} style={[styles.macroTile, { backgroundColor: theme.colors.surfaceRaised }]}><AppText size={11} muted>{macroLabel(macro)}</AppText><AppText size={16} weight="bold">{Math.round(current)}<AppText size={10} muted> / {target}g</AppText></AppText><View accessibilityRole="progressbar" accessibilityLabel={`${macroLabel(macro)} progress`} accessibilityValue={{ min: 0, max: target, now: Math.min(current, target) }} style={[styles.macroTrack, { backgroundColor: theme.colors.border }]}><View style={{ height: "100%", width: `${Math.min(100, current / Math.max(1, target) * 100)}%`, borderRadius: 4, backgroundColor: colors[index] }} /></View></View>;
-          })}</View></View>
-        </TrainingCard> : null}
-        {journalTab === "Journal" && todayEntries.length === 0 ? <TrainingCard padding={16} gap={6}><AppText size={15} weight="extrabold">Nothing logged yet</AppText><AppText size={12} muted>Add a food to start tracking this day.</AppText></TrainingCard> : null}
+        {journalTab === "Journal" ? <FuelDailySummary
+          dayLabel={dayLabel}
+          entryCount={todayEntries.length}
+          calories={currentNutrition.calories}
+          calorieGoal={currentNutrition.calorieGoal}
+          protein={currentNutrition.protein}
+          proteinGoal={currentNutrition.proteinGoal}
+          carbs={currentNutrition.carbs}
+          carbGoal={currentNutrition.carbGoal}
+          fats={currentNutrition.fats}
+          fatGoal={currentNutrition.fatGoal}
+          onEditGoals={openGoals}
+        /> : null}
         {journalTab === "Plan" ? <>
         <MacroPlanCard calories={currentNutrition.calorieGoal} protein={currentNutrition.proteinGoal} carbs={currentNutrition.carbGoal} fat={currentNutrition.fatGoal}
           manual={nutritionGoalSource === "manual"} progressLabel={isToday ? "Today's macros" : "Macros for this day"} onEdit={openGoals} consumed={{ calories: currentNutrition.calories, protein: currentNutrition.protein, carbs: currentNutrition.carbs, fats: currentNutrition.fats }} goal={nutritionProfile?.goal} hasPlan={Boolean(nutritionProfile)} disabled={!nutritionPlanReady || savingPlan} onPress={() => setShowCalculator(true)} />
@@ -502,24 +712,63 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
 
         {journalTab === "Journal" ? <View style={{ gap: 12 }}>
-        <SecondaryButton disabled={!foodJournalReady || journalDate > daysFromToday(0)} onPress={() => void saveShortcut(`nutrition-day:${journalDate}`, dayComplete ? "" : "complete")}>{dayComplete ? "Day complete ✓ · Mark incomplete" : "Mark day complete"}</SecondaryButton>
-        <AppText size={12} muted>{dayComplete ? "All meals for this day are logged." : "This day is unmarked; its totals may be partial."}</AppText>
-        <SecondaryButton onPress={() => setCopying(value => !value)}>Copy yesterday's meal</SecondaryButton>
-        {copying ? <TrainingCard padding={12} gap={10}><AppText weight="bold">Copy from {yesterdayDate} to {journalDate}</AppText><Field label="Source meal"><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} onPress={() => setCopySource(option)}>{copySource === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field><Field label="Destination meal"><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} onPress={() => setCopyDestination(option)}>{copyDestination === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field><PrimaryButton onPress={async () => {
-          const source = foodEntries.filter(entry => entry.date === yesterdayDate && entry.meal === copySource);
-          if (!source.length) { setShortcutError("No foods in that source meal."); return; }
-          if (!(await copyFoodMeal(yesterdayDate,copySource,journalDate,copyDestination))) return;
-          setCopying(false); setShortcutError(null);
-        }}>Copy meal</PrimaryButton></TrainingCard> : null}
-        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Favorite portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><SecondaryButton onPress={() => reuseFood({ key: settingId,source:"recent",food })}>{food.name} · {food.calories} cal</SecondaryButton><Pressable onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove favorite</AppText></Pressable></View>)}</TrainingCard> : null}
-        {undo ? <TrainingCard padding={12} gap={8}><AppText>{undo.entry.name} deleted</AppText><SecondaryButton onPress={async () => { if (Date.now() >= undo.until) { setUndo(null); return; } if (await restoreFoodEntry(undo.entry)) setUndo(null); }}>Undo (10 seconds)</SecondaryButton></TrainingCard> : null}
-        {shortcutError ? <AppText color={theme.colors.danger}>{shortcutError}</AppText> : null}
         <View style={[styles.sectionHeader, { flexWrap: "wrap", gap: 12 }]}>
-          <View style={{ flex: 1, minWidth: 140 }}>
+          <View style={{ flex: 1, minWidth: 140, gap: 2 }}>
             <AppText size={20} weight="extrabold">Food journal</AppText>
-            <AppText size={13} muted>{todayEntries.length} item{todayEntries.length === 1 ? "" : "s"} logged {isToday ? "today" : "for this day"}</AppText>
+            <AppText size={13} muted>{todayEntries.length ? `${todayEntries.length} item${todayEntries.length === 1 ? "" : "s"} logged ${isToday ? "today" : "for this day"}` : "Meals and snacks will appear here"}</AppText>
           </View>
+          {dayComplete ? <View style={[styles.completePill, { backgroundColor: theme.colors.primaryTint }]}><AppText size={11} weight="bold" primary>DAY COMPLETE</AppText></View> : null}
         </View>
+        {!foodJournalReady ? (
+          <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
+            <AppText size={13} muted>Loading your food journal…</AppText>
+          </View>
+        ) : todayEntries.length === 0 ? <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
+          <View style={styles.journalEmptyHeader}>
+            <View style={[styles.emptyStateMark, { backgroundColor: theme.colors.primaryTint }]}><AppText size={22} weight="black" primary>+</AppText></View>
+            <View style={{ flex: 1, gap: 3 }}><AppText size={15} weight="extrabold">Start with your first meal</AppText><AppText size={12} muted>Log it once. We’ll keep the day’s numbers moving.</AppText></View>
+          </View>
+        </View> : null}
+        {dayCanBeChanged || canRepeatYesterday || copying ? (
+          <View style={styles.journalActions}>
+            {dayCanBeChanged ? (
+            <SecondaryButton
+              accessibilityLabel={dayComplete ? "Mark day incomplete" : "Mark day complete"}
+              accessibilityState={{ disabled: savingDayComplete }}
+              disabled={savingDayComplete}
+              height={44}
+              fontSize={12}
+              onPress={() => void toggleDayComplete()}
+              style={[styles.journalActionButton, { opacity: savingDayComplete ? 0.5 : 1 }]}
+            >
+              {savingDayComplete ? "Saving…" : dayComplete ? "Reopen day" : "Finish day"}
+            </SecondaryButton>
+            ) : null}
+            {canRepeatYesterday || copying ? (
+            <SecondaryButton
+              accessibilityLabel="Copy a meal from yesterday"
+              accessibilityState={{ disabled: copyingMeal, expanded: copying }}
+              disabled={copyingMeal}
+              height={44}
+              fontSize={12}
+              onPress={toggleMealCopy}
+              style={[styles.journalActionButton, { opacity: copyingMeal ? 0.5 : 1 }]}
+            >
+              {copying ? "Close repeat" : "Repeat a meal"}
+            </SecondaryButton>
+            ) : null}
+          </View>
+        ) : null}
+        {copying ? <TrainingCard padding={14} gap={12}>
+          <View style={{ gap: 3 }}><AppText size={15} weight="extrabold">Repeat yesterday's meal</AppText><AppText size={12} muted>Choose what to copy and where it should go today.</AppText></View>
+          <Field label="From yesterday"><View style={styles.mealOptions}>{yesterdayMealOptions.map(option => <SecondaryButton key={option} height={40} fontSize={12} disabled={copyingMeal} onPress={() => setCopySource(option)}>{copySource === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field>
+          <Field label={isToday ? "Add to today" : "Add to this day"}><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} height={40} fontSize={12} disabled={copyingMeal} onPress={() => setCopyDestination(option)}>{copyDestination === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field>
+          <PrimaryButton disabled={copyingMeal} style={{ opacity: copyingMeal ? 0.55 : 1 }} onPress={() => void repeatMeal()}>{copyingMeal ? "Copying meal…" : "Copy meal"}</PrimaryButton>
+        </TrainingCard> : null}
+        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Favorite portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><SecondaryButton onPress={() => reuseFood({ key: settingId,source:"recent",food })}>{food.name} · {food.calories} cal</SecondaryButton><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${food.name} from favorites`} onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove favorite</AppText></Pressable></View>)}</TrainingCard> : null}
+        {undo ? <TrainingCard padding={12} gap={8}><AppText>{undo.entry.name} deleted</AppText><SecondaryButton onPress={async () => { if (Date.now() >= undo.until) { setUndo(null); return; } if (await restoreFoodEntry(undo.entry)) setUndo(null); }}>Undo (10 seconds)</SecondaryButton></TrainingCard> : null}
+        {journalNotice ? <View accessibilityLiveRegion="polite"><AppText size={13} weight="semibold" color={theme.colors.success}>{journalNotice}</AppText></View> : null}
+        {shortcutError ? <View accessibilityLiveRegion="assertive"><AppText size={13} weight="semibold" color={theme.colors.danger}>{shortcutError}</AppText></View> : null}
         {entriesByMeal.map(({ meal: mealName, entries }) => (
           entries.length ? <TrainingCard key={mealName} padding={14} gap={12}>
               <View style={styles.sectionHeader}>
@@ -732,10 +981,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
                 </>}
                 {!buildFromIngredients && !savingNewRecipe && !editingFood && addFoodTab === "Food" ? <View style={{ gap: 12 }}>
-                  <View style={{ flex: 1, gap: 7 }}><AppText size={12} weight="bold" muted>MEAL</AppText><View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View></View>
+                  <View style={{ flex: 1, gap: 7 }}><AppText size={12} weight="bold" muted>MEAL</AppText><View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View></View>
                   <FoodSearch entries={[]} recipes={[]} ready onSelect={useCommonFood} mode="find" compact />
                 </View> : <Field label="Meal">
-                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
+                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
                 </Field>}
                 {!buildFromIngredients ? <>
                   <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
@@ -747,7 +996,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   </View>
                 </> : null}
                 {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
-        <SaveFeedback area="food" />
         {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
                 {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
                 <SaveFeedback area={savingNewRecipe ? "recipes" : "food"} onRetried={() => { setShowAddFood(false); resetForm(); }} />
@@ -774,7 +1022,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   </Pressable>
                 </View>
                 <Field label="Meal">
-                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
+                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
                 </Field>
                 <Field label="Recipe name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
                 {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode"}</SecondaryButton> : null}
@@ -785,7 +1033,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
                   <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
                 </View>
-        <SaveFeedback area="recipes" />
         {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
                 <SaveFeedback area="recipes" onRetried={closeRecipeEditor} />
                 <PrimaryButton disabled={savingRecipe || !recipesReady} onPress={() => void saveRecipeEdits()}>{savingRecipe ? "Saving..." : "Save changes"}</PrimaryButton>
@@ -852,7 +1099,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     return (
       <View style={{ flex: 1 }}>
         {journal}
-        <View style={styles.floatingAdd}><PrimaryButton height={54} fontSize={16} onPress={() => openFoodForm(false)}>+ Add food</PrimaryButton></View>
         {sheets}
       </View>
     );
@@ -862,20 +1108,50 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     <Screen>
       <TitleBar title="Nutrition tracker" onBack={nav.back} />
       {journal}
-      <View style={styles.floatingAdd}><PrimaryButton height={54} fontSize={16} onPress={() => openFoodForm(false)}>+ Add food</PrimaryButton></View>
       {sheets}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  viewTabs: { flexDirection: "row", gap: 4, padding: 4, borderRadius: 14 },
-  viewTab: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  intakeIcon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  goalPill: { minHeight: 40, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", borderRadius: 12 },
-  calorieSummary: { gap: 11, padding: 14, borderRadius: 16 },
-  remainingPill: { minWidth: 66, minHeight: 54, alignItems: "center", justifyContent: "center", borderRadius: 14, paddingHorizontal: 10 },
-  macroTrack: { height: 6, borderRadius: 4, overflow: "hidden", marginTop: 3 },
-  floatingAdd: { position: "absolute", left: 18, right: 18, bottom: 14, zIndex: 20 },
-  body: { gap: 18, paddingBottom: 30 }, hero: { gap: 5 }, summaryHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" }, goalButton: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 }, macroRow: { flexDirection: "row", gap: 8 }, macroTile: { borderRadius: 12, flex: 1, gap: 2, padding: 10 }, sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, calculatorCallout: { alignItems: "center", borderRadius: 15, borderWidth: 1, flexDirection: "row", gap: 12, padding: 14 }, addButton: { borderRadius: 10, paddingHorizontal: 12 }, mealSection: { gap: 8 }, foodRow: { alignItems: "center", flexDirection: "row", gap: 12 }, foodRight: { alignItems: "flex-end", minWidth: 42 }, savedMeals: { gap: 10 }, savedAddButton: { borderRadius: 9, paddingHorizontal: 12 }, recipeActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 14 }, keyboardAvoiding: { flex: 1 }, overlay: { backgroundColor: "rgba(0, 0, 0, 0.74)", flex: 1, justifyContent: "flex-end" }, sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: "88%", padding: 18 }, calculatorSheet: { alignSelf: "center", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, padding: 18, paddingBottom: 22 }, sheetBody: { gap: 15, paddingBottom: 18 }, sheetHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, mealOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, mealOption: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 9 }, inputRow: { flexDirection: "row", gap: 8 }, inputHalf: { flex: 1 }, goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, goalHalf: { minWidth: "46%" },
+  viewTabs: { flexDirection: "row", gap: 4, padding: 4, borderRadius: 16, borderCurve: "continuous", borderWidth: 1 },
+  viewTab: { flex: 1, minHeight: 42, borderRadius: 12, borderCurve: "continuous", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  fuelSummary: { borderRadius: 22, borderCurve: "continuous", borderWidth: 1, gap: 18, padding: 18 },
+  fuelEditGoals: { minHeight: 40, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", borderRadius: 12, borderCurve: "continuous" },
+  fuelEnergyRow: { flexDirection: "row", alignItems: "center", gap: 16, minHeight: 112 },
+  fuelRing: { width: 108, height: 108, borderRadius: 54, alignItems: "center", justifyContent: "center" },
+  fuelDivider: { height: StyleSheet.hairlineWidth, width: "100%" },
+  fuelMacroRow: { gap: 7 },
+  fuelMacroMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+  fuelMacroDot: { width: 7, height: 7, borderRadius: 4 },
+  fuelMacroTrack: { height: 7, borderRadius: 4, overflow: "hidden" },
+  fuelMacroFill: { height: "100%", borderRadius: 4 },
+  fuelIntro: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 20, paddingTop: 8, paddingBottom: 6 },
+  fuelIntroActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, flexGrow: 1, justifyContent: "flex-end" },
+  fuelIntroButton: { flexGrow: 1, minWidth: 126 },
+  journalEmpty: { gap: 14, padding: 16, borderRadius: 18, borderCurve: "continuous" },
+  journalEmptyHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
+  emptyStateMark: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  completePill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 10, borderRadius: 15 },
+  journalActions: { flexDirection: "row", gap: 8 },
+  journalActionButton: { flex: 1, minWidth: 0, paddingHorizontal: 8 },
+  body: { gap: 16, paddingBottom: 30 },
+  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  foodRow: { alignItems: "center", flexDirection: "row", gap: 12 },
+  foodRight: { alignItems: "flex-end", minWidth: 42 },
+  savedMeals: { gap: 10 },
+  savedAddButton: { borderRadius: 9, paddingHorizontal: 12 },
+  recipeActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  keyboardAvoiding: { flex: 1 },
+  overlay: { backgroundColor: "rgba(0, 0, 0, 0.74)", flex: 1, justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, maxHeight: "88%", padding: 18 },
+  calculatorSheet: { alignSelf: "center", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, padding: 18, paddingBottom: 22 },
+  sheetBody: { gap: 15, paddingBottom: 18 },
+  sheetHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  mealOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  mealOption: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 9 },
+  inputRow: { flexDirection: "row", gap: 8 },
+  inputHalf: { flex: 1 },
+  goalGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  goalHalf: { minWidth: "46%" },
 });
