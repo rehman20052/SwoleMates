@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { foregroundRefresh } from './foreground-refresh';
 
 import { readMediaBytes } from "@/lib/media-bytes";
 import { listConnections } from "@/lib/matches";
@@ -491,10 +492,10 @@ export async function socialAlertCount() {
   return notices.filter((notice) => notice.at > seenAt).length;
 }
 
-const socialNoticeListeners = new Set<() => void>();
+const socialNoticeListeners = new Set<() => void | Promise<unknown>>();
 let socialNoticeListenerId = 0;
 
-export function subscribeSocialNotices(onChange: () => void) {
+export function subscribeSocialNotices(onChange: () => void | Promise<unknown>) {
   socialNoticeListeners.add(onChange);
   const stopFeed = subscribeFeed(onChange, `social-tab-notices-${++socialNoticeListenerId}`);
   return () => {
@@ -593,36 +594,33 @@ const SLOW_POLL_MS = 30_000;
 
 // Reloads the feed when someone posts, likes, or comments.
 // A slow poll runs only while the live channel is down.
-export function subscribeFeed(onChange: () => void, channelName = "social-feed") {
-  let pending: ReturnType<typeof setTimeout> | null = null;
-  let poll: ReturnType<typeof setInterval> | null = null;
-  const pull = () => {
-    if (pending) clearTimeout(pending);
-    pending = setTimeout(() => {
-      pending = null;
-      onChange();
-    }, 300);
+const feedListeners = new Set<() => void | Promise<unknown>>();
+let stopFeedChannel: (() => void) | null = null;
+let feedChannelId = 0;
+export function subscribeFeed(onChange: () => void | Promise<unknown>, _channelName = "social-feed") {
+  // Notice badges, the feed and comments share one upstream subscription.
+  const listener = () => onChange();
+  feedListeners.add(listener);
+  if (!stopFeedChannel) stopFeedChannel = startFeedChannel();
+  return () => {
+    feedListeners.delete(listener);
+    if (!feedListeners.size) { stopFeedChannel?.(); stopFeedChannel = null; }
   };
-  const stopPoll = () => {
-    if (!poll) return;
-    clearInterval(poll);
-    poll = null;
-  };
-  const startPoll = () => {
-    if (poll) return;
-    poll = setInterval(pull, SLOW_POLL_MS);
-  };
-  const channel = supabase.channel(channelName);
+}
+function startFeedChannel() {
+  let active = true, realtime = false;
+  const refresh = foregroundRefresh(() => Promise.allSettled([...feedListeners].map(async listener => listener())), SLOW_POLL_MS, () => !realtime);
+  const channel = supabase.channel(`social-feed-shared-${++feedChannelId}`);
   for (const table of liveTables) {
-    channel.on("postgres_changes", { event: "*", schema: "public", table }, pull);
+    channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh.request);
   }
   channel.subscribe((status) => {
-    if (status === "SUBSCRIBED") stopPoll();
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") startPoll();
+    if (!active) return;
+    realtime = status === 'SUBSCRIBED';
+    if (realtime) refresh.request();
   });
   return () => {
-    if (pending) clearTimeout(pending);
-    stopPoll();
+    active = false; refresh.stop();
     void supabase.removeChannel(channel);
   };
 }

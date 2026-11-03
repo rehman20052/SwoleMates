@@ -1,4 +1,5 @@
 import { BRAND_LIME } from "@/theme";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { TrainAppearance, TrainPrototype, PrototypeWorkout } from "@/components/train-prototype";
 import { HomeBackdrop } from "@/components/home-backdrop";
 import { ReactNode, useEffect, useMemo, useState } from "react";
@@ -195,6 +196,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const [showRoutines, setShowRoutines] = useState(false);
   const [homeMode, setHomeMode] = useState<HomeMode>(savedHomeMode);
   const [fuelDate, setFuelDate] = useState<string | undefined>();
+  const [fuelScrolled, setFuelScrolled] = useState(false);
   const [showRecipes, setShowRecipes] = useState(savedShowRecipes);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => daysFromToday(0));
@@ -228,11 +230,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         // Keep the last saved calendar data when a background refresh fails.
       }
     };
-    void refreshVerifiedLogs();
-    const timer = setInterval(() => void refreshVerifiedLogs(), 15000);
+    const refresh = foregroundRefresh(refreshVerifiedLogs, 15000);
+    refresh.request();
     return () => {
       active = false;
-      clearInterval(timer);
+      refresh.stop();
     };
   }, [foodJournalReady]);
 
@@ -333,11 +335,11 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
         }
       />
 
-      <View style={styles.modeSwitch}>
+      <View style={[styles.modeSwitch, homeMode === 'fuel' && !showRecipes && fuelScrolled && { display: 'none' }]}>
         <SegmentSwitch
           value={homeMode}
           onChange={(next) => {
-            if (next === "fuel") setFuelDate(undefined);
+            if (next === "fuel") { setFuelDate(undefined); setFuelScrolled(false); }
             savedHomeMode = next;
             setHomeMode(next);
           }}
@@ -365,6 +367,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
               key={fuelDate ?? "today"}
               date={fuelDate}
               embedded
+              onScrolledChange={setFuelScrolled}
               header={
                 <Pressable
                   accessibilityRole="button"

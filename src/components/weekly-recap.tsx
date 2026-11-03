@@ -12,13 +12,12 @@ import { useAppTheme } from "@/theme";
 export function WeeklyRecap() {
   const theme = useAppTheme();
   const trainPalette = useTrainPalette();
-  const { logs, foodEntries, trackedLifts, weeklyWorkoutGoal, foodJournalReady, workspaceSettings } = useAppData();
+  const { logs, foodEntries, trackedLifts, weeklyWorkoutGoal, foodJournalReady } = useAppData();
   const [offset, setOffset] = useState(0);
   const [weeks, setWeeks] = useState<4 | 8 | 12>(4);
   const [showHistory, setShowHistory] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
-  const completed = workspaceSettings.filter(item => item.id.startsWith("nutrition-day:") && typeof item.value === "object" && item.value.content === "complete").map(item => item.id.slice("nutrition-day:".length));
-  const recap = weeklyRecap(daysFromToday(0), offset, logs, foodEntries, trackedLifts, completed);
+  const recap = weeklyRecap(daysFromToday(0), offset, logs, foodEntries, trackedLifts);
   const weekLogs = logs.filter(log => log.date >= recap.start && log.date <= recap.end && log.date <= daysFromToday(0));
   const setCount = weekLogs.reduce((sum, log) => sum + (log.exercises ?? []).reduce((total, exercise) => total + (exercise.setDetails?.length ?? exercise.sets), 0), 0);
   const history = trainingHistory(daysFromToday(0), weeks, logs, trackedLifts);
@@ -56,7 +55,6 @@ export function WeeklyRecap() {
       {recap.bests.slice(0, 3).map((record, index) => <View key={index} style={{ flexDirection: "row", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: trainPalette.border }}><AppText size={13} weight="bold" style={{ flex: 1 }}>{record.name}</AppText><AppText size={12} muted>+{record.increase} {record.unit}</AppText></View>)}
       <SecondaryButton accessibilityState={{ expanded: showNutrition }} onPress={() => setShowNutrition(value => !value)}>{showNutrition ? "Hide nutrition" : "Nutrition / " + recap.nutritionDays + " days logged"}</SecondaryButton>
       {showNutrition ? <View style={{ gap: 8 }}>      {recap.averageCalories !== null ? <AppText size={12} muted>{`Logged-day average: ${recap.averageCalories.toLocaleString()} cal · ${recap.averageProtein}g protein. Includes partial days.`}</AppText> : null}
-      <AppText size={12} muted>{recap.completedDays}/7 days marked complete. {recap.completedAverageCalories === null ? "No completed-day average yet." : `Completed-day average: ${recap.completedAverageCalories} cal · ${recap.completedAverageProtein}g protein.`}</AppText>
 </View> : null}
       <SecondaryButton onPress={() => setShowHistory(value => !value)}>{showHistory ? "Hide training history" : "Training consistency and lift history"}</SecondaryButton>
       {showHistory ? <View style={{ gap: 8 }}><View style={{ flexDirection:"row",gap:8 }}>{([4,8,12] as const).map(value => <SecondaryButton key={value} style={{ flex:1 }} onPress={() => setWeeks(value)}>{weeks === value ? "✓ " : ""}{value} weeks</SecondaryButton>)}</View><AppText size={12} muted>{history.start} – {history.end} · {history.days} days trained · {history.sessions} sessions · {history.activeWeeks} calendar weeks with training</AppText>{!history.sessions ? <AppText muted>No workouts recorded in this period.</AppText> : null}{history.lifts.map((lift,index) => <View key={index} style={{gap:4}}><AppText weight="bold">{lift.name} ({lift.unit})</AppText>{lift.entries.length ? lift.entries.map((entry,i) => <AppText key={i} size={12} muted>{entry.date} · {entry.weight} {lift.unit} · {entry.minReps}–{entry.maxReps} reps</AppText>) : <AppText muted>No lift history in this period.</AppText>}</View>)}</View> : null}

@@ -260,13 +260,32 @@ test('partial workout drafts allow unfinished numeric fields but reject damaged 
 });
 
 const { nutritionGoalSource, planWithUpdatedWeight } = loadModule('src/lib/nutrition-plan-storage.ts');
-test('custom macro goals survive weight check-ins and legacy custom targets are detected', () => {
+test('weight check-ins refresh custom and estimated targets from the updated goal profile', () => {
   const profile = { sex: 'Male', age: 28, weightLb: 183, heightIn: 70, goal: 'maintain', steps: '4to7', strengthDays: 3, cardioSessions: 0, cardioLength: null, bodyFat: null, targetWeightLb: null, targetWeeks: null, weighIns: [], plannedWeeklyLb: 0, calorieAdjustment: 0, calibratedThrough: null };
   const goals = { calorieGoal: 1900, proteinGoal: 160, carbGoal: 180, fatGoal: 60 };
   const manual = { goals, profile, goalSource: 'manual' };
   const updated = planWithUpdatedWeight(manual, { ...profile, weightLb: 178 });
-  assert.deepEqual(plain(updated.goals), goals); assert.equal(updated.profile.weightLb, 178); assert.equal(updated.goalSource, 'manual');
+  assert.deepEqual(plain(updated.goals), plain(goalsFromProfile({ ...profile, weightLb: 178 }))); assert.equal(updated.profile.weightLb, 178); assert.equal(updated.goalSource, 'estimated');
   assert.equal(nutritionGoalSource({ goals, profile }), 'manual');
   const estimated = { goals: goalsFromProfile(profile), profile, goalSource: 'estimated' };
   assert.deepEqual(plain(planWithUpdatedWeight(estimated, { ...profile, weightLb: 178 }).goals), plain(goalsFromProfile({ ...profile, weightLb: 178 })));
+});
+test('weigh-ins update goal-based calories and macros atomically and preserve goal settings', async () => {
+  for (const goal of ['lose', 'maintain', 'gain']) {
+    const storage = memoryStorage();
+    const store = createNutritionPlanStore(storage);
+    const profile = { ...macroProfile, goal, calorieAdjustment: 100 };
+    const goals = goalsFromProfile(profile);
+    await store.load(goals, profile, goals);
+    const updatedProfile = withCurrentWeight(profile, '2026-11-03', 170);
+    const updated = await store.change(current => planWithUpdatedWeight(current, updatedProfile));
+    assert.equal(updated.profile.goal, goal);
+    assert.equal(updated.profile.calorieAdjustment, 100);
+    assert.equal(updated.profile.weightLb, 170);
+    assert.equal(updated.profile.weighIns.at(-1).weightLb, 170);
+    assert.deepEqual(plain(updated.goals), plain(goalsFromProfile(updatedProfile)));
+    assert.notDeepEqual(plain(updated.goals), plain(goals));
+    const reopened = await createNutritionPlanStore(storage).load(goals, profile, goals);
+    assert.deepEqual(plain(reopened), plain(updated));
+  }
 });

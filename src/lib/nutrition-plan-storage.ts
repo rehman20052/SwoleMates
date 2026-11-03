@@ -34,8 +34,9 @@ export function nutritionGoalSource(plan: SavedNutritionPlan): "manual" | "estim
   return (Object.keys(estimated) as (keyof NutritionGoals)[]).every(key => estimated[key] === plan.goals[key]) ? "estimated" : "manual";
 }
 export function planWithUpdatedWeight(plan: SavedNutritionPlan, profile: NutritionProfile): SavedNutritionPlan {
-  const goalSource = nutritionGoalSource(plan);
-  return { profile, goalSource, goals: goalSource === "manual" ? plan.goals : goalsFromProfile(profile) };
+  // Logging weight explicitly refreshes goal-based daily targets, including a
+  // previously customized plan. Save profile and targets as one record.
+  return { ...plan, profile, goalSource: 'estimated', goals: goalsFromProfile(profile) };
 }
 export function createNutritionPlanStore(storage: ListStorage) {
   const store = createDurableList(storage, nutritionPlanStorageKey, isSavedPlan);

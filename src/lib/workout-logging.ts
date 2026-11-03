@@ -30,6 +30,10 @@ export function prefillExercise(row: DraftExercise, previous?: WorkoutExercise):
   const sets = Array.from({ length: count }, (_, index) => ({ ...source[Math.min(index, source.length - 1)], completed: false }));
   return { ...row, unit: previous?.unit ?? row.unit, reps: sets[0].reps, weight: sets[0].weight, setValues: sets };
 }
+export function prefillWorkoutRows(rows: DraftExercise[], logs: PerformanceLog[], date: string, excludeId?: string): DraftExercise[] {
+  const history = performanceHistory(logs, date, excludeId);
+  return rows.map(row => prefillExercise(row, lastPerformance(history, exerciseName(row))));
+}
 export function completedExercises(rows: DraftExercise[]): WorkoutExercise[] {
   return rows.flatMap(row => {
     const sets = draftSets(row).filter(set => set.completed);
