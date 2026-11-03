@@ -1,6 +1,16 @@
 import { ingredientTotals, scannedIngredient, type ScanIngredient, type ScannedFood } from "./food-scanner";
 import type { FoodLogEntry } from "@/state/app-data";
 
+export function portionGrams(item: ScanIngredient): number | null {
+  if (item.gramsPerServing && Number.isFinite(item.gramsPerServing) && item.gramsPerServing > 0) return item.gramsPerServing;
+  const basis = item.basis.trim();
+  // Never interpret an ambiguous weight/volume basis as grams.
+  if (/\bml\b|\/|—/.test(basis)) return null;
+  const match = basis.match(/^(\d+(?:[.,]\d+)?)\s*g$/i) ?? basis.match(/^1 serving\s*\([^)]*?(\d+(?:[.,]\d+)?)\s*g\s*\)$/i);
+  const amount = match ? Number(match[1].replace(",", ".")) : NaN;
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 export function fillScannedIngredient(food: ScannedFood, target?: ScanIngredient | null): ScanIngredient {
   const scanned = scannedIngredient(food);
   // A different product has its own serving basis; reset quantity instead of
