@@ -12,8 +12,24 @@ function load(path, dependencies = {}) {
   return exports;
 }
 const scanner = load('src/lib/food-scanner.ts');
-const { entryIngredients, draftFood, fillScannedIngredient } = load('src/lib/food-log-draft.ts', { './food-scanner': scanner });
+const { entryIngredients, draftFood, fillScannedIngredient, portionGrams } = load('src/lib/food-log-draft.ts', { './food-scanner': scanner });
 const chicken = () => ({ id: 'chicken', name: 'Chicken', basis: '100 g', source: 'manual', servings: '1.5', calories: '165', protein: '31', carbs: '0', fats: '3.6' });
+
+test('scanned grams scale the original nutrition basis and survive reopening', () => {
+  const item = fillScannedIngredient({ name: 'Yogurt', basis: '1 serving (170 g)', source: 'barcode', calories: 100, protein: 17, carbs: 6, fats: 0 });
+  assert.equal(portionGrams(item), 170);
+  item.servings = String(85 / portionGrams(item));
+  const food = draftFood('Yogurt', 'Breakfast', [item]);
+  assert.equal(food.calories, 50);
+  assert.equal(food.protein, 8.5);
+  assert.equal(portionGrams(entryIngredients(food)[0]), 170);
+  const ambiguous = { ...item, basis: '100 g / 100 ml — check the package' };
+  assert.equal(portionGrams(ambiguous), null);
+  ambiguous.gramsPerServing = 100;
+  assert.equal(portionGrams(ambiguous), 100);
+  assert.equal(portionGrams({ ...item, basis: '100 ml' }), null);
+  assert.equal(portionGrams(chicken()), 100);
+});
 
 test('scanning fills the selected ingredient without changing other draft ingredients', () => {
   const target = chicken();

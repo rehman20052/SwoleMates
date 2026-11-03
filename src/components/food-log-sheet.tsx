@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { AppText, Field, Input, PrimaryButton, ScrollBody, SecondaryButton } from "./ui";
 import { FoodScanner } from "./food-scanner";
 import { SaveFeedback } from "./save-feedback";
 import { foodChoices, type CommonFood, type FoodChoice } from "@/lib/food-search";
 import { ingredientTotals, nutritionKeys, scannedIngredient, type ScanIngredient } from "@/lib/food-scanner";
-import { draftFood, entryIngredients, fillScannedIngredient } from "@/lib/food-log-draft";
+import { draftFood, entryIngredients, fillScannedIngredient, portionGrams } from "@/lib/food-log-draft";
 import { useAppData, type FoodLogEntry } from "@/state/app-data";
 import { useAppTheme } from "@/theme";
 import ingredients from "@/data/ingredients.json";
@@ -21,11 +21,28 @@ function LogIcon({ kind, color }: { kind: "search" | "scan" | "saved" | "recent"
 const catalog = [...ingredients, ...usdaFoods] as CommonFood[];
 const meals: FoodLogEntry["meal"][] = ["Breakfast", "Lunch", "Dinner", "Snack"];
 const labels = { calories: "Calories", protein: "Protein (g)", carbs: "Carbs (g)", fats: "Fat (g)" };
+function useFoodKeyboard() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const update = () => setOpen(document.documentElement.classList.contains("keyboard-open"));
+      const observer = new MutationObserver(update);
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+      update(); return () => observer.disconnect();
+    }
+    const show = Keyboard.addListener("keyboardDidShow", () => setOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  return open;
+}
 type Props = { date: string; initialMeal: FoodLogEntry["meal"]; entry: FoodLogEntry | null; recipeOnly: boolean; onClose: () => void };
 
 // Mounted once per logging session; all sources append to the same draft.
 function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
   const theme = useAppTheme(), c = theme.colors;
+  const keyboardOpen = useFoodKeyboard();
+  const [showGramReference, setShowGramReference] = useState(false);
   const { foodEntries, savedMeals, foodJournalReady, recipesReady, foodJournalError, recipeStorageError, addFoodEntry, updateFoodEntry, saveMeal, accountUserId } = useAppData();
   const account = useRef(accountUserId);
   useEffect(() => { if (account.current !== accountUserId) onClose(); }, [accountUserId, onClose]);
@@ -42,6 +59,7 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
   const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const editorTouched = !!editor && (!!editingId || editor.source !== "manual" || nutritionKeys.some(key => editor[key].trim()));
+  const baseGrams = editor ? portionGrams(editor) : null;
   const editorItem = editor && editorTouched ? { ...editor, name: editor.name.trim() || name.trim() || "My meal", ...Object.fromEntries(nutritionKeys.map(key => [key, editor.source === "manual" && key !== "calories" && !editor[key].trim() ? "0" : editor[key]])) } as ScanIngredient : null;
   const draftItems = editorItem ? editingId ? items.map(item => item.id === editingId ? editorItem : item) : [...items, editorItem] : items;
   const totals = ingredientTotals(draftItems);
@@ -52,7 +70,7 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
     if (choice.source === "common") append(scannedIngredient({ name: choice.food.name, ...choice.food.per100g, basis: "100 g", source: "manual" }));
     else { setItems(previous => [...previous, ...entryIngredients(choice.food)]); if (!items.length && !name.trim()) setName(choice.food.name); setQuery(""); setError(null); }
   }
-  function manual() { setEditingId(null); setEditor(scannedIngredient({ name: query.trim() || (!items.length ? name : ""), basis: "1 serving", source: "manual", calories: null, protein: null, carbs: null, fats: null })); setError(null); }
+  function manual() { setShowGramReference(false); setEditingId(null); setEditor(scannedIngredient({ name: query.trim() || (!items.length ? name : ""), basis: "1 serving", source: "manual", calories: null, protein: null, carbs: null, fats: null })); setError(null); }
   function confirmEditor() {
     if (!editor || !editorItem) return false;
     const next = editorItem!;
@@ -63,6 +81,7 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
   }
   function nextIngredient() {
     if (!confirmEditor()) return;
+    setShowGramReference(false);
     setEditor(scannedIngredient({ name: "", basis: "1 serving", source: "manual", calories: null, protein: null, carbs: null, fats: null }));
   }
   function scanCurrentFood() {
@@ -81,21 +100,23 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
     finally { lock.current = false; setSaving(false); }
   }
   const row = { flexDirection: "row" as const, alignItems: "center" as const, gap: 10 };
-  return <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.root}>
+  return <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[s.root, keyboardOpen && { height: "100%" }]}>
     <View style={[s.sheet, { backgroundColor: c.background, borderColor: c.border }]}>
-      <View style={[s.grabber, { backgroundColor: c.borderStrong }]} />
-      <View style={[row, s.header, { borderBottomColor: c.border }]}>
-        <View style={{ flex: 1, gap: 4 }}><AppText size={10} weight="bold" primary style={{ letterSpacing: 2 }}>DAILY FUEL</AppText><AppText size={32} display>{scanner ? "Scan food" : recipeOnly ? "Save a meal" : entry ? "Edit meal" : "Log food"}</AppText><AppText size={12} muted>{new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</AppText></View>
+      {!keyboardOpen ? <View style={[s.grabber, { backgroundColor: c.borderStrong }]} /> : null}
+      <View style={[row, s.header, { borderBottomColor: c.border }, keyboardOpen && { paddingVertical: 4 }]}>
+        <View style={{ flex: 1, gap: 4 }}>{!keyboardOpen ? <AppText size={10} weight="bold" primary style={{ letterSpacing: 2 }}>DAILY FUEL</AppText> : null}<AppText size={keyboardOpen ? 22 : 32} display>{scanner ? "Scan food" : recipeOnly ? "Save a meal" : entry ? "Edit meal" : "Log food"}</AppText>{!keyboardOpen ? <AppText size={12} muted>{new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</AppText> : null}</View>
+        {keyboardOpen ? <Pressable accessibilityRole="button" accessibilityLabel="Done typing" onPress={() => { Keyboard.dismiss(); if (Platform.OS === "web" && typeof document !== "undefined") (document.activeElement as HTMLElement | null)?.blur(); }} style={s.close}><AppText primary weight="bold">Done</AppText></Pressable> : null}
         <Pressable disabled={saving} accessibilityRole="button" accessibilityLabel={scanner ? "Back to meal" : "Close food logger"} onPress={() => scanner ? setScanner(false) : onClose()} style={[s.close, { backgroundColor: c.surfaceRaised, borderRadius: 22 }]}><AppText size={23} display={false} muted>{scanner ? "‹" : "×"}</AppText></Pressable>
       </View>
       {scanner ? <FoodScanner onDetected={food => {
         const item = fillScannedIngredient(food, scanIntoEditor ? editor : null);
+        setShowGramReference(false);
         setEditor(item);
         if (!scanIntoEditor) setEditingId(null);
         setScanner(false); setPanel(null);
         setError(ingredientTotals([item]).complete ? null : "This product is missing nutrition. Check the package and fill it in.");
       }} onUse={(_food, scanned) => { setItems(previous => [...previous, ...scanned]); setScanner(false); }} onClose={() => setScanner(false)} /> : <>
-      <ScrollBody keyboardShouldPersistTaps="handled" contentContainerStyle={s.body}>
+      <ScrollBody style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={s.body}>
         <View style={[s.mealStrip, { backgroundColor: c.surface }]}>{meals.map(option => <Pressable disabled={saving} key={option} accessibilityRole="button" accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[s.meal, { backgroundColor: meal === option ? c.primary : "transparent" }]}><AppText size={12} weight="semibold" color={meal === option ? c.primaryText : c.muted}>{option}</AppText></Pressable>)}</View>
         <Field label="Meal name"><Input accessibilityLabel="Meal name" bordered placeholder="e.g. Chicken & rice bowl" value={name} onChangeText={setName} editable={!saving} style={{ height: 48, backgroundColor: c.surface }} /></Field>
         <View style={{ gap: 10 }}>
@@ -116,6 +137,12 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
         {editor ? <View style={[s.editor, { borderColor: c.border, backgroundColor: c.surface }]}>
           <View style={row}><AppText weight="bold" style={{ flex: 1 }}>{editingId ? "Edit ingredient" : "Nutrition"}</AppText>{Platform.OS === "web" ? <Pressable accessibilityRole="button" accessibilityLabel="Scan to fill this ingredient" disabled={saving} onPress={scanCurrentFood} style={[row, { minHeight: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.primaryTint, gap: 7 }]}><LogIcon kind="scan" color={c.accent} /><AppText size={12} weight="semibold" primary>Scan</AppText></Pressable> : null}<Pressable accessibilityRole="button" accessibilityLabel="Cancel nutrition entry" onPress={() => { setEditor(null); setError(null); }} style={s.close}><AppText size={20} muted>×</AppText></Pressable></View>
           <Input accessibilityLabel="Ingredient name" bordered placeholder="Food or ingredient name" value={editor.name} onChangeText={value => setEditor({ ...editor, name: value })} />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Field label="Servings" style={{ flex: 1 }}><Input bordered accessibilityLabel="Ingredient servings" keyboardType="decimal-pad" value={editor.servings} onChangeText={servings => setEditor({ ...editor, servings })} /></Field>
+            {baseGrams !== null ? <Field label="Amount (g)" style={{ flex: 1 }}><Input bordered accessibilityLabel="Ingredient amount in grams" keyboardType="decimal-pad" value={editor.servings.trim() && Number.isFinite(Number(editor.servings.replace(",", "."))) ? String(Math.round(Number(editor.servings.replace(",", ".")) * baseGrams * 1000) / 1000) : ""} onChangeText={text => { const grams = Number(text.replace(",", ".")); setEditor({ ...editor, servings: text.trim() && Number.isFinite(grams) ? String(grams / baseGrams) : "" }); }} /></Field> : null}
+          </View>
+          {baseGrams === null && !showGramReference ? <Pressable accessibilityRole="button" onPress={() => setShowGramReference(true)} style={{ minHeight: 44, justifyContent: "center" }}><AppText size={12} primary>Enter grams per serving</AppText></Pressable> : null}
+          {showGramReference ? <Field label="Grams in one base serving"><Input bordered accessibilityLabel="Grams per base serving" keyboardType="decimal-pad" value={editor.gramsPerServing ? String(editor.gramsPerServing) : ""} placeholder="Check the package" onChangeText={text => { const value = Number(text.replace(",", ".")); setEditor({ ...editor, gramsPerServing: Number.isFinite(value) && value > 0 ? value : undefined }); }} /></Field> : null}
           <AppText size={11} muted>Per {editor.basis} · {editor.source === "manual" ? "Unentered macros count as 0" : "Check any missing values on the package"}</AppText>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>{nutritionKeys.map(key => <Field key={key} label={labels[key]} style={{ width: "46%", flexGrow: 1 }}><Input bordered style={{ height: 46, backgroundColor: c.background, fontSize: 18 }} accessibilityLabel={`Ingredient ${labels[key]}`} keyboardType="decimal-pad" value={editor[key]} placeholder={key === "calories" ? "Required" : "0"} onChangeText={value => setEditor({ ...editor, [key]: value })} /></Field>)}</View>
           <SecondaryButton height={42} fontSize={13} style={{ borderStyle: "dashed", backgroundColor: c.primaryTint, borderColor: editorTouched ? c.accent : c.border, opacity: editorTouched ? 1 : 0.6 }} textColor={c.accent} disabled={!editorTouched} onPress={editingId ? confirmEditor : nextIngredient}>{editingId ? "Update ingredient" : "+ Add another ingredient"}</SecondaryButton>
@@ -124,7 +151,7 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
           const grams = item.basis === "100 g", value = ingredientTotals([item]);
           return <View key={item.id} style={[s.item, { borderBottomColor: c.border }]}>
             <Pressable disabled={saving || editorTouched} accessibilityRole="button" accessibilityLabel={`Edit nutrition for ${item.name}`} onPress={() => { setEditor({ ...item }); setEditingId(item.id); setError(null); }} style={{ flex: 1, gap: 3, minWidth: 0, minHeight: 44, justifyContent: "center" }}><AppText size={14} weight="semibold">{item.name}</AppText><AppText size={11} muted>{value.calories ?? "—"} kcal · {grams ? "per 100 g" : item.basis}</AppText></Pressable>
-            <Input bordered editable={!saving && !editorTouched} accessibilityLabel={`Amount for ${item.name} in ${grams ? "grams" : "servings"}`} keyboardType="decimal-pad" style={{ width: 65, textAlign: "center", paddingHorizontal: 5 }} value={grams ? item.servings.trim() && Number.isFinite(Number(item.servings.replace(",", "."))) ? String(Math.round(Number(item.servings.replace(",", ".")) * 100 * 1000) / 1000) : "" : item.servings} onChangeText={text => { const number = Number(text.replace(",", ".")); const servings = grams ? text.trim() && Number.isFinite(number) ? String(number / 100) : "" : text; setItems(previous => previous.map(i => i.id === item.id ? { ...i, servings } : i)); }} />
+            <Input bordered editable={!saving && !editorTouched} accessibilityLabel={`Amount for ${item.name} in ${grams ? "grams" : "servings"}`} keyboardType="decimal-pad" style={{ width: 65, textAlign: "center", paddingHorizontal: 5, fontSize: 16 }} value={grams ? item.servings.trim() && Number.isFinite(Number(item.servings.replace(",", "."))) ? String(Math.round(Number(item.servings.replace(",", ".")) * 100 * 1000) / 1000) : "" : item.servings} onChangeText={text => { const number = Number(text.replace(",", ".")); const servings = grams ? text.trim() && Number.isFinite(number) ? String(number / 100) : "" : text; setItems(previous => previous.map(i => i.id === item.id ? { ...i, servings } : i)); }} />
             <AppText size={11} muted>{grams ? "g" : "×"}</AppText>
             <Pressable disabled={saving || editorTouched} accessibilityRole="button" accessibilityLabel={`Remove ${item.name}`} onPress={() => setItems(previous => previous.filter(i => i.id !== item.id))} style={s.remove}><AppText size={22} muted>×</AppText></Pressable>
           </View>;
@@ -132,11 +159,11 @@ function FoodLogForm({ date, initialMeal, entry, recipeOnly, onClose }: Props) {
         {error || (recipeOnly ? recipeStorageError : foodJournalError) ? <AppText accessibilityLiveRegion="polite" size={13} color={c.danger}>{error ?? (recipeOnly ? recipeStorageError : foodJournalError)}</AppText> : null}
         {error ? <SaveFeedback area={recipeOnly ? "recipes" : "food"} onRetried={onClose} /> : null}
       </ScrollBody>
-      <View style={[s.footer, { borderTopColor: c.border, backgroundColor: c.surface }]}>
+      {!keyboardOpen ? <View style={[s.footer, { borderTopColor: c.border, backgroundColor: c.surface }]}>
         <View style={[row, { justifyContent: "space-between", marginBottom: 10 }]}><AppText size={10} weight="bold" muted style={{ letterSpacing: 1.5 }}>MEAL TOTAL</AppText><AppText size={11} muted>{draftItems.length} {draftItems.length === 1 ? "ingredient" : "ingredients"}</AppText></View>
         {draftItems.length ? <View style={[row, { justifyContent: "space-between", marginBottom: 12 }]}>{nutritionKeys.map(key => <View key={key} style={{ gap: 3 }}><AppText size={key === "calories" ? 23 : 16} weight="bold">{totals[key] ?? "—"}{key === "calories" ? "" : "g"}</AppText><AppText size={11} muted>{key === "calories" ? "kcal" : key === "fats" ? "Fat" : key === "carbs" ? "Carbs" : "Protein"}</AppText></View>)}</View> : null}
         <PrimaryButton height={50} style={{ borderRadius: 14, opacity: saving || !ready || !totals.complete ? 0.45 : 1 }} disabled={saving || !ready || !totals.complete} onPress={() => void save()}>{saving ? "Saving…" : recipeOnly ? "Save meal" : entry ? "Save changes" : `Log to ${meal.toLowerCase()}`}</PrimaryButton>
-      </View>
+      </View> : null}
       </>}
     </View>
   </KeyboardAvoidingView>;
