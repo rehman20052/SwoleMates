@@ -15,6 +15,6 @@ export function loadTs(filename) {
     if (specifier.startsWith('.')) return loadTs(path.resolve(path.dirname(resolved), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`));
     throw new Error(`Unexpected test import: ${specifier}`);
   };
-  vm.runInNewContext(`(function(exports, require, module) { ${output}\n})`, { console })(module.exports, localRequire, module);
+  vm.runInNewContext(`(function(exports, require, module) { ${output}\n})`, { console, setTimeout, clearTimeout })(module.exports, localRequire, module);
   return module.exports;
 }

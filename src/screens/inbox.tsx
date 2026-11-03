@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { answeredIncomingWorkoutIds, clearCanceledWorkoutPreviews, workoutPlanId, listIncomingWorkoutRequests, type PlannedWorkout } from "@/lib/workouts";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 
 type RequestTab = "received" | "sent";
 
@@ -47,7 +48,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
     let active = true;
     const version = hiddenVersion.current;
     if (!background) setStatus("loading");
-    listConnections()
+    const done = listConnections()
       .then(async (people) => {
         const { data: session, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -89,21 +90,22 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Could not load chats.");
       });
-    return () => {
+    return Object.assign(() => {
       active = false;
-    };
+    }, { done });
   }, []);
 
-  useEffect(() => load(), [load]);
   useEffect(() => {
     let cancel: (() => void) | undefined;
-    const refresh = () => { cancel?.(); cancel = load(true); };
-    const timer = setInterval(refresh, 15000);
-    if (Platform.OS === "web") window.addEventListener("focus", refresh);
-    return () => { cancel?.(); clearInterval(timer); if (Platform.OS === "web") window.removeEventListener("focus", refresh); };
+    let background = false;
+    const refresh = foregroundRefresh(() => {
+      const operation = load(background); background = true; cancel = operation;
+      return operation.done;
+    }, 15000);
+    refresh.request();
+    const unsubscribe = subscribeChatAlerts(refresh.request);
+    return () => { refresh.stop(); cancel?.(); unsubscribe(); };
   }, [load]);
-
-  useEffect(() => subscribeChatAlerts(() => load(true)), [load]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || document.getElementById("chat-scroll-style")) return;

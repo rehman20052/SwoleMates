@@ -8,6 +8,7 @@ import { useAppData } from "@/state/app-data";
 import { parseWorkoutDraft, uniqueWorkoutTemplates } from "@/lib/workout-drafts";
 import { sharedExercises } from "@/lib/shared-workout-plan";
 import { useAppTheme } from "@/theme";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 
 export type SharedExercise = { name: string; sets: number; reps: number };
 type Session = { plan: SharedExercise[]; locked: boolean; states: Record<string, string> };
@@ -43,13 +44,10 @@ export function SharedWorkoutSession({ plan, me, home = false }: { plan: Planned
         setSession(data as Session); setAvailable(true);
       } catch { if (mounted) setAvailable(false); }
     }
-    void refresh();
-    const wake = () => { void refresh(); };
-    const timer = setInterval(wake, 15000);
-    if (typeof window !== "undefined") { window.addEventListener("focus", wake); window.addEventListener("online", wake); }
+    const updates = foregroundRefresh(refresh, 15000);
+    updates.request();
     return () => {
-      mounted = false; clearInterval(timer);
-      if (typeof window !== "undefined") { window.removeEventListener("focus", wake); window.removeEventListener("online", wake); }
+      mounted = false; updates.stop();
     };
   }, [active, plan.id, plan.status]);
 

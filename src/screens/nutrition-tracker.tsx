@@ -83,7 +83,7 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   const ringSize = 108;
   const ringRadius = 45;
   const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringColor = overGoal ? theme.colors.warning : theme.colors.primary;
+  const ringColor = overGoal ? theme.colors.warning : theme.colors.accent;
   const macros = [
     { label: "Protein", current: protein, target: proteinGoal, color: theme.colors.protein },
     { label: "Carbs", current: carbs, target: carbGoal, color: theme.colors.carbs },
@@ -157,9 +157,11 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   );
 }
 
-export function NutritionTrackerScreen({ embedded = false, header, date }: { embedded?: boolean; header?: ReactNode; date?: string }) {
+export function NutritionTrackerScreen({ embedded = false, header, date, onScrolledChange }: { embedded?: boolean; header?: ReactNode; date?: string; onScrolledChange?: (scrolled: boolean) => void }) {
   const theme = useAppTheme();
   const frame = useWindowDimensions();
+  const scrolled = useRef(false);
+
   const nav = useNavigation();
   const framed = Platform.OS === "web" && frame.width > 450;
   const phoneHeight = Math.min(874, frame.height - 32);
@@ -184,6 +186,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showGoals, setShowGoals] = useState(false);
   const [journalTab, setJournalTab] = useState<"Journal" | "Recipes" | "Plan">("Journal");
+  useEffect(() => { scrolled.current = false; onScrolledChange?.(false); }, [journalTab, onScrolledChange]);
   const [collapsedMeals, setCollapsedMeals] = useState<Meal[]>([]);
   const [expandedFoodId, setExpandedFoodId] = useState<string | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
@@ -201,9 +204,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [copyingMeal, setCopyingMeal] = useState(false);
   const [copySource, setCopySource] = useState<Meal>("Breakfast");
   const [copyDestination, setCopyDestination] = useState<Meal>("Breakfast");
-  const [savingDayComplete, setSavingDayComplete] = useState(false);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [journalNotice, setJournalNotice] = useState<string | null>(null);
+  const savingPortion = useRef(false);
+  const [savingPortionId, setSavingPortionId] = useState<string | null>(null);
   useEffect(() => { if (!undo) return; const timer = setTimeout(() => setUndo(null), Math.max(0, undo.until - Date.now())); return () => clearTimeout(timer); }, [undo]);
   useEffect(() => { setUndo(null); setCopying(false); setShortcutError(null); setJournalNotice(null); }, [accountUserId, date]);
   const favorites = workspaceSettings.flatMap(item => {
@@ -218,13 +222,28 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     const saved = await saveWorkspaceSetting(id, content, accountUserId, Date.now());
     setShortcutError(saved ? null : "Could not save this change."); return saved;
   }
+  async function savePortionAsMeal(entry: FoodLogEntry, legacySettingId?: string) {
+    if (savingPortion.current || !recipesReady || !accountUserId) return;
+    savingPortion.current = true; setSavingPortionId(entry.id);
+    setShortcutError(null); setJournalNotice(null);
+    try {
+      const duplicate = savedMeals.some(meal => meal.name.trim().toLowerCase() === entry.name.trim().toLowerCase()
+        && meal.meal === entry.meal && meal.calories === entry.calories && meal.protein === entry.protein && meal.carbs === entry.carbs && meal.fats === entry.fats);
+      const { name, meal, calories, protein, carbs, fats, artwork, scannedIngredients } = entry;
+      if (!duplicate && !await saveMeal({ name, meal, calories, protein, carbs, fats, artwork, scannedIngredients })) {
+        setShortcutError('Could not save this meal. Please try again.'); return;
+      }
+      // Existing favorites can be moved without losing them if the meal save fails.
+      if (legacySettingId) await saveShortcut(legacySettingId, '');
+      setJournalNotice(duplicate ? `${name} is already in saved recipes.` : `${name} saved as a meal. Find it in Recipes.`);
+    } catch { setShortcutError('Could not save this meal. Please try again.'); }
+    finally { savingPortion.current = false; setSavingPortionId(null); }
+  }
   async function removeFood(entry: FoodLogEntry) {
     if (await deleteFoodEntry(entry.id)) setUndo({ entry, until: Date.now() + 10000 });
   }
 
   const journalDate = date ?? daysFromToday(0);
-  const completeSetting = workspaceSettings.find(item => item.id === `nutrition-day:${journalDate}`)?.value;
-  const dayComplete = typeof completeSetting === "object" && completeSetting.content === "complete";
   const [jy,jm,jd] = journalDate.split("-").map(Number);
   const yesterday = new Date(jy,jm-1,jd-1);
   const yesterdayDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,"0")}-${String(yesterday.getDate()).padStart(2,"0")}`;
@@ -247,21 +266,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
   if (!nutrition) return null;
   const currentNutrition = { ...nutrition, ...sumFoodEntries(foodEntries, journalDate) };
-  const dayCanBeChanged = foodJournalReady && journalDate <= daysFromToday(0) && Boolean(accountUserId) && (dayComplete || todayEntries.length > 0);
   const canRepeatYesterday = foodJournalReady && yesterdayMealOptions.length > 0;
-
-  async function toggleDayComplete() {
-    if (savingDayComplete || !dayCanBeChanged) return;
-    setSavingDayComplete(true);
-    setShortcutError(null);
-    setJournalNotice(null);
-    try {
-      const saved = await saveShortcut(`nutrition-day:${journalDate}`, dayComplete ? "" : "complete");
-      if (saved) setJournalNotice(dayComplete ? "Day reopened. You can keep logging food." : "Day marked complete.");
-    } finally {
-      setSavingDayComplete(false);
-    }
-  }
 
   function toggleMealCopy() {
     setShortcutError(null);
@@ -631,8 +636,38 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     return saved;
   }
 
+  const fuelActions = (
+    <View style={[styles.fuelActionBar, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+      <View style={styles.fuelIntroActions}>
+        {Platform.OS === "web" ? (
+          <SecondaryButton
+            accessibilityLabel="Scan a food barcode"
+            disabled={!foodJournalReady}
+            height={46}
+            style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
+            onPress={openBarcodeForm}
+          >
+            Scan barcode
+          </SecondaryButton>
+        ) : null}
+        <PrimaryButton
+          accessibilityLabel="Log food"
+          disabled={!foodJournalReady}
+          height={46}
+          style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
+          onPress={() => openFoodForm(false)}
+        >
+          Log food
+        </PrimaryButton>
+      </View>
+    </View>
+  );
+
   const journal = (
-      <ScrollBody key={journalTab} contentContainerStyle={styles.body}>
+      <ScrollBody key={journalTab} contentContainerStyle={styles.body} scrollEventThrottle={16} onScroll={event => {
+        const next = event.nativeEvent.contentOffset.y > 0;
+        if (next !== scrolled.current) { scrolled.current = next; onScrolledChange?.(next); }
+      }}>
         <View style={styles.fuelIntro}>
           <View style={{ flex: 1, minWidth: 220, gap: 8 }}>
             <AppText size={frame.width > 700 ? 44 : 34} weight="black">
@@ -640,28 +675,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             </AppText>
             <AppText size={15} muted>Eat with intent. Recover. Come back stronger.</AppText>
           </View>
-          <View style={styles.fuelIntroActions}>
-            {Platform.OS === "web" ? (
-              <SecondaryButton
-                accessibilityLabel="Scan a food barcode"
-                disabled={!foodJournalReady}
-                height={46}
-                style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
-                onPress={openBarcodeForm}
-              >
-                Scan barcode
-              </SecondaryButton>
-            ) : null}
-            <PrimaryButton
-              accessibilityLabel="Log food"
-              disabled={!foodJournalReady}
-              height={46}
-              style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
-              onPress={() => openFoodForm(false)}
-            >
-              Log food
-            </PrimaryButton>
-          </View>
+
         </View>
         {!nutritionPlanReady ? <AppText muted>Loading saved daily targets...</AppText> : null}
         {nutritionPlanError ? <AppText color={theme.colors.danger}>{nutritionPlanError}</AppText> : null}
@@ -717,7 +731,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             <AppText size={20} weight="extrabold">Food journal</AppText>
             <AppText size={13} muted>{todayEntries.length ? `${todayEntries.length} item${todayEntries.length === 1 ? "" : "s"} logged ${isToday ? "today" : "for this day"}` : "Meals and snacks will appear here"}</AppText>
           </View>
-          {dayComplete ? <View style={[styles.completePill, { backgroundColor: theme.colors.primaryTint }]}><AppText size={11} weight="bold" primary>DAY COMPLETE</AppText></View> : null}
         </View>
         {!foodJournalReady ? (
           <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
@@ -729,21 +742,8 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             <View style={{ flex: 1, gap: 3 }}><AppText size={15} weight="extrabold">Start with your first meal</AppText><AppText size={12} muted>Log it once. We’ll keep the day’s numbers moving.</AppText></View>
           </View>
         </View> : null}
-        {dayCanBeChanged || canRepeatYesterday || copying ? (
+        {canRepeatYesterday || copying ? (
           <View style={styles.journalActions}>
-            {dayCanBeChanged ? (
-            <SecondaryButton
-              accessibilityLabel={dayComplete ? "Mark day incomplete" : "Mark day complete"}
-              accessibilityState={{ disabled: savingDayComplete }}
-              disabled={savingDayComplete}
-              height={44}
-              fontSize={12}
-              onPress={() => void toggleDayComplete()}
-              style={[styles.journalActionButton, { opacity: savingDayComplete ? 0.5 : 1 }]}
-            >
-              {savingDayComplete ? "Saving…" : dayComplete ? "Reopen day" : "Finish day"}
-            </SecondaryButton>
-            ) : null}
             {canRepeatYesterday || copying ? (
             <SecondaryButton
               accessibilityLabel="Copy a meal from yesterday"
@@ -765,9 +765,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
           <Field label={isToday ? "Add to today" : "Add to this day"}><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} height={40} fontSize={12} disabled={copyingMeal} onPress={() => setCopyDestination(option)}>{copyDestination === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field>
           <PrimaryButton disabled={copyingMeal} style={{ opacity: copyingMeal ? 0.55 : 1 }} onPress={() => void repeatMeal()}>{copyingMeal ? "Copying meal…" : "Copy meal"}</PrimaryButton>
         </TrainingCard> : null}
-        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Favorite portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><SecondaryButton onPress={() => reuseFood({ key: settingId,source:"recent",food })}>{food.name} · {food.calories} cal</SecondaryButton><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${food.name} from favorites`} onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove favorite</AppText></Pressable></View>)}</TrainingCard> : null}
+        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Previously favorited portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><AppText>{food.name} · {food.calories} cal</AppText><SecondaryButton disabled={!recipesReady || savingPortionId !== null} onPress={() => void savePortionAsMeal(food, settingId)}>Save as meal in Recipes</SecondaryButton><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${food.name} from favorites`} onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove</AppText></Pressable></View>)}</TrainingCard> : null}
         {undo ? <TrainingCard padding={12} gap={8}><AppText>{undo.entry.name} deleted</AppText><SecondaryButton onPress={async () => { if (Date.now() >= undo.until) { setUndo(null); return; } if (await restoreFoodEntry(undo.entry)) setUndo(null); }}>Undo (10 seconds)</SecondaryButton></TrainingCard> : null}
         {journalNotice ? <View accessibilityLiveRegion="polite"><AppText size={13} weight="semibold" color={theme.colors.success}>{journalNotice}</AppText></View> : null}
+        {journalNotice?.includes('saved') ? <SecondaryButton onPress={() => setJournalTab('Recipes')}>View saved recipes</SecondaryButton> : null}
         {shortcutError ? <View accessibilityLiveRegion="assertive"><AppText size={13} weight="semibold" color={theme.colors.danger}>{shortcutError}</AppText></View> : null}
         {entriesByMeal.map(({ meal: mealName, entries }) => (
           entries.length ? <TrainingCard key={mealName} padding={14} gap={12}>
@@ -794,7 +795,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${entry.name}`} onPress={() => openFoodEditor(entry)} style={{ minHeight: 44, justifyContent: "center", flex: 1 }}>
                     <AppText size={12} weight="bold" primary>Edit food</AppText>
                   </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Favorite ${entry.name} portion`} onPress={() => void saveShortcut(`favorite-food:${entry.id}`,JSON.stringify(entry))} style={{ minHeight:44,justifyContent:"center" }}><AppText size={12} primary>Favorite portion</AppText></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Save ${entry.name} as a meal`} disabled={!recipesReady || !accountUserId || savingPortionId !== null} onPress={() => void savePortionAsMeal(entry)} style={{ minHeight:44,justifyContent:"center", opacity: recipesReady && savingPortionId === null ? 1 : 0.5 }}><AppText size={12} primary>{savingPortionId === entry.id ? 'Saving…' : 'Save as meal'}</AppText></Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${entry.name}`} onPress={() => void removeFood(entry)} style={{ minHeight: 44, justifyContent: "center" }}><AppText size={12} color={theme.colors.danger}>Delete</AppText></Pressable>
                   </View> : null}
                 </View>
@@ -1099,6 +1100,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     return (
       <View style={{ flex: 1 }}>
         {journal}
+        {fuelActions}
         {sheets}
       </View>
     );
@@ -1108,6 +1110,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     <Screen>
       <TitleBar title="Nutrition tracker" onBack={nav.back} />
       {journal}
+      {fuelActions}
       {sheets}
     </Screen>
   );
@@ -1127,12 +1130,12 @@ const styles = StyleSheet.create({
   fuelMacroTrack: { height: 7, borderRadius: 4, overflow: "hidden" },
   fuelMacroFill: { height: "100%", borderRadius: 4 },
   fuelIntro: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 20, paddingTop: 8, paddingBottom: 6 },
+  fuelActionBar: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   fuelIntroActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, flexGrow: 1, justifyContent: "flex-end" },
   fuelIntroButton: { flexGrow: 1, minWidth: 126 },
   journalEmpty: { gap: 14, padding: 16, borderRadius: 18, borderCurve: "continuous" },
   journalEmptyHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   emptyStateMark: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  completePill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 10, borderRadius: 15 },
   journalActions: { flexDirection: "row", gap: 8 },
   journalActionButton: { flex: 1, minWidth: 0, paddingHorizontal: 8 },
   body: { gap: 16, paddingBottom: 30 },

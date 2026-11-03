@@ -1,4 +1,5 @@
 import { WorkoutPlanner } from './workout-planner';
+import { DietRecap } from './diet-recap';
 import { WorkoutLogButton, WorkoutLogHeader, WorkoutSetEditor, WorkoutRecordedSets, WorkoutLogIcon, useWorkoutLogPalette } from './workout-log-editor';
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
@@ -11,9 +12,10 @@ import { TrainSaveFeedback as SaveFeedback } from "./train-ui";
 import { useAppData, daysFromToday, type SessionLog } from "@/state/app-data";
 
 import { uniqueWorkoutTemplates, parseWorkoutDraft, hasWorkoutDraftInput, type DraftExercise, type WorkoutDraft } from "@/lib/workout-drafts";
-import { completedExercises, exerciseToDraft } from "@/lib/workout-logging";
+import { completedExercises, exerciseToDraft, prefillWorkoutRows } from "@/lib/workout-logging";
 import { validWorkoutExercises } from "@/lib/workout-session";
 import { useSavedDraft } from "@/lib/use-saved-draft";
+import { isSplitWorkoutCompleted, matchesSplitTemplate } from "@/lib/workout-split";
 import { trainTokens, trainTextSize, TrainPrototypeContext, useTrainPalette } from "./train-ui";
 import { ThemeScope, useAppTheme } from "@/theme";
 import { ProgressVisibilityProvider, useProgressVisibility } from "./train-progress-bar";
@@ -74,7 +76,8 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   const [selected, setSelected] = useState(today);
   const [week, setWeek] = useState(() => monday(today));
   const [logging, setLogging] = useState(false);
-  const [resumeWorkout, setResumeWorkout] = useState<{ date: string; draft: WorkoutDraft } | null>(null);
+  const [resumeWorkouts, setResumeWorkouts] = useState<{ date: string; draft: WorkoutDraft }[]>([]);
+  const resumeWorkout = resumeWorkouts[0] ?? null;
   const [planning, setPlanning] = useState(false);
   const [initialTemplate, setInitialTemplate] = useState<Template | undefined>();
   const [monthOpen, setMonthOpen] = useState(false);
@@ -121,33 +124,38 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
         const draft = item.content ? parseWorkoutDraft(item.content) : null;
         const date = draft?.workoutDate ?? id.slice("draft:train-log:".length);
         return draft && /^\d{4}-\d{2}-\d{2}$/.test(date) && hasWorkoutDraftInput(draft, allTemplates) && !logs.some(log => log.id === draft.recordId) ? { date, draft } : null;
-      }).find(Boolean) ?? null;
-      if (active) setResumeWorkout(found);
+      }).filter((item): item is { date: string; draft: WorkoutDraft } => item !== null);
+      if (active) setResumeWorkouts(found);
     })();
     return () => { active = false; };
   }, [accountUserId, foodJournalReady, workspaceSettings, logs, logging]);
   const plannedTemplate = allTemplates.find(template => template.id === activeSplit?.days[(dateOf(selected).getDay() + 6) % 7]);
   const todayTemplate = allTemplates.find(template => template.id === activeSplit?.days[(dateOf(today).getDay() + 6) % 7]);
-  const todayCompleted = todayTemplate && logs.some(log => log.date === today && log.title.trim().toLowerCase() === todayTemplate.title.trim().toLowerCase());
+  const todayCompleted = todayTemplate && isSplitWorkoutCompleted(today, todayTemplate, logs);
+  const plannedCompleted = plannedTemplate && isSplitWorkoutCompleted(selected, plannedTemplate, logs);
+  const todayDraft = resumeWorkouts.find(workout => workout.date === today);
+  const resumeToday = !!(todayDraft && todayTemplate && matchesSplitTemplate(todayDraft.draft, todayTemplate));
   function moveWeek(n: number) { const next = plus(week, n * 7); setWeek(next); setSelected(iso(plus(dateOf(selected), n * 7))); }
-  function resumeActiveWorkout() { if (!resumeWorkout) return; setSelected(resumeWorkout.date); setWeek(monday(resumeWorkout.date)); setInitialTemplate(undefined); setLogging(true); }
-  function startTemplate(template: Template) { setInitialTemplate(template); setLogging(true); }
+  function resumeActiveWorkout(workout = resumeWorkout) { if (!workout) return; setSelected(workout.date); setWeek(monday(workout.date)); setInitialTemplate(undefined); setLogging(true); }
+  function startTemplate(template: Template, date = selected) { if (date > today || resumeWorkouts.some(workout => workout.date === date)) return; setSelected(date); setWeek(monday(date)); setInitialTemplate(template); setLogging(true); }
   return <ScrollBody ref={visibility.setViewport} onScroll={visibility.check} onLayout={visibility.check} scrollEventThrottle={32} contentContainerStyle={{ padding: wide ? 24 : 16, paddingBottom: 40, gap: 28, width: "100%", maxWidth: 960, alignSelf: "center" }}>
     <View style={[s.row, { flexWrap: "wrap", gap: 20, paddingTop: 8, paddingBottom: 6 }]}>
       <View style={{ flex: 1, minWidth: 230, gap: 12 }}><T size={wide ? 44 : 34} weight="bold">Training<T size={wide ? 44 : 34} color={TRAIN_LIME}>.</T></T><T size={15} muted>Show up. Put in the work. Get stronger.</T></View>
       <View style={[s.row, { flexWrap: "wrap", gap: 10 }]}><Action label="Create workout plan" onPress={() => setPlanning(true)} /><Action label={resumeWorkout ? "↻  Resume workout" : "+  Log workout"} primary disabled={!foodJournalReady || !resumeWorkout && selected > today} onPress={() => { if (resumeWorkout) resumeActiveWorkout(); else setLogging(true); }} /></View>
     </View>
     {checkIn}
-    {foodJournalReady && todayTemplate ? <View style={[s.card, { backgroundColor: theme.isDark ? "#141b0e" : "#F0F5E7", padding: 20, borderColor: theme.isDark ? "#43551b" : "#C8D8AC", gap: 12 }]}>
+    {resumeWorkout ? <View style={{ gap: 6 }}><T size={14} weight="semibold">Workout in progress: {resumeWorkout.draft.title || "Workout"}</T><T size={12} muted>{resumeWorkout.date} · Resume to continue your saved sets.</T></View> : null}
+    {foodJournalReady && todayTemplate && !todayCompleted ? <View style={[s.card, { backgroundColor: theme.isDark ? "#141b0e" : "#F0F5E7", padding: 20, borderColor: theme.isDark ? "#43551b" : "#C8D8AC", gap: 12 }]}>
       <View style={[s.row, { flexWrap: "wrap", justifyContent: "space-between" }]}>
         <View style={{ flex: 1, minWidth: 180, gap: 8 }}>
-          <T size={12} color={theme.colors.accent} weight="semibold">{todayCompleted ? "TODAY’S WORKOUT · LOGGED" : "TODAY’S WORKOUT"}</T>
-          <T size={24} weight="bold">{todayCompleted ? `${todayTemplate.title} complete!` : `Today is ${todayTemplate.title.replace(/[!]+$/, "")}!`}</T>
-          <T size={14} muted>{todayCompleted ? "You showed up. Keep the momentum going." : "Make time to get your workout in today."}</T>
+          <T size={12} color={theme.colors.accent} weight="semibold">TODAY’S WORKOUT</T>
+          <T size={24} weight="bold">{`Today is ${todayTemplate.title.replace(/[!]+$/, "")}!`}</T>
+          <T size={14} muted>Make time to get your workout in today.</T>
           <T size={12} muted>{activeSplit?.title} · {todayTemplate.rows.length} exercises{todayTemplate.durationMinutes ? ` · ${todayTemplate.durationMinutes} min` : ""}</T>
         </View>
-        {!todayCompleted ? <Action label={resumeWorkout ? "Resume workout" : "Start today’s workout"} primary onPress={() => { if (resumeWorkout) resumeActiveWorkout(); else { setSelected(today); setWeek(monday(today)); startTemplate(todayTemplate); } }} /> : null}
+        <Action label={resumeToday ? "Resume today’s workout" : "Start today’s workout"} primary disabled={!!todayDraft && !resumeToday} onPress={() => { if (resumeToday) resumeActiveWorkout(todayDraft); else startTemplate(todayTemplate, today); }} />
       </View>
+      {todayDraft && !resumeToday ? <T size={12} muted>Resume or discard {todayDraft.draft.title || "your active workout"} before starting another workout for today.</T> : null}
     </View> : null}
     <View style={[s.card, { backgroundColor: palette.surface, borderColor: palette.border, padding: wide ? 30 : 18, gap: 28 }]}>
       <View style={[s.row, { flexWrap: "wrap", justifyContent: "space-between" }]}><T size={23} weight="bold">Your activity</T><Pressable accessibilityRole="button" accessibilityLabel="Toggle month calendar" accessibilityState={{ expanded: monthOpen }} onPress={() => { setMonth(new Date(dateOf(selected).getFullYear(), dateOf(selected).getMonth(), 1)); setMonthOpen(!monthOpen); }} style={[s.row, { minHeight: 44 }]}><Icon source={icons.calendarMuted} size={20} tint={palette.muted} /><T size={16} weight="medium">{(monthOpen ? month : dateOf(selected)).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</T><T size={20}>⌄</T></Pressable></View>
@@ -161,9 +169,9 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View style={[s.row, { justifyContent: "space-between" }]}><T size={16} weight="medium">{selected === today ? "Today" : dateOf(selected).toLocaleDateString("en-US", { weekday: "long" })}<T size={14} muted>{` · ${dateOf(selected).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</T></T><T size={12} muted>{dayLogs.length} workout{dayLogs.length === 1 ? "" : "s"}</T></View>
       {dayLogs.length ? dayLogs.map(log => <Pressable key={log.id} accessibilityRole="button" accessibilityLabel={`View ${log.title}`} onPress={() => setDetail(log)} style={[s.row, { gap: wide ? 18 : 12, minHeight: 64 }]}><View style={[s.badge, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><Icon source={icons.training} size={trainTokens.iconSize} tint={theme.colors.accent} /></View><View style={{ flex: 1, gap: 10 }}><T size={18} weight="semibold">{log.title}</T><T size={13} muted>{log.exercises?.length ?? 0} exercises{log.durationMinutes !== undefined ? `  ·  ${log.durationMinutes} min` : ""}</T></View><View style={[s.status, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><T size={11} weight="semibold" color={theme.colors.accent}>Completed</T></View><T size={22}>↗</T></Pressable>) : <T size={14} muted>{foodJournalReady ? "No workouts logged for this day." : "Loading your activity…"}</T>}
       <View style={s.separator} /><View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap" }]}><View style={s.row}><Icon source={icons.flame} size={20} tint="#ffa845" /><T size={16} muted>Calories eaten</T></View><View style={[s.row, { flexWrap: "wrap" }]}><T size={16} weight="semibold">{Math.round(calories).toLocaleString()}<T size={12} muted> kcal</T></T><Pressable accessibilityRole="button" accessibilityLabel="View foods and macros for selected day" disabled={!foodJournalReady} onPress={() => setFoodOverviewOpen(true)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8, opacity: foodJournalReady ? 1 : 0.45 }}><T size={13} weight="medium" color={theme.colors.accent}>View foods ↗</T></Pressable></View></View>
-      {plannedTemplate ? <View style={[s.row, { flexWrap: "wrap" }]}><View style={{ flex: 1, gap: 8, minWidth: 130 }}><T size={12} muted>Planned in your split</T><T weight="semibold">{plannedTemplate.title}</T></View><Action label="Start planned workout" disabled={selected > today || !!resumeWorkout} onPress={() => startTemplate(plannedTemplate)} /></View> : null}
+      {plannedTemplate ? <View style={[s.row, { flexWrap: "wrap" }]}><View style={{ flex: 1, gap: 8, minWidth: 130 }}><T size={12} muted>Planned in your split</T><T weight="semibold">{plannedTemplate.title}</T></View>{plannedCompleted ? <T size={13} color={theme.colors.accent}>Completed</T> : <Action label="Start planned workout" disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} onPress={() => startTemplate(plannedTemplate)} />}</View> : null}
     </View>
-    {templates.length ? <WorkoutTemplates templates={templates} onUse={startTemplate} disabled={!!resumeWorkout} /> : null}
+    {templates.length ? <WorkoutTemplates templates={templates} onUse={startTemplate} disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} /> : null}
     <View style={{ height: wide ? 232 : 205, borderRadius: 12, overflow: "hidden", justifyContent: "center", backgroundColor: theme.isDark ? "#101214" : "#E8EDDF", borderWidth: 1, borderColor: palette.border }}>
       <Image source={trainingPhoto} contentFit="cover" style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.isDark ? "rgba(0,0,0,0.48)" : "rgba(0,0,0,0.22)" }]} />
@@ -181,6 +189,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View accessibilityLabel="Workouts by weekday" style={[s.row, { alignItems: "flex-end", gap: wide ? 18 : 8 }]}>{days.map((d, i) => { const count = weekLogs.filter(log => log.date === iso(d)).length; const max = Math.max(1, ...days.map(day => weekLogs.filter(log => log.date === iso(day)).length)); return <View key={iso(d)} accessibilityLabel={`${weekdays[i]}: ${count} workouts`} style={{ flex: 1, height: 126, justifyContent: "flex-end", gap: 16, alignItems: "center" }}><View style={{ width: "100%", height: count ? Math.max(20, count / max * 80) : 8, backgroundColor: count ? "#212b13" : palette.field, borderTopWidth: count ? 3 : 0, borderTopColor: TRAIN_LIME, borderTopLeftRadius: 5, borderTopRightRadius: 5 }} /><T size={11} muted>{weekdays[i][0]}</T></View>; })}</View>
       <Pressable accessibilityRole="button" accessibilityLabel="Edit weekly workout goal" onPress={onGoal} style={[s.row, { minHeight: 44, marginTop: 8 }]}><View style={[s.badge, { width: 40, height: 40 }]}><T size={23} color={TRAIN_LIME}>ϟ</T></View><T size={14} style={{ flex: 1 }}>{workouts >= weeklyWorkoutGoal ? "You hit your weekly goal. Keep showing up." : `${weeklyWorkoutGoal - workouts} more session${weeklyWorkoutGoal - workouts === 1 ? "" : "s"} to hit your weekly goal.`}</T></Pressable>
     </View>
+    <DietRecap key={weekStart} weekStart={weekStart} onOpenFuel={() => onEditFoods(today)} />
     {foodOverviewOpen ? <Sheet title="Foods eaten" onClose={() => setFoodOverviewOpen(false)}>
       <View style={{ gap: 8 }}>
         <T size={13} muted>{dateOf(selected).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</T>
@@ -243,7 +252,7 @@ export function PrototypeWorkout({ date, templates, initialTemplate, plannedWork
   const [title, setTitle] = useState(plannedWorkout ? plannedWorkout.routine?.title ?? '' : existing?.title ?? initialTemplate?.title ?? "");
   const [minutes, setMinutes] = useState(String(existing?.durationMinutes ?? initialTemplate?.durationMinutes ?? 45));
   const [durationEdited, setDurationEdited] = useState(false);
-  const [rows, setRows] = useState<DraftExercise[]>(() => existing?.exercises?.map(e => exerciseToDraft(e, uid(), true)) ?? (plannedWorkout ? plannedWorkout.routine?.exercises.map(e => ({ id: uid(), exercise: e.name, customName: e.name, sets: String(e.sets), reps: String(e.reps), weight: "", unit: "lb" as const })) ?? [] : initialTemplate?.rows.map(row => ({ ...row, id: uid(), setValues: row.setValues?.map(set => ({ ...set, completed: false })) })) ?? []));
+  const [rows, setRows] = useState<DraftExercise[]>(() => existing?.exercises?.map(e => exerciseToDraft(e, uid(), true)) ?? prefillWorkoutRows(plannedWorkout ? plannedWorkout.routine?.exercises.map(e => ({ id: uid(), exercise: e.name, customName: e.name, sets: String(e.sets), reps: String(e.reps), weight: "", unit: "lb" as const })) ?? [] : initialTemplate?.rows.map(row => ({ ...row, id: uid() })) ?? [], logs, date));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [discarding, setDiscarding] = useState<"top" | "bottom" | null>(null);
@@ -307,7 +316,7 @@ export function PrototypeWorkout({ date, templates, initialTemplate, plannedWork
         </View>
         <WorkoutLogIcon name={showTemplates ? 'up' : 'down'} size={20} color={palette.onPrimary} />
       </Pressable>
-      {showTemplates ? templates.map(plan => <WorkoutLogButton key={plan.id} disabled={busy || !draft.ready} onPress={() => { markStarted(); setSourceTemplateId(plan.id); setWorkoutOrigin('template'); setTitle(plan.title); setMinutes(String(plan.durationMinutes ?? 45)); setRows(plan.rows.map(row => ({ ...row, id: uid(), setValues: row.setValues?.map(set => ({ ...set, completed: false })) }))); setShowTemplates(false); }}>{plan.title}</WorkoutLogButton>) : null}
+      {showTemplates ? templates.map(plan => <WorkoutLogButton key={plan.id} disabled={busy || !draft.ready} onPress={() => { markStarted(); setSourceTemplateId(plan.id); setWorkoutOrigin('template'); setTitle(plan.title); setMinutes(String(plan.durationMinutes ?? 45)); setRows(prefillWorkoutRows(plan.rows.map(row => ({ ...row, id: uid() })), logs, date, existing?.id)); setShowTemplates(false); }}>{plan.title}</WorkoutLogButton>) : null}
     </View> : null}
     <WorkoutSetEditor rows={rows} setRows={setRows} onChange={markStarted} disabled={busy || !draft.ready} preserveCompletionOnEdit={!!existing?.exercises?.length} history={logs.filter(log => log.id !== existing?.id && log.date <= date)} />
     {error ? <T color="#ff7878" accessibilityRole="alert">{error}</T> : null}<SaveFeedback area="workouts" />
