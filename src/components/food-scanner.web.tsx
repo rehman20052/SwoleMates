@@ -6,10 +6,10 @@ import { decodeFoodBarcode, videoFrame } from "@/lib/food-scanner-browser";
 import { rememberConfirmedIngredient } from "@/scanning/product-memory";
 import { useAppTheme } from "@/theme";
 
-type Props = { initialIngredients?: ScanIngredient[]; onChange?: (items: ScanIngredient[]) => void; onUse: (food: ScannedFood, items: ScanIngredient[]) => void; onClose: () => void };
+type Props = { onDetected?: (food: ScannedFood) => void; initialIngredients?: ScanIngredient[]; onChange?: (items: ScanIngredient[]) => void; onUse: (food: ScannedFood, items: ScanIngredient[]) => void; onClose: () => void };
 const labels = { calories: "Calories", protein: "Protein (g)", carbs: "Carbs (g)", fats: "Fat (g)" };
 
-export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose }: Props) {
+export function FoodScanner({ onDetected, initialIngredients = [], onChange, onUse, onClose }: Props) {
   const theme = useAppTheme();
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -43,6 +43,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
   }, []);
 
   function append(food: ScannedFood) {
+    if (onDetected) { onDetected(food); return; }
     const item = scannedIngredient(food);
     change([...itemsRef.current, item]); setExpanded(item.id); setError("");
     setMessage(nutritionKeys.some(key => food[key] === null) ? "Product added. Fill in its missing nutrition." : "Product added. You can scan another barcode.");
@@ -89,10 +90,21 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
     try { await track.applyConstraints({ advanced: [{ torch: !torch } as MediaTrackConstraintSet] }); setTorch(!torch); }
     catch { setError("This camera does not support a light control."); }
   }
+  useEffect(() => { if (onDetected) void scan(); }, []);
+
   function summary(item: ScanIngredient) {
     const value = ingredientTotals([item]);
     return `${value.calories ?? "?"} cal · ${value.protein ?? "?"}g protein · ${value.carbs ?? "?"}g carbs · ${value.fats ?? "?"}g fat`;
   }
+
+  if (onDetected) return <ScrollBody contentContainerStyle={{ padding: 20, gap: 16 }}>
+    <AppText size={13} muted>Point at a package barcode. Its name and nutrition will fill your current food for review.</AppText>
+    <div style={{ display: camera ? "block" : "none", height: "min(40dvh, 300px)", minHeight: 200, borderRadius: 14, overflow: "hidden", background: "#080a08" }}><video ref={video} muted playsInline autoPlay aria-label="Barcode scanner camera preview" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>
+    {camera ? <View style={{ flexDirection: "row", gap: 10 }}>{hasTorch ? <SecondaryButton onPress={() => void toggleTorch()}>{torch ? "Light off" : "Light on"}</SecondaryButton> : null}<SecondaryButton onPress={stop}>Stop camera</SecondaryButton></View> : <PrimaryButton disabled={busy} onPress={() => void scan()}>{busy ? "Finding food…" : "Start camera"}</PrimaryButton>}
+    {message ? <AppText accessibilityLiveRegion="polite" size={13} muted>{message}</AppText> : null}
+    {error ? <AppText accessibilityLiveRegion="polite" size={13} color={theme.colors.danger}>{error}</AppText> : null}
+    <SecondaryButton onPress={() => { stop(); onClose(); }}>Back to meal</SecondaryButton>
+  </ScrollBody>;
 
   return <View style={{ flex: 1 }}>
     <View style={{ paddingHorizontal: 18, paddingBottom: 10, gap: 8 }}>
