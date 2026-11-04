@@ -528,7 +528,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
             return <Pressable key={tab.value} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setJournalTab(tab.value)} style={({ pressed }) => [styles.viewTab, selected && { backgroundColor: theme.colors.surfaceRaised }, pressed && { opacity: 0.72 }]}><AppText size={13} weight={selected ? "extrabold" : "semibold"} primary={selected} muted={!selected}>{tab.label}</AppText></Pressable>;
           })}
         </View>
-        {journalTab === "Journal" ? <FuelDailySummary
+        {journalTab === "Journal" && foodJournalReady ? <FuelDailySummary
           dayLabel={dayLabel}
           entryCount={todayEntries.length}
           calories={currentNutrition.calories}
