@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 import { createAccountList, type AccountRemote, type AccountRecord } from "./account-sync-core";
+import { withDeadline } from "./network-deadline";
 
 export function accountSyncError(error: unknown) {
   const value = error as { code?: string; message?: string };
@@ -11,7 +12,7 @@ export function accountSyncError(error: unknown) {
 export function accountRemote(userId: string): AccountRemote {
   const snapshots = new Map<string, { rows: Map<string, AccountRecord>; sequence: number }>();
   async function checkOwner() {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await withDeadline(supabase.auth.getSession());
     if (error) throw error;
     if (data.session?.user.id !== userId) throw new Error("Your account changed. Reopen this screen before saving.");
   }

@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { isFoodEntry, sumFoodEntries } from "@/lib/food-journal";
 import { mergeVerifiedLogs, workoutLogKey } from "@/lib/workout-log-sync";
 import { nutritionGoalSource, planWithUpdatedWeight, goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
-import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
+import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores, cachedAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { reconcileWorkoutLifts } from "@/lib/workout-lift-progression";
@@ -398,7 +398,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     const refresh = async (owner: string | null, force = false) => {
       if (!active) return;
       if (refreshing) { refreshAgain = true; return; }
-      if (owner !== currentOwner || force) {
+      if (owner !== currentOwner || force || (owner && !accountStores.current)) {
         currentOwner = owner; loaded = false; accountGeneration.current++;
         accountStores.current = owner ? createAccountStores(owner) : null;
         setDashboardHydrated(false); setData(seedData());
@@ -413,6 +413,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       const operation = accountQueue.current.then(async () => {
         if (!active || generation !== accountGeneration.current) return;
         try {
+          if (!loaded) {
+            try {
+              const cached = await cachedAccountStores(stores, defaultNutrition);
+              if (!active || generation !== accountGeneration.current) return;
+              if (cached) { applySnapshot(cached); setDashboardHydrated(true); }
+            } catch { /* A cache read failure must not prevent recovery from the server. */ }
+          }
           const snapshot = loaded ? await refreshAccountStores(stores, defaultNutrition) : await loadAccountStores(stores, defaultNutrition);
           if (!active || generation !== accountGeneration.current) return;
           applySnapshot(snapshot);
@@ -450,7 +457,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       const owner = data.session?.user.id ?? null;
-      bindAccountChannel(owner); return refresh(owner, true);
+      bindAccountChannel(owner);
+      if (owner === currentOwner && accountStores.current) return;
+      return refresh(owner);
     });
     const { data: auth } = supabase.auth.onAuthStateChange((event, session) => {
       const owner = session?.user.id ?? null;
@@ -459,7 +468,10 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         // Clear the old account synchronously, even while a server call is pending.
         accountGeneration.current++; accountStores.current = null;
         currentOwner = owner; loaded = false; setDashboardHydrated(false); setData(seedData());
-        setTimeout(() => { refreshing = false; void refresh(owner, true); }, 0);
+        setTimeout(() => {
+          if (!active || currentOwner !== owner || (owner && accountStores.current?.userId === owner)) return;
+          refreshing = false; void refresh(owner, true);
+        }, 0);
       }
     });
     const updates = foregroundRefresh(() => refresh(currentOwner), 60000, () => !realtime);
