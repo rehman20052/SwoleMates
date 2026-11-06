@@ -9,6 +9,8 @@ import { lookupUsZip } from "@/lib/zip-location";
 export type ProfileGender = "" | "Male" | "Female" | "Other";
 
 export const profileGoals = ["Fat loss", "Endurance", "Strength training", "Gain mass"] as const;
+// Ways people like to work out together, beyond lifting.
+export const profileActivities = ["Lifting", "Pilates", "Yoga", "Hiking", "Walking", "Running", "Cycling", "Climbing", "Swimming", "Sports"] as const;
 export const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 export const dayTimes = ["Morning", "Afternoon", "Evening"] as const;
 export const MIN_PROFILE_PROMPTS = 3;
@@ -107,6 +109,7 @@ export type UserProfile = {
   about: string;
   experienceLevel: string;
   selectedGoals: string[];
+  activities: string[];
   availabilityDays: string[];
   availabilityTimes: string[];
   bench: string;
@@ -256,6 +259,7 @@ export function normalizeProfile(value: unknown): UserProfile | null {
     about: typeof profile.about === "string" ? profile.about : "",
     experienceLevel: typeof profile.experienceLevel === "string" ? profile.experienceLevel : "Intermediate",
     selectedGoals: goals,
+    activities: chosen(profile.activities, profileActivities),
     availabilityDays: chosen(profile.availabilityDays, weekDays),
     availabilityTimes: chosen(profile.availabilityTimes, dayTimes),
     bench: typeof profile.bench === "string" ? profile.bench : "N/A",
@@ -359,6 +363,7 @@ function accountProfile(profile: UserProfile, photoPaths: string[], location: { 
     about: clip(profile.about, 280),
     experienceLevel: clip(profile.experienceLevel, 20),
     selectedGoals: chosen(profile.selectedGoals, profileGoals),
+    activities: chosen(profile.activities, profileActivities),
     availabilityDays: chosen(profile.availabilityDays, weekDays),
     availabilityTimes: chosen(profile.availabilityTimes, dayTimes),
     ...legacyLiftFields(profileLifts(profile)),

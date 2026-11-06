@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppText, Icon, ScrollBody } from "./ui";
+import { AppText, Icon, Input, ScrollBody } from "./ui";
+import { activityEfforts, activitySummary, distanceUnits, estimateCalories, loggableActivities, type ActivityDetails, type DistanceUnit } from "@/lib/activity-log";
 import { icons } from "@/assets";
 import { LiftProgression } from "./lift-progression";
 import { TrainSaveFeedback as SaveFeedback } from "./train-ui";
@@ -76,6 +77,10 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   const [selected, setSelected] = useState(today);
   const [week, setWeek] = useState(() => monday(today));
   const [logging, setLogging] = useState(false);
+  // Cardio and other activities: a new one ({}) or an existing log being edited.
+  const [activityLog, setActivityLog] = useState<{ existing?: SessionLog } | null>(null);
+  // "Log workout" first asks what kind: a lift (sets and reps) or cardio (anything else).
+  const [choosingLog, setChoosingLog] = useState(false);
   const [resumeWorkouts, setResumeWorkouts] = useState<{ date: string; draft: WorkoutDraft }[]>([]);
   const resumeWorkout = resumeWorkouts[0] ?? null;
   const [planning, setPlanning] = useState(false);
@@ -141,7 +146,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   return <ScrollBody ref={visibility.setViewport} onScroll={visibility.check} onLayout={visibility.check} scrollEventThrottle={32} contentContainerStyle={{ padding: wide ? 24 : 16, paddingBottom: 40, gap: 28, width: "100%", maxWidth: 960, alignSelf: "center" }}>
     <View style={[s.row, { flexWrap: "wrap", gap: 20, paddingTop: 8, paddingBottom: 6 }]}>
       <View style={{ flex: 1, minWidth: 230, gap: 12 }}><T size={wide ? 44 : 34} weight="bold">Training<T size={wide ? 44 : 34} color={TRAIN_LIME}>.</T></T><T size={15} muted>Show up. Put in the work. Get stronger.</T></View>
-      <View style={[s.row, { flexWrap: "wrap", gap: 10 }]}><Action label="Create workout plan" onPress={() => setPlanning(true)} /><Action label={resumeWorkout ? "↻  Resume workout" : "+  Log workout"} primary disabled={!foodJournalReady || !resumeWorkout && selected > today} onPress={() => { if (resumeWorkout) resumeActiveWorkout(); else setLogging(true); }} /></View>
+      <View style={[s.row, { flexWrap: "wrap", gap: 10 }]}><Action label="Create workout plan" onPress={() => setPlanning(true)} /><Action label={resumeWorkout ? "↻  Resume workout" : "+  Log workout"} primary disabled={!foodJournalReady || !resumeWorkout && selected > today} onPress={() => { if (resumeWorkout) resumeActiveWorkout(); else setChoosingLog(true); }} /></View>
     </View>
     {checkIn}
     {resumeWorkout ? <View style={{ gap: 6 }}><T size={14} weight="semibold">Workout in progress: {resumeWorkout.draft.title || "Workout"}</T><T size={12} muted>{resumeWorkout.date} · Resume to continue your saved sets.</T></View> : null}
@@ -167,7 +172,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       </View>
       <View style={s.separator} />
       <View style={[s.row, { justifyContent: "space-between" }]}><T size={16} weight="medium">{selected === today ? "Today" : dateOf(selected).toLocaleDateString("en-US", { weekday: "long" })}<T size={14} muted>{` · ${dateOf(selected).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</T></T><T size={12} muted>{dayLogs.length} workout{dayLogs.length === 1 ? "" : "s"}</T></View>
-      {dayLogs.length ? dayLogs.map(log => <Pressable key={log.id} accessibilityRole="button" accessibilityLabel={`View ${log.title}`} onPress={() => setDetail(log)} style={[s.row, { gap: wide ? 18 : 12, minHeight: 64 }]}><View style={[s.badge, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><Icon source={icons.training} size={trainTokens.iconSize} tint={theme.colors.accent} /></View><View style={{ flex: 1, gap: 10 }}><T size={18} weight="semibold">{log.title}</T><T size={13} muted>{log.exercises?.length ?? 0} exercises{log.durationMinutes !== undefined ? `  ·  ${log.durationMinutes} min` : ""}</T></View><View style={[s.status, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><T size={11} weight="semibold" color={theme.colors.accent}>Completed</T></View><T size={22}>↗</T></Pressable>) : <T size={14} muted>{foodJournalReady ? "No workouts logged for this day." : "Loading your activity…"}</T>}
+      {dayLogs.length ? dayLogs.map(log => <Pressable key={log.id} accessibilityRole="button" accessibilityLabel={`View ${log.title}`} onPress={() => setDetail(log)} style={[s.row, { gap: wide ? 18 : 12, minHeight: 64 }]}><View style={[s.badge, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><Icon source={icons.training} size={trainTokens.iconSize} tint={theme.colors.accent} /></View><View style={{ flex: 1, gap: 10 }}><T size={18} weight="semibold">{log.title}</T><T size={13} muted>{log.activity ? activitySummary(log.activity, log.durationMinutes) : `${log.exercises?.length ?? 0} exercises${log.durationMinutes !== undefined ? `  ·  ${log.durationMinutes} min` : ""}`}</T></View><View style={[s.status, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><T size={11} weight="semibold" color={theme.colors.accent}>Completed</T></View><T size={22}>↗</T></Pressable>) : <T size={14} muted>{foodJournalReady ? "No workouts logged for this day." : "Loading your activity…"}</T>}
       <View style={s.separator} /><View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap" }]}><View style={s.row}><Icon source={icons.flame} size={20} tint="#ffa845" /><T size={16} muted>Calories eaten</T></View><View style={[s.row, { flexWrap: "wrap" }]}><T size={16} weight="semibold">{Math.round(calories).toLocaleString()}<T size={12} muted> kcal</T></T><Pressable accessibilityRole="button" accessibilityLabel="View foods and macros for selected day" disabled={!foodJournalReady} onPress={() => setFoodOverviewOpen(true)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8, opacity: foodJournalReady ? 1 : 0.45 }}><T size={13} weight="medium" color={theme.colors.accent}>View foods ↗</T></Pressable></View></View>
       {plannedTemplate ? <View style={[s.row, { flexWrap: "wrap" }]}><View style={{ flex: 1, gap: 8, minWidth: 130 }}><T size={12} muted>Planned in your split</T><T weight="semibold">{plannedTemplate.title}</T></View>{plannedCompleted ? <T size={13} color={theme.colors.accent}>Completed</T> : <Action label="Start planned workout" disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} onPress={() => startTemplate(plannedTemplate)} />}</View> : null}
     </View>
@@ -206,9 +211,122 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
     </Sheet> : null}
     <View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap", paddingVertical: 16 }]}><T size={11} muted>YOUR ONLY COMPETITION IS YOU.</T><T size={11} muted>{`Your training data · ${dateOf(selected).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`}</T></View>
     {logging ? <PrototypeWorkout key={`${accountUserId}:${selected}`} date={selected} templates={templates} initialTemplate={initialTemplate} onClose={() => { setLogging(false); setInitialTemplate(undefined); }} /> : null}
-    {detail ? <WorkoutDetail log={detail} onClose={() => setDetail(null)} onEdit={() => { onEditLog(detail); setDetail(null); }} /> : null}
+    {detail ? <WorkoutDetail log={detail} onClose={() => setDetail(null)} onEdit={() => { if (detail.activity) setActivityLog({ existing: detail }); else onEditLog(detail); setDetail(null); }} /> : null}
+    {choosingLog ? <Sheet title="Log workout" onClose={() => setChoosingLog(false)}>
+      <T size={14} muted>What kind of workout?</T>
+      <LogChoice title="Log lift" detail="Exercises with sets, reps and weight." onPress={() => { setChoosingLog(false); setLogging(true); }} />
+      <LogChoice title="Log cardio" detail="Running, swimming, pilates, hiking or anything else that isn't a lift." onPress={() => { setChoosingLog(false); setActivityLog({}); }} />
+    </Sheet> : null}
+    {activityLog ? <ActivityLog key={activityLog.existing?.id ?? `new:${selected}`} date={selected} existing={activityLog.existing} onClose={() => setActivityLog(null)} /> : null}
     {planning ? <PrototypePlan templates={templates} splits={splits} onClose={() => setPlanning(false)} /> : null}
   </ScrollBody>;
+}
+
+function LogChoice({ title, detail, onPress }: { title: string; detail: string; onPress: () => void }) {
+  const palette = useTrainPalette();
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress}
+    style={({ pressed }) => [s.row, { gap: 12, padding: 18, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, opacity: pressed ? 0.8 : 1 }]}>
+    <View style={{ flex: 1, gap: 6 }}><T size={18} weight="semibold">{title}</T><T size={13} muted>{detail}</T></View>
+    <T size={22} muted>›</T>
+  </Pressable>;
+}
+
+// Logs cardio or another activity: what it was, how long, optional distance and effort.
+function ActivityLog({ date, existing, onClose }: { date: string; existing?: SessionLog; onClose: () => void }) {
+  const { logWorkout, updateWorkoutLog, foodJournalReady, nutritionProfile } = useAppData();
+  const palette = useTrainPalette();
+  const theme = useAppTheme();
+  // Body weight for the calorie estimate: the latest weigh-in, else the weight from the Fuel plan.
+  const latestWeighIn = [...(nutritionProfile?.weighIns ?? [])].sort((a, b) => b.date.localeCompare(a.date))[0]?.weightLb;
+  const savedWeight = latestWeighIn ?? nutritionProfile?.weightLb ?? null;
+  const [weightInput, setWeightInput] = useState("");
+  const weightLb = savedWeight ?? (weightInput ? Number(weightInput) : null);
+  const [caloriesInput, setCaloriesInput] = useState(existing?.activity?.caloriesSource === "manual" && existing.activity.calories !== undefined ? String(existing.activity.calories) : "");
+  const [type, setType] = useState<string>(existing?.activity?.type ?? "Running");
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [minutes, setMinutes] = useState(existing?.durationMinutes ? String(existing.durationMinutes) : "");
+  const [distance, setDistance] = useState(existing?.activity?.distance ? String(existing.activity.distance) : "");
+  const [unit, setUnit] = useState<DistanceUnit>(existing?.activity?.distanceUnit ?? "mi");
+  const [effort, setEffort] = useState<ActivityDetails["effort"]>(existing?.activity?.effort);
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const units = distanceUnits(type);
+  const shownUnit = units.includes(unit) ? unit : units[0];
+  const typedDistance = units.length && distance.trim() ? Number(distance) : undefined;
+  const estimate = estimateCalories(
+    { type, effort, ...(typedDistance && shownUnit ? { distance: typedDistance, distanceUnit: shownUnit } : {}) },
+    Number(minutes), weightLb);
+  const chip = (label: string, selected: boolean, onPress: () => void) => (
+    <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress}
+      style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, justifyContent: "center",
+        borderColor: selected ? TRAIN_LIME : palette.border, backgroundColor: selected ? (theme.isDark ? "#212b13" : "#EDF5D9") : palette.surface }}>
+      <T size={14} weight="semibold" color={selected ? theme.colors.accent : undefined}>{label}</T>
+    </Pressable>
+  );
+  async function save() {
+    const mins = Number(minutes);
+    if (!Number.isInteger(mins) || mins < 1 || mins > 1440) { setError("Enter how many minutes it took, from 1 to 1440."); return; }
+    const dist = units.length && distance.trim() ? Number(distance) : undefined;
+    if (dist !== undefined && !(Number.isFinite(dist) && dist > 0 && dist <= 100000)) { setError("Distance needs to be a number above 0, or leave it empty."); return; }
+    const activity: ActivityDetails = { type, ...(dist !== undefined && shownUnit ? { distance: Math.round(dist * 100) / 100, distanceUnit: shownUnit } : {}), ...(effort ? { effort } : {}) };
+    const manual = caloriesInput.trim() ? Number(caloriesInput) : undefined;
+    if (manual !== undefined && !(Number.isInteger(manual) && manual >= 0 && manual <= 10000)) { setError("Calories need to be a whole number from 0 to 10,000, or leave it empty to use the estimate."); return; }
+    const burned = manual ?? estimate ?? undefined;
+    if (burned !== undefined) Object.assign(activity, { calories: burned, caloriesSource: manual !== undefined && manual !== estimate ? "manual" : "estimate" });
+    const name = title.trim() || type;
+    setBusy(true); setError("");
+    const saved = existing
+      ? await updateWorkoutLog(existing.id, { title: name, notes: notes.trim() || undefined, durationMinutes: mins, activity })
+      : await logWorkout(name, notes.trim() || undefined, date, { activity, durationMinutes: mins, workoutOrigin: "manual" });
+    setBusy(false);
+    if (saved) onClose(); else setError("Could not save this workout. Try again.");
+  }
+  return <Sheet title={existing ? "Edit cardio" : "Log cardio"} onClose={onClose} busy={busy}>
+    <View style={{ gap: 10 }}>
+      <T size={13} muted>What did you do?</T>
+      <View style={[s.row, { flexWrap: "wrap", gap: 8 }]}>{loggableActivities.map(item => chip(item, type === item, () => setType(item)))}</View>
+    </View>
+    <View style={{ gap: 8 }}>
+      <T size={13} muted>Name (optional)</T>
+      <Input bordered value={title} onChangeText={setTitle} placeholder={`e.g. Morning ${type.toLowerCase()}`} maxLength={100} />
+    </View>
+    <View style={[s.row, { gap: 12, alignItems: "flex-start" }]}>
+      <View style={{ flex: 1, gap: 8 }}>
+        <T size={13} muted>Minutes</T>
+        <Input bordered value={minutes} onChangeText={value => setMinutes(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="30" maxLength={4} accessibilityLabel="Minutes" />
+      </View>
+      {units.length ? <View style={{ flex: 1, gap: 8 }}>
+        <T size={13} muted>Distance (optional)</T>
+        <Input bordered value={distance} onChangeText={value => setDistance(value.replace(/[^0-9.]/g, ""))} keyboardType="decimal-pad" placeholder={units[0] === "m" ? "800" : "3.1"} maxLength={8} accessibilityLabel="Distance" />
+        <View style={[s.row, { gap: 8 }]}>{units.map(item => chip(item, shownUnit === item, () => setUnit(item)))}</View>
+      </View> : null}
+    </View>
+    <View style={{ gap: 10 }}>
+      <T size={13} muted>How hard was it? (optional)</T>
+      <View style={[s.row, { flexWrap: "wrap", gap: 8 }]}>{activityEfforts.map(item => chip(item, effort === item, () => setEffort(effort === item ? undefined : item)))}</View>
+    </View>
+    <View style={{ gap: 8 }}>
+      <T size={13} muted>Calories burned</T>
+      <T size={20} weight="semibold" color={estimate ? theme.colors.accent : undefined}>{caloriesInput.trim() && Number(caloriesInput) !== estimate ? `${caloriesInput} kcal (your number)` : estimate ? `≈ ${estimate} kcal` : "Add minutes to see an estimate"}</T>
+      {savedWeight == null ? <View style={{ gap: 6 }}>
+        <T size={12} muted>Add your weight to estimate calories. It's only used for this estimate; set it for good in Fuel.</T>
+        <Input bordered value={weightInput} onChangeText={value => setWeightInput(value.replace(/[^0-9.]/g, ""))} keyboardType="decimal-pad" placeholder="Your weight (lb)" maxLength={5} accessibilityLabel="Your weight in pounds" />
+      </View> : <T size={12} muted>{`Estimated from the activity, time${units.length ? ", distance" : ""} and effort at ${Math.round(savedWeight)} lb. Your watch says different? Type its number below.`}</T>}
+      <Input bordered value={caloriesInput} onChangeText={value => setCaloriesInput(value.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder={estimate ? `Use estimate (${estimate})` : "Calories (optional)"} maxLength={5} accessibilityLabel="Calories burned" />
+      <Pressable accessibilityRole="button" accessibilityLabel="Use calorie estimate" disabled={!estimate} onPress={() => { if (estimate) setCaloriesInput(String(estimate)); }}
+        style={({ pressed }) => ({ alignSelf: "flex-start", minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, justifyContent: "center",
+          borderColor: palette.border, backgroundColor: palette.surface, opacity: !estimate ? 0.45 : pressed ? 0.8 : 1 })}>
+        <T size={13} weight="semibold">Use calorie estimate</T>
+      </Pressable>
+    </View>
+    <View style={{ gap: 8 }}>
+      <T size={13} muted>Notes (optional)</T>
+      <Input bordered multiline value={notes} onChangeText={setNotes} placeholder="How did it go?" maxLength={1000} />
+    </View>
+    {error ? <T color={theme.colors.danger} accessibilityLiveRegion="polite">{error}</T> : null}
+    <Action label={busy ? "Saving…" : existing ? "Save changes" : "Save cardio"} primary disabled={busy || !foodJournalReady} onPress={() => void save()} />
+  </Sheet>;
 }
 
 function WorkoutDetail({ log, onClose, onEdit }: { log: SessionLog; onClose: () => void; onEdit: () => void }) {
@@ -216,7 +334,7 @@ function WorkoutDetail({ log, onClose, onEdit }: { log: SessionLog; onClose: () 
   const palette = useTrainPalette();
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const id = useRef(`workout-plan:${uid()}`);
-  const canSaveTemplate = log.workoutOrigin !== "template" && !workspaceSettings.some(item => item.id.startsWith("workout-plan:") && typeof item.value === "object" && parseWorkoutDraft(item.value.content)?.title.trim().toLowerCase() === log.title.trim().toLowerCase());
+  const canSaveTemplate = !log.activity && log.workoutOrigin !== "template" && !workspaceSettings.some(item => item.id.startsWith("workout-plan:") && typeof item.value === "object" && parseWorkoutDraft(item.value.content)?.title.trim().toLowerCase() === log.title.trim().toLowerCase());
   async function saveTemplate() {
     if (!canSaveTemplate || busy || !accountUserId || !log.exercises?.length) return;
     setBusy(true);
@@ -227,7 +345,7 @@ function WorkoutDetail({ log, onClose, onEdit }: { log: SessionLog; onClose: () 
     } catch { setMessage("Could not save this template. Try again."); }
     finally { setBusy(false); }
   }
-  return <Sheet compact title={log.title} onClose={onClose} busy={busy}><T muted>{log.date}{log.durationMinutes !== undefined ? ` · ${log.durationMinutes} minutes` : ""}</T><WorkoutRecordedSets exercises={log.exercises ?? []} />{message ? <T accessibilityLiveRegion="polite">{message}</T> : null}{canSaveTemplate ? <Action label="Save as template" disabled={busy || !accountUserId || !log.exercises?.length} onPress={() => void saveTemplate()} /> : null}<Action label="Edit workout" disabled={busy} onPress={onEdit} /></Sheet>;
+  return <Sheet compact title={log.title} onClose={onClose} busy={busy}><T muted>{log.date}{log.activity ? ` · ${log.activity.type}` : log.durationMinutes !== undefined ? ` · ${log.durationMinutes} minutes` : ""}</T>{log.activity ? <T size={18} weight="semibold">{activitySummary(log.activity, log.durationMinutes)}</T> : <WorkoutRecordedSets exercises={log.exercises ?? []} />}{log.activity && log.notes ? <T muted>{log.notes}</T> : null}{message ? <T accessibilityLiveRegion="polite">{message}</T> : null}{canSaveTemplate ? <Action label="Save as template" disabled={busy || !accountUserId || !log.exercises?.length} onPress={() => void saveTemplate()} /> : null}<Action label="Edit workout" disabled={busy} onPress={onEdit} /></Sheet>;
 }
 function WorkoutTemplates({ templates, onUse, disabled }: { templates: Template[]; onUse: (template: Template) => void; disabled?: boolean }) {
   const { saveWorkspaceSetting, accountUserId, workspaceSettings } = useAppData();

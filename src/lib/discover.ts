@@ -1,5 +1,5 @@
 import { experienceLevels } from "@/data/partners";
-import { normalizeProfile, type UserProfile } from "@/lib/profile";
+import { normalizeProfile, profileActivities, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 
 export type DiscoverGender = "Male" | "Female";
@@ -10,6 +10,8 @@ export type DiscoverFilters = {
   ageMin: number;
   ageMax: number;
   experience: string[];
+  // Show people who do at least one of these. Empty means any.
+  activities: string[];
   matchAvailability: boolean;
 };
 
@@ -19,6 +21,7 @@ export const defaultDiscoverFilters: DiscoverFilters = {
   ageMin: 18,
   ageMax: 70,
   experience: [],
+  activities: [],
   matchAvailability: false,
 };
 
@@ -105,6 +108,8 @@ export function matchesDiscoverFilters(
 
   if (filters.experience.length > 0 && !filters.experience.includes(candidate.profile.experienceLevel)) return false;
 
+  if (filters.activities.length > 0 && !filters.activities.some((activity) => candidate.profile.activities.includes(activity))) return false;
+
   if (filters.matchAvailability) {
     const sharesDay = mine.availabilityDays.some((day) => candidate.profile.availabilityDays.includes(day));
     const sharesTime = mine.availabilityTimes.some((time) => candidate.profile.availabilityTimes.includes(time));
@@ -159,8 +164,11 @@ type FilterRow = {
   min_age?: number | null;
   max_age?: number | null;
   experience_levels?: string[] | null;
+  activities?: string[] | null;
   match_availability?: boolean | null;
 };
+const knownActivities = (values: string[] | null | undefined) =>
+  (values ?? []).filter((activity) => (profileActivities as readonly string[]).includes(activity));
 
 export function filtersFromRow(row: FilterRow | null): DiscoverFilters {
   if (!row) return defaultDiscoverFilters;
@@ -176,6 +184,7 @@ export function filtersFromRow(row: FilterRow | null): DiscoverFilters {
     ageMin,
     ageMax,
     experience,
+    activities: knownActivities(row.activities),
     matchAvailability: Boolean(row.match_availability),
   };
 }
@@ -189,6 +198,7 @@ function filterRow(userId: string, filters: DiscoverFilters) {
     min_age: ageMin,
     max_age: clampInt(filters.ageMax, ageMin, 70),
     experience_levels: filters.experience.filter((level) => (experienceLevels as readonly string[]).includes(level)),
+    activities: knownActivities(filters.activities),
     match_availability: filters.matchAvailability,
   };
 }
@@ -198,7 +208,7 @@ export async function loadDiscoverFilters() {
   if (!me) return null;
   const { data, error } = await supabase
     .from("discover_filter")
-    .select("max_distance_miles, genders, min_age, max_age, experience_levels, match_availability")
+    .select("*")
     .eq("user_id", me)
     .maybeSingle();
   if (error || !data) return null;
@@ -208,7 +218,13 @@ export async function loadDiscoverFilters() {
 export async function saveDiscoverFilters(filters: DiscoverFilters) {
   const me = await currentUserId();
   if (!me) return;
-  await supabase.from("discover_filter").upsert(filterRow(me, filters));
+  const row = filterRow(me, filters);
+  const { error } = await supabase.from("discover_filter").upsert(row);
+  // Until discover_filter has an activities column, save everything else without it.
+  if (error && /activities/.test(error.message ?? "")) {
+    const { activities: _skip, ...rest } = row;
+    await supabase.from("discover_filter").upsert(rest);
+  }
 }
 
 export async function loadSkippedIds() {

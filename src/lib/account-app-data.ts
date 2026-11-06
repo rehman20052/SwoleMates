@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isActivityDetails } from "./activity-log";
 import { accountList, mayImportLegacy } from "./account-sync";
 import { isFoodEntry } from "./food-journal";
 import { goalsFromProfile, isNutritionGoals, isSavedPlan, type NutritionGoals } from "./nutrition-plan-storage";
@@ -24,7 +25,8 @@ export function isWorkoutLog(value: unknown): value is SessionLog {
   return typeof log.id === "string" && typeof log.title === "string"
     && typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date) && typeof log.verified === "boolean"
     && (log.exercises === undefined || validWorkoutExercises(log.exercises))
-    && (log.durationMinutes === undefined || Number.isInteger(log.durationMinutes) && log.durationMinutes >= 1 && log.durationMinutes <= 1440);
+    && (log.durationMinutes === undefined || Number.isInteger(log.durationMinutes) && log.durationMinutes >= 1 && log.durationMinutes <= 1440)
+    && (log.activity === undefined || isActivityDetails(log.activity));
 }
 export function createAccountStores(userId: string) {
   return {
