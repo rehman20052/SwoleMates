@@ -153,6 +153,7 @@ const emptyProfile = (): UserProfile => ({
   about: '',
   experienceLevel: 'Intermediate',
   selectedGoals: [],
+  activities: [],
   availabilityDays: [],
   availabilityTimes: [],
   bench: 'N/A',
