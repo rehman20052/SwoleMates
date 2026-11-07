@@ -448,6 +448,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!owner) return;
       channel = supabase.channel(`account-record-deltas-${owner}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "account_records", filter: `user_id=eq.${owner}` }, () => foreground())
+        .on("postgres_changes", { event: "*", schema: "public", table: "workout_logs", filter: `user_id=eq.${owner}` }, () => foreground())
         .subscribe(status => { if (!active || channelOwner !== owner) return; realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
     };
     void supabase.auth.getSession().then(({ data }) => {
