@@ -66,11 +66,16 @@ export function accountRemote(userId: string): AccountRemote {
     },
   };
 }
-// Workouts live in real tables (workout_logs, workout_exercise, workout_set, see
-// supabase/workout-tables.sql) but sync exactly like account_records: same revisions, same
-// conflict checks, same offline queue. Until that script has been run, the functions are
-// missing (PGRST202) and workouts keep using account_records.
-export function workoutRemote(userId: string): AccountRemote {
+// Some kinds of data have moved out of account_records into real tables, but sync exactly the
+// same way: same revisions, conflict checks and offline queue. Each table group has four
+// database functions named after it, e.g. workout_read_delta / workout_commit_operation.
+//   workout_logs -> workout_* (workout_logs, workout_exercise, workout_set; supabase/workout-tables.sql)
+//   lifts        -> lift_*    (tracked_lift, lift_history; supabase/lift-tables.sql)
+// Until a group's script has been run its functions are missing (PGRST202), and that data
+// keeps using account_records.
+const tableGroups: Record<string, string> = { workout_logs: "workout", lifts: "lift" };
+
+export function tableRemote(userId: string, group: string): AccountRemote {
   const fallback = accountRemote(userId);
   let snapshot = { rows: new Map<string, AccountRecord>(), sequence: 0 };
   let tables: boolean | null = null; // null until we know whether the new functions exist
@@ -87,7 +92,7 @@ export function workoutRemote(userId: string): AccountRemote {
       if (tables === false) return fallback.read(namespace);
       await checkOwner();
       while (true) {
-        const result = await supabase.rpc("workout_read_delta", { p_after: snapshot.sequence, p_limit: 500 });
+        const result = await supabase.rpc(`${group}_read_delta`, { p_after: snapshot.sequence, p_limit: 500 });
         if (result.error) {
           if (!missing(result.error)) throw result.error;
           tables = false;
@@ -106,7 +111,7 @@ export function workoutRemote(userId: string): AccountRemote {
       await checkOwner();
       const rows: AccountRecord[] = [];
       for (let offset = 0; offset < ids.length; offset += 100) {
-        const { data, error } = await supabase.rpc("workout_read_records", { p_ids: ids.slice(offset, offset + 100) });
+        const { data, error } = await supabase.rpc(`${group}_read_records`, { p_ids: ids.slice(offset, offset + 100) });
         if (error) {
           if (!missing(error)) throw error;
           tables = false;
@@ -120,7 +125,7 @@ export function workoutRemote(userId: string): AccountRemote {
       if (tables === false) return fallback.import(namespace, records);
       await checkOwner();
       for (let offset = 0; offset < records.length; offset += 500) {
-        const { error } = await supabase.rpc("workout_import_records", { p_records: records.slice(offset, offset + 500) });
+        const { error } = await supabase.rpc(`${group}_import_records`, { p_records: records.slice(offset, offset + 500) });
         if (error) {
           if (!missing(error)) throw error;
           tables = false;
@@ -131,7 +136,7 @@ export function workoutRemote(userId: string): AccountRemote {
     async save(namespace, changes, operationId) {
       if (tables === false) return fallback.save(namespace, changes, operationId);
       await checkOwner();
-      const { error } = await supabase.rpc("workout_commit_operation", { p_changes: changes, p_operation_id: operationId });
+      const { error } = await supabase.rpc(`${group}_commit_operation`, { p_changes: changes, p_operation_id: operationId });
       if (error) {
         if (!missing(error)) throw error;
         tables = false;
@@ -141,7 +146,8 @@ export function workoutRemote(userId: string): AccountRemote {
   };
 }
 export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T) {
-  const remote = namespace === "workout_logs" ? workoutRemote(userId) : accountRemote(userId);
+  const group = tableGroups[namespace];
+  const remote = group ? tableRemote(userId, group) : accountRemote(userId);
   return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote, allowRestore: namespace === "hidden_chats" });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
