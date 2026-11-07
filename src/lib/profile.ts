@@ -601,6 +601,14 @@ async function saveProfileTables(userId: string, account: AccountProfile) {
     userId,
     account.selectedGoals.map((goal) => ({ user_id: userId, goal })),
   );
+  // Until the user_activity table is created in Supabase, skip it instead of failing the save.
+  await replaceRows(
+    "user_activity",
+    userId,
+    account.activities.map((activity) => ({ user_id: userId, activity })),
+  ).catch((error: { code?: string; message?: string }) => {
+    if (!["42P01", "PGRST205"].includes(error?.code ?? "") && !/user_activity/.test(error?.message ?? "")) throw error;
+  });
 }
 
 export async function loadProfile(): Promise<UserProfile | null> {

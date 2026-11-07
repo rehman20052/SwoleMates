@@ -39,3 +39,22 @@ test('saved activities validate calories and show them in the summary', () => {
   assert.ok(!isActivityDetails({ type: 'Swimming', calories: -5 }));
   assert.equal(activitySummary({ type: 'Running', distance: 3.1, distanceUnit: 'mi', effort: 'Moderate', calories: 370 }, 30), '30 min · 3.1 mi · Moderate · 370 kcal');
 });
+
+test('weekly recap adds up sessions, time, calories and distance per activity', () => {
+  const { activityRecap } = exports;
+  const recap = activityRecap([
+    { durationMinutes: 30, activity: { type: 'Running', distance: 3, distanceUnit: 'mi', calories: 360 } },
+    { durationMinutes: 25, activity: { type: 'Running', distance: 5, distanceUnit: 'km', calories: 300 } },
+    { durationMinutes: 40, activity: { type: 'Pilates', calories: 120 } },
+    { durationMinutes: 20, activity: { type: 'Swimming', distance: 500, distanceUnit: 'yd' } },
+    { durationMinutes: 60, exercises: [] },
+  ]);
+  assert.equal(recap.sessions, 4);
+  assert.equal(recap.minutes, 115);
+  assert.equal(recap.calories, 780);
+  const running = recap.byType.find((row) => row.type === 'Running');
+  assert.equal(running.sessions, 2); assert.equal(running.unit, 'mi'); assert.equal(running.distance, 6.1);
+  const swim = recap.byType.find((row) => row.type === 'Swimming');
+  assert.equal(swim.unit, 'm'); assert.equal(swim.distance, 457.2);
+  assert.equal(recap.byType[0].type, 'Running');
+});
