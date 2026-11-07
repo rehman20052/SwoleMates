@@ -6,7 +6,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, use
 import { Image } from "expo-image";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppText, Icon, Input, ScrollBody } from "./ui";
-import { activityEfforts, activitySummary, distanceUnits, estimateCalories, loggableActivities, type ActivityDetails, type DistanceUnit } from "@/lib/activity-log";
+import { activityEfforts, activityRecap, activitySummary, distanceUnits, estimateCalories, loggableActivities, type ActivityDetails, type DistanceUnit } from "@/lib/activity-log";
 import { icons } from "@/assets";
 import { LiftProgression } from "./lift-progression";
 import { TrainSaveFeedback as SaveFeedback } from "./train-ui";
@@ -99,6 +99,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   const minutes = weekLogs.reduce((sum, log) => sum + (log.durationMinutes ?? 0), 0);
   const sets = weekLogs.reduce((sum, log) => sum + (log.exercises ?? []).reduce((n, e) => n + (e.setDetails?.length ?? e.sets), 0), 0);
   const workouts = new Set(weekLogs.map(log => log.date)).size;
+  const cardio = activityRecap(weekLogs);
   const range = `${week.toLocaleDateString("en-US", { month: "short" }).toUpperCase()} ${week.getDate()} – ${days[6].getMonth() !== week.getMonth() ? days[6].toLocaleDateString("en-US", { month: "short" }).toUpperCase() + " " : ""}${days[6].getDate()}`;
   const allTemplates: Template[] = workspaceSettings.flatMap(item => { if (!item.id.startsWith("workout-plan:") || typeof item.value !== "object") return []; const draft = parseWorkoutDraft(item.value.content); return draft ? [{ ...draft, id: item.id }] : []; });
   const templates = uniqueWorkoutTemplates(allTemplates);
@@ -192,6 +193,17 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View style={s.row}>{[{ value: workouts, label: "Workouts" }, { value: minutes, label: "Minutes trained" }, { value: sets, label: "Working sets" }].map((metric, i) => <View key={metric.label} style={{ flex: 1, gap: 14, paddingLeft: i ? (wide ? 24 : 10) : 0, borderLeftWidth: i ? 1 : 0, borderColor: palette.border }}><T size={wide ? 40 : 29} weight="medium">{metric.value}{i === 0 ? <T size={20} muted> / {weeklyWorkoutGoal}</T> : null}</T><T size={wide ? 13 : 11} muted>{metric.label}</T></View>)}</View>
       <View style={s.separator} />
       <View accessibilityLabel="Workouts by weekday" style={[s.row, { alignItems: "flex-end", gap: wide ? 18 : 8 }]}>{days.map((d, i) => { const count = weekLogs.filter(log => log.date === iso(d)).length; const max = Math.max(1, ...days.map(day => weekLogs.filter(log => log.date === iso(day)).length)); return <View key={iso(d)} accessibilityLabel={`${weekdays[i]}: ${count} workouts`} style={{ flex: 1, height: 126, justifyContent: "flex-end", gap: 16, alignItems: "center" }}><View style={{ width: "100%", height: count ? Math.max(20, count / max * 80) : 8, backgroundColor: count ? "#212b13" : palette.field, borderTopWidth: count ? 3 : 0, borderTopColor: TRAIN_LIME, borderTopLeftRadius: 5, borderTopRightRadius: 5 }} /><T size={11} muted>{weekdays[i][0]}</T></View>; })}</View>
+      {cardio.sessions ? <View style={{ gap: 14 }}>
+        <View style={s.separator} />
+        <View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap", gap: 8 }]}>
+          <T size={16} weight="semibold">{"Cardio & activities"}</T>
+          <T size={12} muted>{`${cardio.sessions} session${cardio.sessions === 1 ? "" : "s"} · ${cardio.minutes} min${cardio.calories ? ` · ${cardio.calories.toLocaleString()} kcal` : ""}`}</T>
+        </View>
+        {cardio.byType.map(row => <View key={row.type} style={[s.row, { justifyContent: "space-between", gap: 12 }]}>
+          <T size={14} weight="medium" style={{ flex: 1 }}>{row.type}</T>
+          <T size={13} muted>{[`${row.sessions}×`, `${row.minutes} min`, row.distance ? `${row.distance.toLocaleString()} ${row.unit}` : null, row.calories ? `${row.calories.toLocaleString()} kcal` : null].filter(Boolean).join(" · ")}</T>
+        </View>)}
+      </View> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Edit weekly workout goal" onPress={onGoal} style={[s.row, { minHeight: 44, marginTop: 8 }]}><View style={[s.badge, { width: 40, height: 40 }]}><T size={23} color={TRAIN_LIME}>ϟ</T></View><T size={14} style={{ flex: 1 }}>{workouts >= weeklyWorkoutGoal ? "You hit your weekly goal. Keep showing up." : `${weeklyWorkoutGoal - workouts} more session${weeklyWorkoutGoal - workouts === 1 ? "" : "s"} to hit your weekly goal.`}</T></Pressable>
     </View>
     <DietRecap key={weekStart} weekStart={weekStart} onOpenFuel={() => onEditFoods(today)} />

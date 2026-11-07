@@ -97,3 +97,32 @@ export function estimateCalories(activity: Pick<ActivityDetails, "type" | "dista
   const kg = weightLb * 0.45359237;
   return Math.round(activityMet(activity, minutes) * kg * (minutes / 60));
 }
+
+export type ActivityRecapRow = { type: string; sessions: number; minutes: number; calories: number; distance: number; unit: DistanceUnit | null };
+
+// Totals for cardio and other activities, overall and per activity. Distances are added in
+// miles for land activities and meters for swimming, whatever unit each log used.
+export function activityRecap(logs: { durationMinutes?: number; activity?: ActivityDetails }[]) {
+  const rows = new Map<string, ActivityRecapRow>();
+  for (const log of logs) {
+    const activity = log.activity;
+    if (!activity) continue;
+    const row = rows.get(activity.type) ?? { type: activity.type, sessions: 0, minutes: 0, calories: 0, distance: 0, unit: null };
+    row.sessions += 1;
+    row.minutes += log.durationMinutes ?? 0;
+    row.calories += activity.calories ?? 0;
+    if (activity.distance && activity.distanceUnit) {
+      const miles = activity.distance * MILES_PER[activity.distanceUnit];
+      if (activity.type === "Swimming") { row.distance += miles / MILES_PER.m; row.unit = "m"; }
+      else { row.distance += miles; row.unit = "mi"; }
+    }
+    rows.set(activity.type, row);
+  }
+  const byType = [...rows.values()].map(row => ({ ...row, distance: Math.round(row.distance * 10) / 10 })).sort((a, b) => b.minutes - a.minutes);
+  return {
+    sessions: byType.reduce((sum, row) => sum + row.sessions, 0),
+    minutes: byType.reduce((sum, row) => sum + row.minutes, 0),
+    calories: byType.reduce((sum, row) => sum + row.calories, 0),
+    byType,
+  };
+}
