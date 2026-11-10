@@ -26,7 +26,7 @@ function endpoint(options = {}) {
     rpc: async (name,args) => {calls.push([name,args.owner_id]);return {error:options.cleanupFails ? {} : null};},
     auth:{admin:{deleteUser: async id => {calls.push(['deleteUser',id]);return {error:null};}}},
   };
-  const source = readFileSync('supabase/functions/delete-account/index.ts','utf8').replace(/^import .*\n/, '');
+  const source = readFileSync('supabase/functions/delete-account/index.ts','utf8').replace(/^import [^\r\n]*\r?\n/, '');
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText, {
     Response, createClient: (_url,key) => key==='service' ? admin : client,
     Deno:{env:{get:name => ({SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:options.noServiceKey ? undefined : 'service'})[name]},serve:value => {handler=value;}},
