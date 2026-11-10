@@ -1,3 +1,4 @@
+import { nutritionSummary } from "@/lib/nutrition-tracking";
 import { WorkoutPlanner } from './workout-planner';
 import { DietRecap } from './diet-recap';
 import { WorkoutLogButton, WorkoutLogHeader, WorkoutSetEditor, WorkoutRecordedSets, WorkoutLogIcon, useWorkoutLogPalette } from './workout-log-editor';
@@ -89,7 +90,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   const weekLogs = logs.filter(log => log.date >= weekStart && log.date <= weekEnd);
   const dayLogs = logs.filter(log => log.date === selected).sort((a, b) => (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""));
   const dayFoods = foodEntries.filter(row => row.date === selected);
-  const foodTotals = dayFoods.reduce((sum, row) => ({ calories: sum.calories + row.calories, protein: sum.protein + row.protein, carbs: sum.carbs + row.carbs, fats: sum.fats + row.fats }), { calories: 0, protein: 0, carbs: 0, fats: 0 });
+  const foodTotals = nutritionSummary(dayFoods);
   const calories = foodTotals.calories;
   const minutes = weekLogs.reduce((sum, log) => sum + (log.durationMinutes ?? 0), 0);
   const sets = weekLogs.reduce((sum, log) => sum + (log.exercises ?? []).reduce((n, e) => n + (e.setDetails?.length ?? e.sets), 0), 0);
@@ -194,12 +195,12 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View style={{ gap: 8 }}>
         <T size={13} muted>{dateOf(selected).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</T>
         <T size={18} weight="semibold">{Math.round(calories).toLocaleString()} kcal</T>
-        <T size={12} muted>{`Protein ${Math.round(foodTotals.protein)}g · Carbs ${Math.round(foodTotals.carbs)}g · Fat ${Math.round(foodTotals.fats)}g`}</T>
+        <T size={12} muted>{`${foodTotals.incomplete.length ? "Known amounts · " : ""}Protein ${Math.round(foodTotals.protein)}g · Carbs ${Math.round(foodTotals.carbs)}g · Fat ${Math.round(foodTotals.fats)}g${foodTotals.incomplete.length ? " · macros incomplete" : ""}`}</T>
       </View>
       <View style={{ gap: 0 }}>
         {dayFoods.length ? dayFoods.map(food => <View key={food.id} style={{ paddingVertical: 12, gap: 5, borderTopWidth: 1, borderColor: palette.border }}>
           <View style={[s.row, { alignItems: "flex-start", justifyContent: "space-between" }]}><T size={14} weight="medium" style={{ flex: 1 }}>{food.name}</T><T size={13}>{Math.round(food.calories)} kcal</T></View>
-          <T size={11} muted>{`${food.meal} · P ${Math.round(food.protein)}g · C ${Math.round(food.carbs)}g · F ${Math.round(food.fats)}g`}</T>
+          <T size={11} muted>{`${food.meal} · P ${food.incompleteNutrients?.includes("protein") ? "≥" : ""}${Math.round(food.protein)}g · C ${food.incompleteNutrients?.includes("carbs") ? "≥" : ""}${Math.round(food.carbs)}g · F ${food.incompleteNutrients?.includes("fats") ? "≥" : ""}${Math.round(food.fats)}g${food.incompleteNutrients?.length ? " · incomplete" : ""}`}</T>
         </View>) : <T size={14} muted>No foods logged for this day.</T>}
       </View>
       <Action label="Edit foods for this day" primary onPress={() => { setFoodOverviewOpen(false); onEditFoods(selected); }} />

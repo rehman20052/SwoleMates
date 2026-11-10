@@ -1,3 +1,5 @@
+import { SaveFeedback } from "@/components/save-feedback";
+import { SafetyStatus } from "@/components/safety-status";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,10 +10,13 @@ import { notifyChatAlerts } from "@/lib/matches";
 import { listBlockedPeople, unblockPerson, type BlockedPerson } from "@/lib/safety";
 import { useNavigation } from "@/navigation";
 import { useAppTheme, useColorScheme } from "@/theme";
+import { useWeightUnit } from "@/state/weight-unit";
 
 export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const theme = useAppTheme();
   const nav = useNavigation();
+  const { unit, setUnit } = useWeightUnit();
+  const [unitError, setUnitError] = useState(false);
   const { scheme, setScheme, schemeError, savingScheme } = useColorScheme();
   const [email, setEmail] = useState("");
   const [people, setPeople] = useState<BlockedPerson[]>([]);
@@ -86,6 +91,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
     <Screen>
       <TitleBar title="Settings" onBack={onClose} />
       <ScrollBody contentContainerStyle={styles.list}>
+        <SafetyStatus always />
         <AppText size={13} weight="bold" primary upper>
           Account
         </AppText>
@@ -120,6 +126,15 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
           </SecondaryButton>
         )}
 
+        <AppText size={13} weight="bold" primary upper style={styles.section}>
+          Weight units
+        </AppText>
+        <View style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <AppText style={{ flex: 1 }} muted>Use throughout the app</AppText>
+          {(['lb', 'kg'] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: unit === value }} accessibilityLabel={`Weight units ${value}`} onPress={async () => setUnitError(!await setUnit(value))} style={{ minWidth: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: unit === value ? theme.colors.primaryTint : theme.colors.surface }}><AppText primary={unit === value}>{value}</AppText></Pressable>)}
+        </View>
+        <SaveFeedback area="drafts" hideSaved />
+        {unitError ? <AppText color={theme.colors.danger}>Could not save weight units. Try again.</AppText> : null}
         <AppText size={13} weight="bold" primary upper style={styles.section}>
           Appearance
         </AppText>

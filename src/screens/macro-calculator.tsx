@@ -1,3 +1,4 @@
+import { useWeightUnit, convertWeight } from "@/state/weight-unit";
 import { useMemo, useState, type ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
@@ -130,6 +131,7 @@ export function MacroCalculator({
   error?: string | null;
 }) {
   const theme = useAppTheme();
+  const { unit } = useWeightUnit();
   const frame = useWindowDimensions();
   const framed = Platform.OS === "web" && frame.width > 450;
   const scrollMax = framed ? Math.min(874, frame.height - 32) - 230 : Math.round(frame.height * 0.62);
@@ -147,7 +149,7 @@ export function MacroCalculator({
   const page = steps[Math.min(step, steps.length - 1)];
   const built = profileFromDraft(draft, profile, !edited && profile != null);
   const plan = built ? calculateMacroPlan(edited || !profile ? { ...built, calorieAdjustment: 0 } : built) : null;
-  const advice = built && !edited ? calibrationAdvice(built) : null;
+  const advice = built && !edited ? calibrationAdvice(built, unit) : null;
 
   function patch(next: Partial<Draft>) {
     setEdited(true);
@@ -222,7 +224,7 @@ export function MacroCalculator({
               inches={draft.heightFt * 12 + draft.heightInches}
               onChange={(total) => patch({ heightFt: Math.floor(total / 12), heightInches: total % 12 })}
             />
-            <Stepper label="Current weight (lb)" value={draft.weightLb} min={90} max={400} onChange={(weightLb) => patch({ weightLb })} />
+            <WeightStepper label="Current weight" value={draft.weightLb} min={90} max={400} onChange={(weightLb) => patch({ weightLb })} />
           </View>
         ) : null}
 
@@ -265,8 +267,8 @@ export function MacroCalculator({
                   onPress={() => patch({ useTargetWeight: true })}
                 />
                 {draft.useTargetWeight ? (
-                  <Stepper
-                    label="Target weight (lb)"
+                  <WeightStepper
+                    label="Target weight"
                     value={draft.targetWeightLb}
                     min={90}
                     max={400}
@@ -400,7 +402,7 @@ export function MacroCalculator({
             </Card>
             <Card padding={16} radius={18} gap={8}>
               <ResultLine label="Estimated maintenance" value={`${plan.maintenance.toLocaleString()} cal`} />
-              <ResultLine label="Expected weekly change" value={formatWeeklyChange(plan.weeklyLb)} />
+              <ResultLine label="Expected weekly change" value={formatWeeklyChange(plan.weeklyLb, unit)} />
             </Card>
             <AppText size={13} muted style={{ lineHeight: 20 }}>
               These are starting estimates. Your actual calorie needs may differ.
@@ -573,6 +575,11 @@ function HeightStepper({ inches, onChange }: { inches: number; onChange: (inches
   );
 }
 
+function WeightStepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+  const { unit, formatWeight } = useWeightUnit();
+  return <Stepper label={label + ' (' + unit + ')'} value={formatWeight(value)} min={Math.ceil(convertWeight(min, 'lb', unit))} max={Math.floor(convertWeight(max, 'lb', unit))} onChange={next => onChange(convertWeight(next, unit, 'lb'))} />;
+}
+
 function Stepper({
   label,
   value,
@@ -630,11 +637,12 @@ export function WeightTrendCard({
   disabled?: boolean;
   error?: string | null;
 }) {
+  const { unit, formatWeight } = useWeightUnit();
   const latest = [...profile.weighIns].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   const [weight, setWeight] = useState(() => Math.round(latest?.weightLb ?? profile.weightLb));
   const [editing, setEditing] = useState(latest == null);
   const [saving, setSaving] = useState(false);
-  const advice = calibrationAdvice(profile);
+  const advice = calibrationAdvice(profile, unit);
   const theme = useAppTheme();
 
   function openEditor() {
@@ -648,14 +656,14 @@ export function WeightTrendCard({
         <FuelThumbnail kind="weight" size={68} />
         <View style={{ flex: 1, gap: 3 }}>
           <AppText size={11} weight="bold" primary upper>Weight check-in</AppText>
-          <AppText size={27} weight="black">{latest?.weightLb ?? profile.weightLb}<AppText size={13} muted> lb</AppText></AppText>
+          <AppText size={27} weight="black">{formatWeight(latest?.weightLb ?? profile.weightLb)}<AppText size={13} muted> {unit}</AppText></AppText>
           <AppText size={11} muted>{latest ? `Last logged ${latest.date}` : "Log your first weigh-in"}</AppText>
         </View>
         {!editing ? <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primaryTint }}><AppText size={19} primary>+</AppText></View> : null}
       </Pressable>
       {editing ? (
         <View style={{ gap: 10 }}>
-          <Stepper label="Current weight (lb)" value={weight} min={90} max={400} onChange={setWeight} />
+          <WeightStepper label="Current weight" value={weight} min={90} max={400} onChange={setWeight} />
           <AppText size={12} muted>Updates daily calories and macros using this weight and your current goal. Custom targets will be recalculated.</AppText>
           <PrimaryButton
             height={44}

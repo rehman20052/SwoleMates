@@ -17,7 +17,7 @@ export function foodChoices(entries: FoodLogEntry[], recipes: SavedMeal[], query
   const recent = entries.map((food, index) => ({ food, index }))
     .sort((a, b) => b.food.date.localeCompare(a.food.date) || a.index - b.index)
     .filter(({ food }) => {
-      const signature = JSON.stringify([normalize(food.name), food.calories, food.protein, food.carbs, food.fats]);
+      const signature = JSON.stringify([normalize(food.name), food.calories, food.protein, food.carbs, food.fats, food.incompleteNutrients]);
       if (seen.has(signature)) return false;
       seen.add(signature); return true;
     })
@@ -35,5 +35,5 @@ export function foodChoices(entries: FoodLogEntry[], recipes: SavedMeal[], query
     })
     .slice(0, 40)
     .map((food): FoodChoice => ({ key: `common-${food.id}`, source: "common", food }));
-  return [...common, ...personal];
+  return [...personal, ...common].sort((a, b) => Number(normalize(b.food.name) === normalize(query)) - Number(normalize(a.food.name) === normalize(query)));
 }

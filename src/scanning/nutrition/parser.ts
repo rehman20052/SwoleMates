@@ -31,7 +31,14 @@ function numeric(text: string): { value: number; unit: string; percent: boolean 
 }
 
 function basisFrom(rows: Row[]): { basis: NutritionBasis; columnX: number | null; warning?: string } {
-  const headings = rows.flatMap(row => row.tokens).filter(token => /per\s*(serving|container)|100\s*(g|ml)/i.test(token.text));
+  // Native OCR splits headings such as "Per 100 g" into individual words.
+  const headings = rows.flatMap(row => row.tokens.flatMap((token, index) => [1, 2, 3].flatMap(length => {
+    const group = row.tokens.slice(index, index + length);
+    const text = group.map(item => item.text).join(" ");
+    if (!/^(?:per\s*(?:serving|container)|(?:per\s*)?100\s*(?:g|ml))$/i.test(text)) return [];
+    const end = group[group.length - 1];
+    return [{ ...token, text, bounds: { ...token.bounds, width: end.bounds.x + end.bounds.width - token.bounds.x } }];
+  })));
   const serving = headings.find(token => /per\s*serving/i.test(token.text));
   const container = headings.find(token => /per\s*container/i.test(token.text));
   const hundred = headings.find(token => /100\s*(g|ml)/i.test(token.text));

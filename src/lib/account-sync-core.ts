@@ -18,8 +18,8 @@ function serialized(value: unknown): string {
 }
 function failure(error: unknown): SyncPhase {
   const { code, message } = error as { code?: string; message?: string };
-  if (code === "40001" || /newer version|conflict/i.test(message ?? "")) return "conflict";
-  if (code && !["08000", "08001", "08006", "57014", "PGRST000", "PGRST001", "PGRST002"].includes(code)) return "error";
+  if (code === "PT409" || code === "40001" || /newer version|conflict/i.test(message ?? "")) return "conflict";
+  if (code && !["REQUEST_TIMEOUT", "08000", "08001", "08006", "57014", "PGRST000", "PGRST001", "PGRST002"].includes(code)) return "error";
   if (/account changed|sign in|permission|still loading/i.test(message ?? "")) return "error";
   return "pending";
 }
@@ -28,6 +28,8 @@ export function createAccountList<T>(options: {
   userId: string; namespace: string; local: ListStorage; remote: AccountRemote;
   identify: (item: T) => string; validate: (value: unknown) => value is T;
   onCacheError?: () => void; allowRestore?: boolean;
+  localFirst?: boolean;
+  onChange?: () => void;
 }) {
   const { userId, namespace, local, remote, identify, validate } = options;
   const cacheKey = `swolemates.account-cache.${userId}.${namespace}`;
@@ -35,7 +37,8 @@ export function createAccountList<T>(options: {
   let queue: Promise<unknown> = Promise.resolve();
   let state: Cache = { version: 2, rows: [], operations: [] };
   let loaded = false;
-  function enqueue(operation: () => Promise<T[]>): Promise<T[]> {
+  let disposed = false;
+  function enqueue<U>(operation: () => Promise<U>): Promise<U> {
     const result = queue.then(operation); queue = result.catch(() => undefined); return result;
   }
   function validateItems(items: unknown): T[] {
@@ -52,7 +55,9 @@ export function createAccountList<T>(options: {
   }
   function visible(snapshot = state) { return validateItems(projected(snapshot).filter(row => !row.deleted).map(row => row.payload)); }
   async function persist(next: Cache) {
+    if (disposed) throw new Error("Your account changed. Reopen this screen before saving.");
     visible(next); await local.setItem(cacheKey, JSON.stringify(next)); state = next;
+    options.onChange?.();
   }
   async function restore() {
     const raw = await local.getItem(cacheKey);
@@ -94,29 +99,90 @@ export function createAccountList<T>(options: {
     try { await pull(); } catch (error) { if (failure(error) !== "pending") throw error; }
     return copy(visible());
   }
+  // Only local persistence runs in `queue` in local-first mode. Network work
+  // has one independent worker, so an offline/slow server cannot hold edits.
+  let worker: Promise<T[]> | null = null;
+  let pullRequested = false;
+  let syncRequested = false;
+  function synchronize(pull = false, force = false): Promise<T[]> {
+    if (disposed) return Promise.resolve(copy(visible()));
+    pullRequested ||= pull; syncRequested = true;
+    if (worker) return worker;
+    worker = (async () => {
+      do {
+        syncRequested = false;
+        while (state.operations.length) {
+          const op = copy(state.operations[0]);
+          if (op.phase === "conflict" || (!force && (op.phase === "error" || op.retryAt > Date.now()))) break;
+          let savedRows: AccountRecord[] | undefined;
+          try {
+            await remote.save(namespace, op.changes, op.id);
+            savedRows = await remote.readRecords?.(namespace, op.changes.map(change => change.id));
+          } catch (error) {
+            if (disposed) return copy(visible());
+            await enqueue(async () => {
+              await persist({ ...state, operations: state.operations.map(item => item.id !== op.id ? item : { ...item, phase: failure(error), attempts: item.attempts + 1,
+                retryAt: Date.now() + Math.min(60000, 1000 * 2 ** Math.min(item.attempts, 6)), message: (error as { message?: string }).message ?? "Waiting for connection" }) });
+              return copy(visible());
+            });
+            break;
+          }
+          if (disposed) return copy(visible());
+          await enqueue(async () => {
+            const rows = new Map(state.rows.map(row => [row.id, row]));
+            for (const change of op.changes) rows.set(change.id, { id: change.id, payload: change.payload, deleted: change.deleted, revision: change.expectedRevision + 1 });
+            for (const row of savedRows ?? []) rows.set(row.id, row);
+            await persist({ ...state, rows: [...rows.values()], operations: state.operations.filter(item => item.id !== op.id) });
+            return copy(visible());
+          });
+        }
+        if (pullRequested) {
+          pullRequested = false;
+          try {
+            const rows = await remote.read(namespace);
+            if (disposed) return copy(visible());
+            await enqueue(async () => { await persist({ ...state, rows }); return copy(visible()); });
+          } catch (error) { if (failure(error) !== "pending") throw error; }
+        }
+      } while (syncRequested || pullRequested);
+      return copy(visible());
+    })().finally(() => { worker = null; });
+    return worker;
+  }
+  const startSync = () => { void synchronize().catch(() => options.onCacheError?.()); };
+  async function loadCachedThenRefresh(fallback: T[]) {
+    let hasCache = false;
+    await enqueue(async () => { hasCache = await restore(); if (hasCache) loaded = true; return copy(visible()); });
+    if (hasCache) return synchronize(true);
+    return loadLegacy(fallback);
+  }
+  function loadLegacy(fallback: T[]) {
+    return enqueue(async () => {
+      const hasCache = await restore();
+      if (!(await local.getItem(migrationKey))) {
+        const imports = validateItems(fallback);
+        try {
+          if (imports.length) await remote.import(namespace, imports.map(payload => ({ id: identify(payload), payload })));
+          await local.setItem(migrationKey, "1");
+        } catch (error) {
+          if (failure(error) !== "pending") throw error;
+          if (!hasCache && imports.length) await persist({ ...state, operations: [{ id: newOperationId(), changes: imports.map(payload => ({ id: identify(payload), payload, deleted: false, expectedRevision: 0 })), phase: "pending", attempts: 0, retryAt: 0 }] });
+        }
+      }
+      loaded = true; return refresh();
+    });
+  }
   return {
     load(fallback: T[] = []) {
-      return enqueue(async () => {
-        const hasCache = await restore();
-        if (!(await local.getItem(migrationKey))) {
-          const imports = validateItems(fallback);
-          try {
-            if (imports.length) await remote.import(namespace, imports.map(payload => ({ id: identify(payload), payload })));
-            await local.setItem(migrationKey, "1");
-          } catch (error) {
-            if (failure(error) !== "pending") throw error;
-            if (!hasCache && imports.length) await persist({ ...state, operations: [{ id: newOperationId(), changes: imports.map(payload => ({ id: identify(payload), payload, deleted: false, expectedRevision: 0 })), phase: "pending", attempts: 0, retryAt: 0 }] });
-          }
-        }
-        loaded = true; return refresh();
-      });
+      return options.localFirst ? loadCachedThenRefresh(fallback) : loadLegacy(fallback);
     },
-    refresh() { return enqueue(() => refresh()); },
-    retry() { return enqueue(() => refresh(true)); },
+    refresh() { return options.localFirst ? synchronize(true) : enqueue(() => refresh()); },
+    retry() { return options.localFirst ? synchronize(true, true) : enqueue(() => refresh(true)); },
     change(edit: (current: T[]) => T[], restoreIds: string[] = []) {
       return enqueue(async () => {
+        if (disposed) throw new Error("Your account changed. Reopen this screen before saving.");
         if (!loaded) throw new Error("Your account data is still loading. Please try again.");
-        if (!state.operations.length) {
+        if (!options.localFirst && !state.operations.length) {
           try { await pull(); } catch (error) { if (failure(error) !== "pending") throw error; }
         }
         const next = validateItems(edit(copy(visible())));
@@ -130,14 +196,16 @@ export function createAccountList<T>(options: {
         for (const row of prior.values()) if (!row.deleted && !after.has(row.id)) changes.push({ id: row.id, payload: null, deleted: true, expectedRevision: row.revision });
         if (!changes.length) return copy(visible());
         await persist({ ...state, operations: [...state.operations, { id: newOperationId(), changes: copy(changes), phase: "pending", attempts: 0, retryAt: 0 }] });
-        await flush(); return copy(visible());
+        if (options.localFirst) setTimeout(startSync, 0); else await flush();
+        return copy(visible());
       });
     },
     status(): { phase: SyncPhase; message?: string; pending: number } {
       const op = state.operations.find(op => op.phase === "conflict" || op.phase === "error") ?? state.operations[0];
       return { phase: op?.phase ?? "saved", message: op?.message, pending: state.operations.length };
     },
-    resolve(choice: "server" | "reapply") {
+    async resolve(choice: "server" | "reapply") {
+      if (options.localFirst && worker) await worker.catch(() => undefined);
       return enqueue(async () => {
         const rows = await remote.read(namespace);
         if (choice === "server") await persist({ ...state, rows, operations: [] });
@@ -150,6 +218,10 @@ export function createAccountList<T>(options: {
         return copy(visible());
       });
     },
-    async cached() { return (await restore()) ? copy(visible()) : null; },
+    async cached() {
+      if (options.localFirst && loaded) return copy(visible());
+      return enqueue(async () => { const found = await restore(); if (found && options.localFirst) loaded = true; return found ? copy(visible()) : null; });
+    },
+    dispose() { disposed = true; },
   };
 }

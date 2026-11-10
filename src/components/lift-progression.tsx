@@ -1,11 +1,11 @@
 import { TrainText as AppText, TrainInput as Input, useTrainPalette } from "./train-ui";
 import { TrainSection as Card, TrainPrimary as PrimaryButton, TrainSecondary as SecondaryButton, TrainSaveFeedback as SaveFeedback } from "./train-ui";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProgressVisibilityProvider, useProgressVisibility } from "./train-progress-bar";
 import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Field, Icon, ScrollBody, SectionLabel, SelectField } from "@/components/ui";
+import { Field, Icon, ScrollBody, SectionLabel } from "@/components/ui";
 import { TrainSection as TrainingCard } from "./train-ui";
 import { icons } from "@/assets";
 import { LiftProgressRow } from "./lift-progress-row";
@@ -16,10 +16,12 @@ import { validLiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { workoutLiftGroups } from "@/lib/workout-lift-progression";
 import { parseWorkoutDraft } from "@/lib/workout-drafts";
 import { useAppData } from "@/state/app-data";
+import { useWeightUnit, convertWeight } from "@/state/weight-unit";
 import { useAppTheme } from "@/theme";
 
 export function LiftProgression({ prototype = false }: { prototype?: boolean } = {}) {
   const theme = useAppTheme();
+  const { unit: preferredUnit } = useWeightUnit();
   const trainPalette = useTrainPalette();
   const insets = useSafeAreaInsets();
   const { trackedLifts, logs, workspaceSettings, saveTrackedLift, deleteTrackedLift, liftStorageError, foodJournalReady } = useAppData();
@@ -34,14 +36,14 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
   const [unit, setUnit] = useState<"lb" | "kg">("lb");
   const [weight, setWeight] = useState("");
   const [goal, setGoal] = useState("");
-  const [minReps, setMinReps] = useState("6");
-  const [maxReps, setMaxReps] = useState("10");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [artwork, setArtwork] = useState<ArtworkDraft>();
   const [confirmDelete, setConfirmDelete] = useState<TrackedLift | null>(null);
   const [liftQuery, setLiftQuery] = useState("");
   const [directory, setDirectory] = useState(false);
+  const [returnToDirectory, setReturnToDirectory] = useState(false);
+  const directoryScroll = useRef(0);
   const [templateFilter, setTemplateFilter] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,27 +57,25 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
     return () => { active = false; };
   }, [open]);
   function openEditor(lift?: TrackedLift) {
+    setReturnToDirectory(directory);
     setArtwork(lift?.artwork);
     setDirectory(false);
     setEditingId(lift?.id ?? null);
     setExercise(lift?.name ?? ""); setCustomName(""); setSearch("");
-    setPicking(!lift); setWeight(lift ? `${lift.currentWeight}` : "");
-    setGoal(lift?.goalWeight ? `${lift.goalWeight}` : ""); setUnit(lift?.unit ?? "lb");
-    setMinReps(`${lift?.minReps ?? 6}`); setMaxReps(`${lift?.maxReps ?? 10}`);
+    setPicking(!lift); setWeight(lift ? `${Number(convertWeight(lift.currentWeight, lift.unit, preferredUnit).toFixed(2))}` : "");
+    setGoal(lift?.goalWeight ? `${Number(convertWeight(lift.goalWeight, lift.unit, preferredUnit).toFixed(2))}` : ""); setUnit(preferredUnit);
     setError(null); setOpen(true);
   }
-  function changeUnit(next: "lb" | "kg") {
-    if (unit === next) return;
-    const factor = next === "kg" ? 1 / 2.2046226218 : 2.2046226218;
-    const convert = (text: string) => text.trim() && Number.isFinite(Number(text)) ? `${Math.round(Number(text) * factor * 100) / 100}` : text;
-    setWeight(convert(weight)); setGoal(convert(goal)); setUnit(next);
+  function closeEditor() {
+    setOpen(false);
+    if (returnToDirectory) setDirectory(true);
   }
   async function save() {
     if (saving || !foodJournalReady) return;
     const details = { name: (exercise === "Other" ? customName : exercise).trim(), unit,
-      currentWeight: Number(weight), goalWeight: Number(goal), minReps: Number(minReps), maxReps: Number(maxReps) };
+      currentWeight: Number(weight), goalWeight: Number(goal), minReps: trackedLifts.find(lift => lift.id === editingId)?.minReps ?? 6, maxReps: trackedLifts.find(lift => lift.id === editingId)?.maxReps ?? 10 };
     if (!weight.trim() || !goal.trim() || details.goalWeight <= 0 || !validLiftDetails(details)) {
-      setError("Choose a lift, enter current and goal weights, and a rep range from 1 to 100. Goal weight must be greater than zero."); return;
+      setError("Choose a lift, enter current and goal weights, Goal weight must be greater than zero."); return;
     }
     setSaving(true); setError(null);
     let savedArtwork;
@@ -85,7 +85,7 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
     // Retain this ID after a failed response, so retry cannot create a duplicate.
     setEditingId(id);
     const saved = await saveTrackedLift(id, { ...details, artwork: savedArtwork });
-    setSaving(false); if (saved) setOpen(false);
+    setSaving(false); if (saved) { setOpen(false); if (returnToDirectory) setDirectory(true); }
   }
   const options = exerciseOptions(names, search);
   const filteredLifts = trackedLifts.filter(lift => lift.name.toLocaleLowerCase().includes(liftQuery.trim().toLocaleLowerCase()));
@@ -97,7 +97,7 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
   const groups = workoutLiftGroups(trackedLifts, logs, templates);
   const activeGroup = groups.find(group => group.id === templateFilter);
   const directoryLifts = activeGroup ? filteredLifts.filter(lift => activeGroup.liftIds.includes(lift.id)) : filteredLifts;
-  const renderLift = (lift: TrackedLift) => <LiftProgressRow key={lift.id} prototype={prototype} lift={lift} recordLabel={trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).length > 1 ? `Record ${trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).findIndex(item => item.id === lift.id) + 1} / ${lift.minReps}-${lift.maxReps} reps / Since ${lift.history[0]?.date ?? "today"}` : undefined} onUpdate={() => openEditor(lift)} onRemove={() => { setDirectory(false); setConfirmDelete(lift); }} />;
+  const renderLift = (lift: TrackedLift) => <LiftProgressRow key={lift.id} prototype={prototype} lift={lift} recordLabel={trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).length > 1 ? `Record ${trackedLifts.filter(item => item.name.trim().toLocaleLowerCase() === lift.name.trim().toLocaleLowerCase()).findIndex(item => item.id === lift.id) + 1} / Since ${lift.history[0]?.date ?? "today"}` : undefined} onUpdate={() => openEditor(lift)} onRemove={() => { setDirectory(false); setConfirmDelete(lift); }} />;
   return <>
     <TrainingCard padding={16} gap={16} style={prototype ? { padding: 24, borderWidth: 1, borderRadius: 8, backgroundColor: trainPalette.surface, borderColor: trainPalette.border } : undefined}>
       <View style={[styles.header, { flexWrap: "wrap", gap: 8 }]}>
@@ -141,7 +141,7 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
             {groups.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingTop: 12 }}>
               {[{ id: null, title: "All lifts" }, ...groups].map(group => <Pressable key={group.id ?? "all"} accessibilityRole="button" accessibilityState={{ selected: group.id === (activeGroup?.id ?? null) }} onPress={() => setTemplateFilter(group.id)} style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: group.id === (activeGroup?.id ?? null) ? theme.colors.primaryTint : "transparent" }}><AppText size={14} weight="semibold">{group.title}</AppText></Pressable>)}
             </View> : null}
-            <ProgressVisibilityProvider><LiftDirectoryScroll>
+            <ProgressVisibilityProvider><LiftDirectoryScroll initialOffset={directoryScroll.current} onOffset={offset => { directoryScroll.current = offset; }}>
               <AppText size={12} muted>{directoryLifts.length} {directoryLifts.length === 1 ? "lift" : "lifts"}{activeGroup ? ` · ${activeGroup.title}` : ""}</AppText>
               {directoryLifts.map(renderLift)}
               {!directoryLifts.length ? <AppText muted>No lifts match that search.</AppText> : null}
@@ -150,14 +150,14 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
         </View>
       </KeyboardAvoidingView>
     </Modal>
-    <Modal transparent animationType="slide" visible={open} onRequestClose={() => { if (!saving) setOpen(false); }}>
+    <Modal transparent animationType="slide" visible={open} onRequestClose={() => { if (!saving) closeEditor(); }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <Pressable style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]} onPress={() => { if (!saving) setOpen(false); }}>
           <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: trainPalette.background, borderColor: theme.colors.border, paddingBottom: Math.max(18, insets.bottom) }]}>
             <ScrollBody contentContainerStyle={{ gap: 8 }}>
               <View style={styles.header}>
                 <AppText size={23} weight="black">{editingId ? "Update lift" : "Track a lift"}</AppText>
-                <Pressable disabled={saving} accessibilityRole="button" accessibilityLabel="Close lift editor" hitSlop={10} onPress={() => setOpen(false)}><AppText size={24} muted>×</AppText></Pressable>
+                <Pressable disabled={saving} accessibilityRole="button" accessibilityLabel="Close lift editor" hitSlop={10} onPress={closeEditor}><AppText size={24} muted>×</AppText></Pressable>
               </View>
               <Field label="Exercise">
                 <Pressable accessibilityRole="button" accessibilityState={{ expanded: picking }} onPress={() => setPicking((current) => !current)} style={[styles.picker, { backgroundColor: theme.colors.surfaceRaised }]}>
@@ -175,18 +175,13 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
                 </View> : null}
               </Field>
               {exercise === "Other" ? <Field label="Your exercise"><Input placeholder="Exercise name" maxLength={100} value={customName} onChangeText={setCustomName} bordered /></Field> : null}
-              <Field label="Weight unit"><SelectField value={unit} options={["lb", "kg"]} onChange={changeUnit} renderLabel={(value) => value === "lb" ? "Pounds (lb)" : "Kilograms (kg)"} /></Field>
               <View style={styles.header}>
                 <Field label={`Current weight (${unit})`} style={{ flex: 1 }}><Input accessibilityLabel="Current lift weight" style={{ height: 44 }} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="135" bordered /></Field>
                 <Field label={`Goal weight (${unit})`} style={{ flex: 1 }}><Input accessibilityLabel="Lift goal weight" style={{ height: 44 }} value={goal} onChangeText={setGoal} keyboardType="decimal-pad" placeholder="225" bordered /></Field>
               </View>
-              <View style={styles.header}>
-                <Field label="Minimum reps" style={{ flex: 1 }}><Input accessibilityLabel="Minimum lift reps" style={{ height: 44 }} value={minReps} onChangeText={setMinReps} keyboardType="number-pad" bordered /></Field>
-                <Field label="Maximum reps" style={{ flex: 1 }}><Input accessibilityLabel="Maximum lift reps" style={{ height: 44 }} value={maxReps} onChangeText={setMaxReps} keyboardType="number-pad" bordered /></Field>
-              </View>
-              <AppText size={12} muted>Updating weight or reps adds a dated history entry. Your lift and goal sync to your account.</AppText>
+              <AppText size={12} muted>Updating weight adds a dated strength history entry. Your lift and goal sync to your account.</AppText>
               {error || liftStorageError ? <AppText color={theme.colors.danger}>{error ?? liftStorageError}</AppText> : null}
-              <SaveFeedback area="lifts" onRetried={() => setOpen(false)} />
+              <SaveFeedback area="lifts" onRetried={() => { setOpen(false); if (returnToDirectory) setDirectory(true); }} />
               <PrimaryButton disabled={saving || !foodJournalReady} onPress={save}>{saving ? "Saving…" : "Save lift"}</PrimaryButton>
             </ScrollBody>
           </Pressable>
@@ -195,14 +190,14 @@ export function LiftProgression({ prototype = false }: { prototype?: boolean } =
     </Modal>
   </>;
 }
-function LiftDirectoryScroll({ children }: { children: ReactNode }) {
+function LiftDirectoryScroll({ children, initialOffset, onOffset }: { children: ReactNode; initialOffset: number; onOffset: (offset: number) => void }) {
   const visibility = useProgressVisibility();
   useEffect(() => {
     // Re-measure after the modal's opening transition finishes.
     const timer = setTimeout(visibility.check, 400);
     return () => clearTimeout(timer);
   }, [visibility.check]);
-  return <ScrollBody ref={visibility.setViewport} onScroll={visibility.check} onLayout={visibility.check} scrollEventThrottle={32} contentContainerStyle={{ gap: 8, paddingTop: 16, paddingBottom: 16 }}>{children}</ScrollBody>;
+  return <ScrollBody ref={visibility.setViewport} contentOffset={{ x: 0, y: initialOffset }} onScroll={event => { onOffset(event.nativeEvent.contentOffset.y); visibility.check(); }} onLayout={visibility.check} scrollEventThrottle={32} contentContainerStyle={{ gap: 8, paddingTop: 16, paddingBottom: 16 }}>{children}</ScrollBody>;
 }
 
 const styles = StyleSheet.create({

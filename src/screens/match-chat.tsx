@@ -1,3 +1,4 @@
+import { SafetyStatus } from "@/components/safety-status";
 import { useSavedDraft } from "@/lib/use-saved-draft";
 import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { useEffect, useRef, useState } from "react";
@@ -383,6 +384,7 @@ export function MatchChat({ userId }: { userId: string }) {
 
   return (
     <Screen style={styles.screen}>
+      <SafetyStatus onRecovered={notifyChatAlerts} />
       <View ref={stageRef} collapsable={false} style={styles.stage}>
       <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
         <View style={styles.header}>

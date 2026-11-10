@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { deadlineFetch } from "./network-deadline";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseClientKey =
@@ -21,6 +22,7 @@ const globalClient = globalThis as typeof globalThis & {
 export const supabase =
   globalClient.__swolematesSupabase ??
   createClient(supabaseUrl, supabaseClientKey, {
+    global: { fetch: deadlineFetch() },
     auth: {
       autoRefreshToken: true,
       persistSession: true,

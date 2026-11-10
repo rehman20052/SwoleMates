@@ -1,3 +1,4 @@
+import { withDeadline, ACCOUNT_WRITE_TIMEOUT } from "@/lib/network-deadline";
 import { createContext, createElement, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 
@@ -181,7 +182,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     const refresh = async () => {
       if (saving.current) return;
       const version = ++generation.current;
-      const { data, error } = await supabase.auth.getUser();
+      const result = await withDeadline(supabase.auth.getUser()).catch(() => null);
+      if (!result) return;
+      const { data, error } = result;
       if (!active || saving.current || version !== generation.current || error) return;
       const saved = data.user?.user_metadata?.colorScheme;
       if (saved !== "light" && saved !== "dark") return;
@@ -207,9 +210,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     saving.current = true; setSavingScheme(true); setSchemeError(null);
     const version = ++generation.current;
     try {
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session } = await withDeadline(supabase.auth.getSession());
       if (session.session) {
-        const { error } = await supabase.auth.updateUser({ data: { colorScheme: next } });
+        const { error } = await withDeadline(supabase.auth.updateUser({ data: { colorScheme: next } }), ACCOUNT_WRITE_TIMEOUT);
         if (error) throw error;
       }
       if (version !== generation.current) return false;

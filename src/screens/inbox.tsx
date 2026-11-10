@@ -1,3 +1,4 @@
+import { SafetyStatus } from "@/components/safety-status";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
@@ -153,7 +154,7 @@ export function InboxScreen({ empty }: { empty: ReactNode }) {
 
   return (
     <Screen style={styles.screen}>
-      <TitleBar title="Chat" />
+      <TitleBar title="Chat" /><SafetyStatus onRecovered={() => { load(false); notifyChatAlerts(); }} />
       {status === "loading" ? (
         <AppText muted style={styles.note}>
           Loading chats...

@@ -3,18 +3,20 @@ import { View } from "react-native";
 import { AppText, Field, Input, PrimaryButton, ScrollBody, SecondaryButton } from "./ui";
 import { ingredientTotals, lookupBarcode, nutritionKeys, scannedIngredient, type ScanIngredient, type ScannedFood } from "@/lib/food-scanner";
 import { decodeFoodBarcode, videoFrame } from "@/lib/food-scanner-browser";
-import { rememberConfirmedIngredient } from "@/scanning/product-memory";
+import { rememberConfirmedIngredients } from "@/scanning/product-memory";
 import { useAppTheme } from "@/theme";
 
-type Props = { initialIngredients?: ScanIngredient[]; onChange?: (items: ScanIngredient[]) => void; onUse: (food: ScannedFood, items: ScanIngredient[]) => void; onClose: () => void };
+type Props = { onDetected?: (food: ScannedFood) => void; initialIngredients?: ScanIngredient[]; onChange?: (items: ScanIngredient[]) => void; onUse: (food: ScannedFood, items: ScanIngredient[]) => void; onClose: () => void };
 const labels = { calories: "Calories", protein: "Protein (g)", carbs: "Carbs (g)", fats: "Fat (g)" };
 
-export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose }: Props) {
+export function FoodScanner({ onDetected, initialIngredients = [], onChange, onUse, onClose }: Props) {
   const theme = useAppTheme();
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const generation = useRef(0);
+  const lookupAbort = useRef<AbortController | null>(null);
+  const [manualCode, setManualCode] = useState("");
   const itemsRef = useRef(initialIngredients);
   const [items, setItems] = useState(initialIngredients);
   const [camera, setCamera] = useState(false);
@@ -31,7 +33,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
   function change(next: ScanIngredient[]) { itemsRef.current = next; setItems(next); onChange?.(next); }
   function edit(id: string, patch: Partial<ScanIngredient>) { change(itemsRef.current.map(item => item.id === id ? { ...item, ...patch } : item)); }
   function stop() {
-    generation.current++; clearTimeout(timer.current);
+    generation.current++; clearTimeout(timer.current); lookupAbort.current?.abort();
     stream.current?.getTracks().forEach(track => track.stop()); stream.current = null;
     if (video.current) video.current.srcObject = null;
     setCamera(false); setBusy(false); setTorch(false); setHasTorch(false); setMessage("");
@@ -43,18 +45,21 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
   }, []);
 
   function append(food: ScannedFood) {
+    if (onDetected) { onDetected(food); return; }
     const item = scannedIngredient(food);
     change([...itemsRef.current, item]); setExpanded(item.id); setError("");
     setMessage(nutritionKeys.some(key => food[key] === null) ? "Product added. Fill in its missing nutrition." : "Product added. You can scan another barcode.");
   }
-  async function findProduct(code: string, current: number) {
-    stop(); generation.current = current; setBusy(true); setMessage("Finding product…");
+  async function findProduct(code: string) {
+    stop(); const current = generation.current; setBusy(true); setError(""); setMessage("Finding product…");
+    const controller = new AbortController(); lookupAbort.current = controller;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const food = await lookupBarcode(code);
+      const food = await Promise.race([lookupBarcode(code, controller.signal), new Promise<never>((_, reject) => { timeout = setTimeout(() => { controller.abort(); reject(new Error("Product lookup timed out. Try again or enter nutrition manually.")); }, 15000); })]);
       if (generation.current === current) append(food);
     } catch (reason) {
       if (generation.current === current) setError(reason instanceof Error ? reason.message.replace(/photograph the label/gi, "scan again") : "Could not find this product.");
-    } finally { if (generation.current === current) { setBusy(false); setMessage(""); } }
+    } finally { clearTimeout(timeout); if (generation.current === current) { setBusy(false); setMessage(""); } }
   }
   async function scan() {
     stop(); const current = generation.current; setError(""); setMessage("Opening camera…");
@@ -74,7 +79,7 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
         try {
           const frame = videoFrame(video.current, "barcode", ++attempts % 3 !== 0);
           const code = await decodeFoodBarcode(frame.getContext("2d")!.getImageData(0, 0, frame.width, frame.height));
-          if (code && generation.current === current) { void findProduct(code, current); return; }
+          if (code && generation.current === current) { void findProduct(code); return; }
         } catch { /* A later frame may decode cleanly. */ }
         timer.current = setTimeout(() => void read(), 250);
       };
@@ -89,10 +94,23 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
     try { await track.applyConstraints({ advanced: [{ torch: !torch } as MediaTrackConstraintSet] }); setTorch(!torch); }
     catch { setError("This camera does not support a light control."); }
   }
+  useEffect(() => { if (onDetected) void scan(); }, []);
+
   function summary(item: ScanIngredient) {
     const value = ingredientTotals([item]);
     return `${value.calories ?? "?"} cal · ${value.protein ?? "?"}g protein · ${value.carbs ?? "?"}g carbs · ${value.fats ?? "?"}g fat`;
   }
+
+  if (onDetected) return <ScrollBody contentContainerStyle={{ padding: 20, gap: 16 }}>
+    <AppText size={13} muted>Point at a package barcode. Its name and nutrition will fill your current food for review.</AppText>
+    <div style={{ display: camera ? "block" : "none", height: "min(40dvh, 300px)", minHeight: 200, borderRadius: 14, overflow: "hidden", background: "#080a08" }}><video ref={video} muted playsInline autoPlay aria-label="Barcode scanner camera preview" style={{ width: "100%", height: "100%", objectFit: "contain" }} /></div>
+    {camera ? <View style={{ flexDirection: "row", gap: 10 }}>{hasTorch ? <SecondaryButton onPress={() => void toggleTorch()}>{torch ? "Light off" : "Light on"}</SecondaryButton> : null}<SecondaryButton onPress={stop}>Stop camera</SecondaryButton></View> : <PrimaryButton disabled={busy} onPress={() => void scan()}>{busy ? "Finding food…" : "Start camera"}</PrimaryButton>}
+    {message ? <AppText accessibilityLiveRegion="polite" size={13} muted>{message}</AppText> : null}
+    {error ? <AppText accessibilityLiveRegion="polite" size={13} color={theme.colors.danger}>{error}</AppText> : null}
+    <Field label="Or enter barcode digits"><Input bordered accessibilityLabel="Food barcode digits" keyboardType="number-pad" value={manualCode} onChangeText={setManualCode} /></Field>
+    <SecondaryButton disabled={busy || !manualCode.trim()} onPress={() => void findProduct(manualCode)}>Look up barcode</SecondaryButton>
+    <SecondaryButton onPress={() => { stop(); onClose(); }}>Back to meal</SecondaryButton>
+  </ScrollBody>;
 
   return <View style={{ flex: 1 }}>
     <View style={{ paddingHorizontal: 18, paddingBottom: 10, gap: 8 }}>
@@ -116,6 +134,6 @@ export function FoodScanner({ initialIngredients = [], onChange, onUse, onClose 
         {!ingredientTotals([item]).complete ? <AppText size={12} color={theme.colors.danger}>Check missing nutrition values, name and serving.</AppText> : null}
       </View>)}
     </ScrollBody>
-    <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }}><PrimaryButton disabled={!totals.complete || busy} onPress={() => { stop(); void Promise.all(items.map(rememberConfirmedIngredient)).catch(() => undefined); onUse({ name: items.length === 1 ? items[0].name.trim() : "Scanned meal", calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fats: totals.fats, basis: "Total of selected servings", source: items.every(item => item.source === "barcode") ? "barcode" : "manual" }, items); }}>Use ingredient totals</PrimaryButton></View>
+    <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background }}><PrimaryButton disabled={!totals.complete || busy} onPress={() => { stop(); void rememberConfirmedIngredients(items).catch(() => undefined); onUse({ name: items.length === 1 ? items[0].name.trim() : "Scanned meal", calories: totals.calories, protein: totals.protein, carbs: totals.carbs, fats: totals.fats, basis: "Total of selected servings", source: items.every(item => item.source === "barcode") ? "barcode" : "manual" }, items); }}>Use ingredient totals</PrimaryButton></View>
   </View>;
 }

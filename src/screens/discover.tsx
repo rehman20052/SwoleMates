@@ -1,3 +1,4 @@
+import { SafetyStatus } from "@/components/safety-status";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -25,6 +26,7 @@ import { useAppData } from "@/state/app-data";
 export function DiscoverScreen({ profile }: { profile: UserProfile }) {
   const nav = useNavigation();
   const { discoverFilters, discoverPrefsLoaded, updateDiscoverFilters, reviewed, blocked, conversations, invites, review } = useAppData();
+  const [loadVersion, setLoadVersion] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [reviewingSkipped, setReviewingSkipped] = useState(false);
   const [skippedIndex, setSkippedIndex] = useState(0);
@@ -71,7 +73,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
     return () => {
       active = false;
     };
-  }, [profile]);
+  }, [profile, loadVersion]);
 
   const hidden = useMemo(
     () => new Set([...reviewed, ...blocked, ...blockedIds, ...conversations.map((item) => item.partnerId), ...invites.map((item) => item.partnerId)]),
@@ -123,6 +125,7 @@ export function DiscoverScreen({ profile }: { profile: UserProfile }) {
 
   return (
     <Screen>
+      <SafetyStatus onRecovered={() => setLoadVersion(value => value + 1)} />
       {reviewingSkipped ? (
         <TitleBar title="Skipped" onBack={() => setReviewingSkipped(false)} right={filtersButton} />
       ) : (

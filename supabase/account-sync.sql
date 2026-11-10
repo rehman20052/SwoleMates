@@ -36,7 +36,8 @@ begin
     select revision into actual_revision from public.account_records
       where user_id = owner_id and namespace = p_namespace and record_id = change->>'id';
     if coalesce(actual_revision, 0) <> (change->>'expectedRevision')::bigint then
-      raise exception 'A newer version exists. Refresh and try again.' using errcode = '40001';
+      -- A revision mismatch needs client reconciliation. PT409 prevents PostgREST from retrying it as a serialization failure.
+      raise exception 'A newer version exists. Refresh and try again.' using errcode = 'PT409';
     end if;
     insert into public.account_records(user_id, namespace, record_id, payload, deleted)
       values(owner_id, p_namespace, change->>'id', change->'payload', coalesce((change->>'deleted')::boolean, false))

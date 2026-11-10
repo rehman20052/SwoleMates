@@ -1,3 +1,4 @@
+import { useWeightUnit, convertWeight } from "@/state/weight-unit";
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -89,12 +90,19 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
-  const [unit, setUnit] = useState<'lb' | 'kg'>(rows[0]?.unit ?? 'lb');
-  const [unitOpen, setUnitOpen] = useState(false);
+  const { unit } = useWeightUnit();
   const [error, setError] = useState('');
   const [menu, setMenu] = useState<string | null>(null);
   const stats = workoutStats(rows);
-  const displayedUnit = rows[0]?.unit ?? unit;
+  const displayedUnit = unit;
+  useEffect(() => {
+    if (!rows.some(row => row.unit !== unit)) return;
+    setRows(current => current.map(row => {
+      if (row.unit === unit) return row;
+      const convert = (value: string) => value.trim() && Number.isFinite(Number(value)) ? String(Number(convertWeight(Number(value), row.unit, unit).toFixed(2))) : value;
+      return { ...row, unit, weight: convert(row.weight), setValues: draftSets(row).map(set => ({ ...set, weight: convert(set.weight) })) };
+    }));
+  }, [rows, unit, setRows]);
   useEffect(() => { let active = true; void loadExerciseCatalog(AsyncStorage).then(data => { if (active) setCatalog(data.names); }); return () => { active = false; }; }, []);
   function change(update: SetStateAction<DraftExercise[]>) { onChange?.(); setError(''); setRows(update); }
   function replaceSets(row: DraftExercise, sets: DraftSet[]) {
@@ -102,15 +110,6 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
   }
   function editSet(row: DraftExercise, index: number, patch: Partial<DraftSet>) {
     replaceSets(row, draftSets(row).map((set, i) => i === index ? { ...set, ...patch, completed: patch.completed ?? (preserveCompletionOnEdit ? set.completed : false) } : set));
-  }
-  function changeUnit(next: 'lb' | 'kg') {
-    setUnit(next); setUnitOpen(false);
-    change(current => current.map(row => {
-      if (row.unit === next) return row;
-      const factor = next === 'kg' ? 0.45359237 : 1 / 0.45359237;
-      const convert = (v: string) => v.trim() && Number.isFinite(Number(v)) ? String(Math.round(Number(v) * factor * 100) / 100) : v;
-      return { ...row, unit: next, weight: convert(row.weight), setValues: draftSets(row).map(set => ({ ...set, weight: convert(set.weight) })) };
-    }));
   }
   function choose(name: string) {
     const id = picking === 'new' ? `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : picking!;
@@ -142,8 +141,7 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
       <View style={styles.row}>
         <View style={{ gap: 3 }}><AppText display={false} size={14} weight="semibold" color={palette.text}>Exercises</AppText><AppText size={12} color={palette.muted} accessibilityLiveRegion="polite">{stats.sets} of {stats.plannedSets} sets completed</AppText></View>
         <View style={{ width: 76 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Weight unit ${displayedUnit}`} accessibilityState={{ expanded: unitOpen, disabled }} disabled={disabled} onPress={() => setUnitOpen(!unitOpen)} style={[styles.unit, { backgroundColor: palette.field, borderColor: palette.border }]}><AppText size={12} weight="medium" color={palette.muted}>{displayedUnit}</AppText><WorkoutLogIcon name="down" size={13} color={palette.muted} /></Pressable>
-          {unitOpen ? <View style={{ borderWidth: 1, borderColor: palette.border, borderRadius: 10, backgroundColor: palette.surface }}>{(['lb', 'kg'] as const).map(next => <Pressable key={next} accessibilityRole="button" accessibilityLabel={`Use ${next} for all exercises`} disabled={disabled} onPress={() => changeUnit(next)} style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><AppText size={14} color={palette.text}>{next}</AppText></Pressable>)}</View> : null}
+          <AppText size={12} color={palette.muted}>Weight ({unit})</AppText>
         </View>
       </View>
       <View accessibilityRole="progressbar" accessibilityLabel="Workout set progress" accessibilityValue={{ min: 0, max: Math.max(1, stats.plannedSets), now: stats.sets }} style={{ height: 2, backgroundColor: palette.border, borderRadius: 4, overflow: 'hidden' }}><View style={{ height: 2, backgroundColor: palette.accent, width: `${stats.plannedSets ? stats.sets / stats.plannedSets * 100 : 0}%` }} /></View>
@@ -190,6 +188,8 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
 }
 
 export function WorkoutRecordedSets({ exercises }: { exercises: WorkoutExercise[] }) {
+  const { unit, formatWeight } = useWeightUnit();
+  exercises = exercises.map(exercise => ({ ...exercise, unit, weight: formatWeight(exercise.weight, exercise.unit), setDetails: exercise.setDetails?.map(set => ({ ...set, weight: formatWeight(set.weight, exercise.unit) })) }));
   const palette = useWorkoutLogPalette();
   return <View style={{ gap: 16 }}>{exercises.map(exercise => <View key={exercise.id} style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}><AppText display={false} size={17} weight="semibold" color={palette.text}>{exercise.name}</AppText><View style={[styles.row, { paddingTop: 14 }]}><AppText size={12} color={palette.muted} style={{ width: 28 }}>Set</AppText><AppText size={12} color={palette.muted} style={styles.column}>Weight ({exercise.unit})</AppText><AppText size={12} color={palette.muted} style={styles.column}>Reps</AppText><AppText size={12} color={palette.muted}>Done</AppText></View>{(exercise.setDetails ?? Array.from({ length: exercise.sets }, () => ({ reps: exercise.reps, weight: exercise.weight }))).map((set, i) => <View key={i} style={[styles.row, { minHeight: 44 }]}><AppText size={12} color={palette.muted} style={{ width: 28 }}>{i + 1}</AppText><AppText size={17} color={palette.text} style={styles.column}>{set.weight}</AppText><AppText size={17} color={palette.text} style={styles.column}>{set.reps}</AppText><WorkoutLogIcon name="check" size={16} color={palette.accent} /></View>)}</View>)}</View>;
 }

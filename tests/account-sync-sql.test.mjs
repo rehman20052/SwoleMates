@@ -20,7 +20,7 @@ test('account migration enforces account ownership, atomic versions, and deletio
     await save([{ id: 'r1', payload: { name: 'My recipe' }, expectedRevision: 0 }]);
     await imports([{ id: 'r1', payload: { name: 'Stale browser' } }]);
     assert.equal((await db.query('select payload from public.account_records')).rows[0].payload.name, 'My recipe');
-    await assert.rejects(save([{ id: 'r2', payload: { name: 'Must roll back' }, expectedRevision: 0 }, { id: 'r1', payload: {}, expectedRevision: 0 }]), /newer version/i);
+    await assert.rejects(save([{ id: 'r2', payload: { name: 'Must roll back' }, expectedRevision: 0 }, { id: 'r1', payload: {}, expectedRevision: 0 }]), { code: 'PT409', message: /newer version/i });
     assert.equal((await db.query('select count(*)::int as total from public.account_records')).rows[0].total, 1);
     await save([{ id: 'r1', payload: null, deleted: true, expectedRevision: 1 }]);
     await imports([{ id: 'r1', payload: { name: 'Deleted recipe' } }]);

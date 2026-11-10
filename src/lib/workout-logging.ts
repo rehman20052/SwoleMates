@@ -1,3 +1,4 @@
+import { convertWeight, type WeightUnit } from "./weight-unit";
 import type { DraftExercise, DraftSet } from "./workout-drafts";
 import { validWorkoutExercises, type WorkoutExercise } from "./workout-session";
 
@@ -48,7 +49,8 @@ export function workoutStats(rows: DraftExercise[]) {
   for (const row of exercises) for (const set of row.setDetails ?? []) volume[row.unit] += set.reps * set.weight;
   return { exercises, sets: exercises.reduce((sum, row) => sum + row.sets, 0), plannedSets: rows.reduce((sum, row) => sum + draftSets(row).length, 0), volume };
 }
-export function volumeLabel(volume: { lb: number; kg: number }) {
+export function volumeLabel(volume: { lb: number; kg: number }, unit?: WeightUnit) {
+  if (unit) return `${Math.round(convertWeight(volume.lb, "lb", unit) + convertWeight(volume.kg, "kg", unit)).toLocaleString()} ${unit}`;
   const parts = (["lb", "kg"] as const).filter(unit => volume[unit] > 0).map(unit => `${Math.round(volume[unit]).toLocaleString()} ${unit}`);
   return parts.join(" + ") || "0";
 }

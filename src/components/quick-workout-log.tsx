@@ -1,3 +1,4 @@
+import { useWeightUnit } from "@/state/weight-unit";
 import { WorkoutLogButton, WorkoutLogHeader, WorkoutSetEditor, WorkoutRecordedSets, useWorkoutLogPalette } from './workout-log-editor';
 import { Card } from './ui';
 import { BRAND_LIME } from "@/theme";
@@ -25,6 +26,7 @@ export function QuickWorkoutLog(props: Props) {
 
 function WorkoutLogContent({ date, existing, onSaved, onDiscard, onManageRoutines, plannedWorkoutId, initialPlan, initialTitle, collapsed = false, onStarted, repeatRequest, onRepeatHandled }: Props) {
   const theme = useAppTheme();
+  const { unit } = useWeightUnit();
   const trainPalette = useTrainPalette();
   const logPalette = useWorkoutLogPalette();
   const { logWorkout, updateWorkoutLog, foodJournalReady, logs, workspaceSettings, saveWorkspaceSetting, accountUserId } = useAppData();
@@ -122,7 +124,7 @@ function WorkoutLogContent({ date, existing, onSaved, onDiscard, onManageRoutine
       if (!saved) { setError("Could not save this workout. Your draft is preserved; try again."); return; }
       attemptedFinish.current = false; changed.current = false; setHasUserInput(false); setDurationEdited(false); await draft.clear();
       if (offerShare) {
-        setShareText(`${title.trim() || "Workout"}\n${exercises.length} exercises · ${stats.sets} completed sets · ${volumeLabel(stats.volume)} volume\n${exercises.map(row => `${row.name}: ${row.setDetails?.map(set => `${set.weight} ${row.unit} × ${set.reps}`).join(", ")}`).join("\n")}${records.length ? `\n${records.join("\n")}` : ""}`.slice(0, 2000));
+        setShareText(`${title.trim() || "Workout"}\n${exercises.length} exercises · ${stats.sets} completed sets · ${volumeLabel(stats.volume, unit)} volume\n${exercises.map(row => `${row.name}: ${row.setDetails?.map(set => `${set.weight} ${row.unit} × ${set.reps}`).join(", ")}`).join("\n")}${records.length ? `\n${records.join("\n")}` : ""}`.slice(0, 2000));
         setSharing(true);
       } else finish();
     } catch (err) { setError(err instanceof Error ? err.message : "Could not save your workout. Please try again."); }
@@ -185,7 +187,7 @@ function WorkoutLogContent({ date, existing, onSaved, onDiscard, onManageRoutine
   </Card>;
   const progress = <View accessibilityLiveRegion="polite" style={{ gap: 8, paddingBottom: 8 }}>
     <AppText size={13} weight="bold">{rows.length} {rows.length === 1 ? "exercise" : "exercises"} · {stats.sets}/{stats.plannedSets} sets completed</AppText>
-    <AppText size={12} muted>Volume: {volumeLabel(stats.volume)}</AppText>
+    <AppText size={12} muted>Volume: {volumeLabel(stats.volume, unit)}</AppText>
     <View accessibilityRole="progressbar" accessibilityLabel="Workout set progress" accessibilityValue={{ min: 0, max: stats.plannedSets, now: stats.sets }} style={{ height: 6, borderRadius: 3, backgroundColor: trainPalette.border, overflow: "hidden" }}><View style={{ height: 6, backgroundColor: logPalette.accent, width: `${stats.plannedSets ? stats.sets / stats.plannedSets * 100 : 0}%` }} /></View>
   </View>;
   if (reviewing) return <Card padding={16} radius={12} gap={16}>
