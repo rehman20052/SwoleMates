@@ -232,10 +232,10 @@ test('a rejected save stays a conflict even when the device cannot store it, so 
   }
   assert.equal(server.state.saves, saves, 'a conflicted save must not be sent again');
 });
-test('settings conflicts settle on their own: the copy edited last wins and nothing loops', async () => {
+for (const localFirst of [false, true]) test(`settings conflicts settle without looping (${localFirst ? 'local first' : 'remote first'})`, async () => {
   const server = backend();
   const newest = (local, remote) => !remote || (local.payload?.value?.updatedAt ?? 0) >= (remote.payload?.value?.updatedAt ?? 0) ? 'local' : 'server';
-  const make = () => { const local = storage(); return { local, store: createAccountList({ userId: 'alice', namespace: 'settings', local, remote: server.remote('alice'), identify: (item) => item.id, validate: valid, resolveConflict: newest }) }; };
+  const make = () => { const local = storage(); return { local, store: createAccountList({ userId: 'alice', namespace: 'settings', local, remote: server.remote('alice'), identify: (item) => item.id, validate: valid, resolveConflict: newest, localFirst }) }; };
   const a = make(); const b = make();
   await a.store.load([{ id: 'draft', value: { content: 'v1', updatedAt: 1 } }]); await b.store.load([]);
   // An older laptop edit loses to a newer phone edit that saved first.
@@ -243,7 +243,8 @@ test('settings conflicts settle on their own: the copy edited last wins and noth
   let pending = a.store.change(() => [{ id: 'draft', value: { content: 'laptop', updatedAt: 20 } }]);
   await pause.entered;
   await b.store.change(() => [{ id: 'draft', value: { content: 'phone', updatedAt: 30 } }]);
-  pause.release(); await pending;
+  await b.store.refresh();
+  pause.release(); await pending; await a.store.refresh();
   assert.equal(a.store.status().phase, 'saved');
   assert.equal((await a.store.refresh())[0].value.content, 'phone');
   // A newer laptop edit is re-sent once on top of the phone's copy and wins.
@@ -251,7 +252,8 @@ test('settings conflicts settle on their own: the copy edited last wins and noth
   pending = a.store.change(() => [{ id: 'draft', value: { content: 'laptop newest', updatedAt: 50 } }]);
   await pause.entered;
   await b.store.change(() => [{ id: 'draft', value: { content: 'phone 2', updatedAt: 40 } }]);
-  pause.release(); await pending;
+  await b.store.refresh();
+  pause.release(); await pending; await a.store.refresh();
   assert.equal(a.store.status().phase, 'saved');
   assert.equal((await b.store.refresh())[0].value.content, 'laptop newest');
   server.state.pauseSave = null;
