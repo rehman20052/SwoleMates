@@ -6,7 +6,7 @@ import ts from 'typescript';
 const exports = {};
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/account-sync-core.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, { exports });
+}).outputText, { exports, setTimeout });
 const { createAccountList } = exports;
 const copy = (value) => JSON.parse(JSON.stringify(value));
 function storage() {

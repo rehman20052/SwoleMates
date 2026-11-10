@@ -76,11 +76,11 @@ export function createAccountList<T>(options: {
   }
   // Settles a rejected save once using options.resolveConflict. Returns false when it can't,
   // so the operation stays a conflict and is never re-sent automatically.
-  async function settleConflict(op: Operation) {
+  async function settleConflict(op: Operation, enqueueResolution = false) {
     if (!options.resolveConflict) return false;
     let rows: AccountRecord[];
     try { rows = await remote.read(namespace); } catch { return false; }
-    return options.localFirst ? enqueue(() => applyConflictResolution(op, rows)) : applyConflictResolution(op, rows);
+    return enqueueResolution ? enqueue(() => applyConflictResolution(op, rows)) : applyConflictResolution(op, rows);
   }
   async function applyConflictResolution(op: Operation, rows: AccountRecord[]) {
     if (disposed || state.operations[0]?.id !== op.id || !options.resolveConflict) return false;
@@ -163,7 +163,7 @@ export function createAccountList<T>(options: {
           } catch (error) {
             if (disposed) return copy(visible());
             const phase = failure(error);
-            if (phase === "conflict" && !settled.has(op.id) && await settleConflict(op).catch(() => false)) {
+            if (phase === "conflict" && !settled.has(op.id) && await settleConflict(op, true).catch(() => false)) {
               settled.add(op.id);
               if (state.operations[0]) settled.add(state.operations[0].id);
               continue;
