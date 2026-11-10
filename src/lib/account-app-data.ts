@@ -26,16 +26,16 @@ export function isWorkoutLog(value: unknown): value is SessionLog {
     && (log.exercises === undefined || validWorkoutExercises(log.exercises))
     && (log.durationMinutes === undefined || Number.isInteger(log.durationMinutes) && log.durationMinutes >= 1 && log.durationMinutes <= 1440);
 }
-export function createAccountStores(userId: string) {
+export function createAccountStores(userId: string, onChange?: () => void) {
   return {
     userId,
-    recipes: accountList(userId, "recipes", (item: SavedMeal) => item.id, isRecipe),
-    food: accountList(userId, "food", (item) => item.id, isFoodEntry),
-    plan: accountList(userId, "nutrition_plan", () => "plan", isSavedPlan),
-    logs: accountList(userId, "workout_logs", workoutLogKey, isWorkoutLog),
-    deletions: accountList(userId, "workout_deletions", (item: string) => item, (value): value is string => typeof value === "string"),
-    settings: accountList(userId, "settings", (item: AccountSetting) => item.id, isSetting),
-    lifts: accountList(userId, "lifts", (item) => item.id, isLift),
+    recipes: accountList(userId, "recipes", (item: SavedMeal) => item.id, isRecipe, onChange),
+    food: accountList(userId, "food", (item) => item.id, isFoodEntry, onChange),
+    plan: accountList(userId, "nutrition_plan", () => "plan", isSavedPlan, onChange),
+    logs: accountList(userId, "workout_logs", workoutLogKey, isWorkoutLog, onChange),
+    deletions: accountList(userId, "workout_deletions", (item: string) => item, (value): value is string => typeof value === "string", onChange),
+    settings: accountList(userId, "settings", (item: AccountSetting) => item.id, isSetting, onChange),
+    lifts: accountList(userId, "lifts", (item) => item.id, isLift, onChange),
   };
 }
 export async function loadAccountStores(stores: ReturnType<typeof createAccountStores>, defaults: NutritionGoals) {

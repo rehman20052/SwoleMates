@@ -16,20 +16,30 @@ export async function rememberedProduct(barcode: string): Promise<ProductNutriti
   return !shared.error && shared.data ? fromRow(shared.data as ProductRow, "cache") : null;
 }
 
-export async function rememberConfirmedProduct(product: ProductNutrition): Promise<boolean> {
+type ConfirmedIngredient = { barcode?: string; name: string; basis: string; calories: string; protein: string; carbs: string; fats: string };
+
+export async function rememberConfirmedIngredients(items: readonly ConfirmedIngredient[], owner?: string): Promise<boolean> {
+  const products = new Map<string, ConfirmedIngredient>();
+  for (const item of items) {
+    if (!item.barcode) continue;
+    try { products.set(normalizeBarcode(item.barcode).gtin14, item); } catch { /* Ignore invalid older barcodes. */ }
+  }
+  if (!products.size) return false;
+
   const user = await supabase.auth.getUser();
-  if (!user.data.user) return false;
-  const { error } = await supabase.from("user_products").upsert({
-    user_id: user.data.user.id, barcode: normalizeBarcode(product.barcode).gtin14, name: product.name, basis: product.basis,
-    serving_size: product.servingSize, calories: product.calories, protein: product.protein, carbs: product.carbs, fat: product.fat, confirmed_at: new Date().toISOString(),
-  }, { onConflict: "user_id,barcode" });
+  const userId = user.data.user?.id;
+  if (!userId || (owner && userId !== owner)) return false;
+  const confirmedAt = new Date().toISOString();
+  const read = (value: string) => {
+    const number = value.trim() ? Number(value.replace(",", ".")) : NaN;
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  };
+  const rows = Array.from(products, ([barcode, item]) => ({
+    user_id: userId, barcode, name: item.name.trim() || null,
+    basis: /100\s*(g|ml)/i.test(item.basis) ? "per_100g" : "per_serving", serving_size: item.basis,
+    calories: read(item.calories), protein: read(item.protein), carbs: read(item.carbs), fat: read(item.fats), confirmed_at: confirmedAt,
+  }));
+  const { error } = await supabase.from("user_products").upsert(rows, { onConflict: "user_id,barcode" });
   if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw error;
   return !error;
-}
-
-export async function rememberConfirmedIngredient(item: { barcode?: string; name: string; basis: string; calories: string; protein: string; carbs: string; fats: string }) {
-  if (!item.barcode) return false;
-  const read = (value: string) => { const number = Number(value.replace(",", ".")); return Number.isFinite(number) && number >= 0 ? number : null; };
-  return rememberConfirmedProduct({ barcode: item.barcode, name: item.name.trim() || null, basis: /100\s*(g|ml)/i.test(item.basis) ? "per_100g" : "per_serving", servingSize: item.basis,
-    calories: read(item.calories), protein: read(item.protein), carbs: read(item.carbs), fat: read(item.fats), source: "user_confirmed" });
 }

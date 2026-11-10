@@ -394,7 +394,6 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
     refreshing,
     refresh,
     loadMore,
-    reload,
     run,
     updatePost,
     toggleFollow,
@@ -609,8 +608,8 @@ function SocialBoard({
             {loadError ?? "Loading your feed..."}
           </AppText>
           {loadError ? (
-            <PrimaryButton height={40} fontSize={13} onPress={() => void board.reload()} style={styles.smallButton}>
-              Try again
+            <PrimaryButton height={40} fontSize={13} disabled={board.refreshing} onPress={() => void board.refresh()} style={styles.smallButton}>
+              {board.refreshing ? "Retrying…" : "Try again"}
             </PrimaryButton>
           ) : null}
         </View>

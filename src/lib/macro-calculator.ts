@@ -1,3 +1,4 @@
+import { convertWeight, type WeightUnit } from "./weight-unit";
 export type GoalKind = "lose" | "maintain" | "gain";
 export type StepBand = "lt4" | "4to7" | "7to10" | "10to13" | "13plus";
 export type CardioLength = "under20" | "20to30" | "30to45" | "45plus";
@@ -146,9 +147,9 @@ function pounds(weeklyLb: number) {
   return `${rounded}`.replace(/(\.\d)0$/, "$1");
 }
 
-export function formatWeeklyChange(weeklyLb: number) {
+export function formatWeeklyChange(weeklyLb: number, unit: WeightUnit = "lb") {
   if (Math.abs(weeklyLb) < 0.05) return "About the same";
-  return `${pounds(weeklyLb)} lb/week ${weeklyLb < 0 ? "loss" : "gain"}`;
+  return `${pounds(convertWeight(weeklyLb, "lb", unit))} ${unit}/week ${weeklyLb < 0 ? "loss" : "gain"}`;
 }
 
 export function weighInTrend(weighIns: WeighIn[]) {
@@ -184,12 +185,12 @@ export type CalibrationAdvice = {
   message: string;
 };
 
-function pace(weeklyLb: number) {
+function pace(weeklyLb: number, unit: WeightUnit) {
   if (Math.abs(weeklyLb) < 0.05) return "holding steady";
-  return weeklyLb < 0 ? `losing ${pounds(weeklyLb)} lb a week` : `gaining ${pounds(weeklyLb)} lb a week`;
+  return weeklyLb < 0 ? `losing ${pounds(convertWeight(weeklyLb, "lb", unit))} ${unit} a week` : `gaining ${pounds(convertWeight(weeklyLb, "lb", unit))} ${unit} a week`;
 }
 
-export function calibrationAdvice(profile: NutritionProfile): CalibrationAdvice | null {
+export function calibrationAdvice(profile: NutritionProfile, unit: WeightUnit = "lb"): CalibrationAdvice | null {
   const trend = weighInTrend(profile.weighIns);
   if (!trend) return null;
   if (profile.calibratedThrough && trend.latestDate <= profile.calibratedThrough) return null;
@@ -198,7 +199,7 @@ export function calibrationAdvice(profile: NutritionProfile): CalibrationAdvice 
     return {
       deltaCalories: 0,
       actualWeeklyLb: trend.weeklyLb,
-      message: `You're ${pace(trend.weeklyLb)}, in line with this plan. No calorie change needed.`,
+      message: `You're ${pace(trend.weeklyLb, unit)}, in line with this plan. No calorie change needed.`,
     };
   }
   const delta = clamp(roundTo(-gap * 500, 10), -250, 250);
@@ -210,7 +211,7 @@ export function calibrationAdvice(profile: NutritionProfile): CalibrationAdvice 
   return {
     deltaCalories: delta,
     actualWeeklyLb: trend.weeklyLb,
-    message: `You're ${pace(trend.weeklyLb)}. This plan expected you to be ${pace(profile.plannedWeeklyLb)}. ${next}`,
+    message: `You're ${pace(trend.weeklyLb, unit)}. This plan expected you to be ${pace(profile.plannedWeeklyLb, unit)}. ${next}`,
   };
 }
 

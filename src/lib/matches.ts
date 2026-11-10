@@ -1,3 +1,4 @@
+import { withDeadline } from "@/lib/network-deadline";
 import { profilePortrait, normalizeProfile, type UserProfile } from "@/lib/profile";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
@@ -190,7 +191,7 @@ export function subscribeIncomingMessages() {
 }
 
 async function signedInUserId() {
-  const { data } = await supabase.auth.getSession();
+  const { data } = await withDeadline(supabase.auth.getSession());
   return data.session?.user.id ?? null;
 }
 
@@ -440,7 +441,7 @@ async function loadConnections() {
 }
 
 async function currentUserId() {
-  const { data } = await supabase.auth.getSession();
+  const { data } = await withDeadline(supabase.auth.getSession());
   const userId = data.session?.user.id;
   if (!userId) throw new Error("Sign in again before sending a request.");
   return userId;
@@ -457,6 +458,7 @@ export async function sendMatchRequest(toUserId: string) {
 }
 
 export async function respondToMatch(requestId: string, accept: boolean) {
+  if (accept) await blockedUserIds();
   await transitionMatch(requestId, accept ? "accept" : "decline");
 }
 async function transitionMatch(requestId: string, action: string) {
@@ -502,6 +504,7 @@ export async function listMessages(matchId: string, me: string): Promise<MatchMe
 }
 
 export async function toggleMessageHeart(messageId: string, hearted: boolean) {
+  await blockedUserIds();
   const me = await currentUserId();
   const query = hearted
     ? supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", me)
@@ -511,6 +514,7 @@ export async function toggleMessageHeart(messageId: string, hearted: boolean) {
 }
 
 export async function sendMatchMessage(matchId: string, body: string) {
+  await blockedUserIds();
   const me = await currentUserId();
   const text = body.trim();
   if (!text) return;
@@ -524,6 +528,7 @@ export async function sendMatchMessage(matchId: string, body: string) {
 }
 
 export async function editMatchMessage(messageId: string, body: string) {
+  await blockedUserIds();
   const text = body.trim();
   if (!text) throw new Error("Message can't be empty.");
   const { data, error } = await supabase

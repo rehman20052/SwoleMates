@@ -1,3 +1,4 @@
+import { useWeightUnit } from "@/state/weight-unit";
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlatList, Modal, PanResponder, Platform, Pressable, StyleSheet, View, type LayoutRectangle, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
@@ -79,6 +80,7 @@ function pickerChoices(picker: { kind: "caption" | "prompt"; index: number } | n
 type ProfileScreenProps = {
   profile: UserProfile;
   saving: boolean;
+  saveProgress?: string;
   error: string | null;
   title?: string;
   initialMode?: "edit" | "view";
@@ -86,8 +88,9 @@ type ProfileScreenProps = {
   onSave: () => Promise<boolean>;
 };
 
-export function ProfileScreen({ profile, saving, error, title = "Edit Profile", initialMode = "view", onChange, onSave }: ProfileScreenProps) {
+export function ProfileScreen({ profile, saving, saveProgress, error, title = "Edit Profile", initialMode = "view", onChange, onSave }: ProfileScreenProps) {
   const theme = useAppTheme();
+  const { unit, formatWeight } = useWeightUnit();
   const nav = useNavigation();
   const [crop, setCrop] = useState<{ profile: UserProfile; uri: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -872,7 +875,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
             });
           }}
         >
-          {saving ? "Saving..." : "Save profile"}
+          {saving ? saveProgress || "Saving..." : "Save profile"}
         </PrimaryButton>
 
         <SecondaryButton height={44} fontSize={13} onPress={nav.signOut}>
@@ -910,7 +913,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                     style={[styles.weightItem, selected && { backgroundColor: theme.colors.surfaceRaised }]}
                   >
                     <AppText weight={selected ? "bold" : "medium"} primary={selected}>
-                      {item}
+                      {item === "N/A" ? item : `${formatWeight(Number.parseFloat(item))} ${unit}`}
                     </AppText>
                   </Pressable>
                 );
@@ -1037,6 +1040,7 @@ export function ProfilePreview({
   footer?: ReactNode;
 }) {
   const theme = useAppTheme();
+  const { unit, formatWeight } = useWeightUnit();
   const nav = useNavigation();
   const [hero, ...morePhotos] = profile.photos;
   const headline = [profile.fullName.trim() || "Your name", profile.age.trim()].filter(Boolean).join(", ");
@@ -1091,7 +1095,7 @@ export function ProfilePreview({
     </Card>,
     ...(profileLifts(profile).length ? [<Card key="lifts">
       <SectionLabel>Lifts</SectionLabel>
-      {profileLifts(profile).map(lift => <View key={lift.name} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}><AppText style={{ flex: 1 }}>{lift.name}</AppText><AppText weight="bold">{lift.weight} {lift.unit}</AppText></View>)}
+      {profileLifts(profile).map(lift => <View key={lift.name} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}><AppText style={{ flex: 1 }}>{lift.name}</AppText><AppText weight="bold">{formatWeight(lift.weight, lift.unit)} {unit}</AppText></View>)}
     </Card>] : []),
     <Card key="gym">
       <SectionLabel>Gym</SectionLabel>

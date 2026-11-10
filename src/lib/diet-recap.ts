@@ -34,9 +34,14 @@ function dietRange(today: string, start: string, end: string, food: Food[], main
   const totals = [...daily.values()].reduce((sum, row) => ({ calories: sum.calories + row.calories, protein: sum.protein + row.protein, carbs: sum.carbs + row.carbs, fats: sum.fats + row.fats }), { calories: 0, protein: 0, carbs: 0, fats: 0 });
   // Today's unfinished intake must not look like a large daily deficit.
   const past = [...daily.entries()].filter(([date]) => date < today);
+  const elapsedDays = days.filter(day => !day.future).length;
+  const pastDays = days.filter(day => day.date < today).length;
+  const missingDays = days.filter(day => day.date < today && day.totals === null).length;
+  const coverage = pastDays === 0 ? 'in-progress' : missingDays === 0 ? 'recorded' : past.length === 0 ? 'missing' : 'partial';
   const baseline = maintenance !== null && Number.isFinite(maintenance) && maintenance > 0 ? maintenance : null;
   const balance = baseline !== null && past.length ? past.reduce((sum, [, row]) => sum + row.calories - baseline, 0) : null;
-  return { start, end, days, totals, loggedDays: daily.size, balanceDays: past.length,
+  const canEstimate = end < today && pastDays > 0 && missingDays === 0 && balance !== null;
+  return { start, end, days, totals, elapsedDays, pastDays, missingDays, coverage, canEstimate, loggedDays: daily.size, balanceDays: past.length,
     averageCalories: daily.size ? totals.calories / daily.size : null,
     averageProtein: daily.size ? totals.protein / daily.size : null,
     averageCarbs: daily.size ? totals.carbs / daily.size : null,

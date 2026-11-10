@@ -3,7 +3,8 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Chip, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
-import { type FoodLogEntry, useAppData } from "@/state/app-data";
+import { useAppData } from "@/state/app-data";
+import { mealAt } from "@/lib/food-log-draft";
 import {
   allergens,
   applySwaps,
@@ -29,10 +30,6 @@ import {
   type Swaps,
 } from "@/lib/recipes";
 import { useAppTheme } from "@/theme";
-
-type Meal = FoodLogEntry["meal"];
-
-const meals: Meal[] = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
 function toggle<T>(list: T[], value: T) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -203,7 +200,6 @@ function RecipeDetail({ recipe, diets: chosenDiets, allergies, embedded, onBack 
   const [busy, setBusy] = useState(false);
   const [swaps, setSwaps] = useState<Swaps>({});
   const [swapping, setSwapping] = useState<string | null>(null);
-  const [meal, setMeal] = useState<Meal>("Dinner");
   const [servings, setServings] = useState(1);
 
   const lines = applySwaps(recipe, swaps);
@@ -225,11 +221,12 @@ function RecipeDetail({ recipe, diets: chosenDiets, allergies, embedded, onBack 
     setSwaps(rest);
   }
 
-  const alreadySaved = savedMeals.some((saved) => saved.name === logName && saved.meal === meal);
+  const alreadySaved = savedMeals.some((saved) => saved.name === recipe.name);
 
   async function logMeal() {
     if (busy) return;
     setBusy(true);
+    const meal = mealAt();
     const added = await addFoodEntry({ meal, name: logName, ...portion });
     setBusy(false);
     if (added) Alert.alert("Added to today", `${logName} was added to your ${meal.toLowerCase()} in the food journal.`);
@@ -238,9 +235,9 @@ function RecipeDetail({ recipe, diets: chosenDiets, allergies, embedded, onBack 
   async function saveToTracker() {
     if (busy || alreadySaved) return;
     setBusy(true);
-    const saved = await saveMeal({ meal, name: logName, ...portion });
+    const saved = await saveMeal({ meal: mealAt(), name: recipe.name, ...scaleMacros(macros, 1) });
     setBusy(false);
-    if (saved) Alert.alert("Saved", `${logName} is in Saved recipes on the tracker, so you can add it to any day in one tap.`);
+    if (saved) Alert.alert("Saved", `${recipe.name} is in Saved recipes on the tracker, so you can add it to any day in one tap.`);
   }
 
   return (
@@ -329,9 +326,6 @@ function RecipeDetail({ recipe, diets: chosenDiets, allergies, embedded, onBack 
       </Card>
 
       <SectionLabel>Log it</SectionLabel>
-      <View style={styles.wrap}>
-        {meals.map((option) => <Chip key={option} shape="tag" label={option} selected={meal === option} onPress={() => setMeal(option)} />)}
-      </View>
       <AppText size={12} weight="bold" muted upper>Servings</AppText>
       <View style={styles.wrap}>
         {servingOptions.map((option) => <Chip key={option} shape="tag" label={`${option}`} selected={servings === option} onPress={() => setServings(option)} />)}

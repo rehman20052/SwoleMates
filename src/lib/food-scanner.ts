@@ -1,21 +1,31 @@
 export type ScannedFood = {
+  provider?: string; externalId?: string; sourceUrl?: string;
   name: string; calories: number | null; protein: number | null; carbs: number | null; fats: number | null;
   basis: string; source: "barcode" | "label" | "manual"; barcode?: string;
 };
 export const nutritionKeys = ["calories", "protein", "carbs", "fats"] as const;
 export type ScanIngredient = {
+  reviewed?: boolean;
+  provider?: string;
+  externalId?: string;
+  sourceUrl?: string;
+  portion?: { unit: "g" | "oz" | "serving"; amount: number; text?: string };
   gramsPerServing?: number;
   id: string; name: string; basis: string; source: ScannedFood["source"]; servings: string;
   calories: string; protein: string; carbs: string; fats: string; barcode?: string;
 };
 export function scannedIngredient(food: ScannedFood): ScanIngredient {
   return { id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, name: food.name,
-    basis: food.basis, source: food.source, barcode: food.barcode, servings: "1", ...Object.fromEntries(nutritionKeys.map(key => [key, food[key] === null ? "" : String(food[key])])) } as ScanIngredient;
+    basis: food.basis, source: food.source, provider: food.provider, externalId: food.externalId, sourceUrl: food.sourceUrl, barcode: food.barcode, servings: "1", ...Object.fromEntries(nutritionKeys.map(key => [key, food[key] === null ? "" : String(food[key])])) } as ScanIngredient;
 }
 export function validScanIngredients(value: unknown): value is ScanIngredient[] {
   return Array.isArray(value) && value.length <= 100 && value.every(item => item &&
     ["id", "name", "basis", "servings", ...nutritionKeys].every(key => typeof item[key] === "string") &&
-    ["barcode", "label", "manual"].includes(item.source) && (item.barcode === undefined || typeof item.barcode === "string"));
+    ["barcode", "label", "manual"].includes(item.source) && (item.barcode === undefined || typeof item.barcode === "string")
+    && (item.gramsPerServing === undefined || Number.isFinite(item.gramsPerServing) && item.gramsPerServing > 0)
+    && ["provider", "externalId", "sourceUrl"].every(key => item[key] === undefined || typeof item[key] === "string")
+    && (item.reviewed === undefined || typeof item.reviewed === "boolean")
+    && (item.portion === undefined || item.portion && ["g", "oz", "serving"].includes(item.portion.unit) && Number.isFinite(item.portion.amount) && item.portion.amount >= 0 && (item.portion.text === undefined || typeof item.portion.text === "string")));
 }
 export function ingredientTotals(items: ScanIngredient[]) {
   // Keep unknown values unknown, rather than quietly counting them as zero.
@@ -24,7 +34,10 @@ export function ingredientTotals(items: ScanIngredient[]) {
     const known = validServings && items.every(item => nutrient(item[key]) !== null);
     return [key, known ? Math.round(items.reduce((sum, item) => sum + nutrient(item[key])! * nutrient(item.servings)!, 0) * 10) / 10 : null];
   })) as Pick<ScannedFood, "calories" | "protein" | "carbs" | "fats">;
-  return { ...totals, complete: items.length > 0 && validServings && items.every(item => item.name.trim()) && nutritionKeys.every(key => totals[key] !== null) };
+  const validValues = items.every(item => nutritionKeys.every(key => !item[key].trim() || nutrient(item[key]) !== null));
+  const loggable = items.length > 0 && validServings && validValues && items.every(item => item.name.trim()) && totals.calories !== null;
+  const known = Object.fromEntries(nutritionKeys.map(key => [key, Math.round(items.reduce((sum, item) => sum + (nutrient(item[key]) ?? 0) * (nutrient(item.servings) ?? 0), 0) * 10) / 10])) as Record<typeof nutritionKeys[number], number>;
+  return { ...totals, known, loggable, complete: loggable && nutritionKeys.every(key => totals[key] !== null) };
 }
 const nutrient = (value: unknown): number | null => {
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value.replace(",", ".")) : NaN;
@@ -53,21 +66,20 @@ export function barcodeProduct(data: unknown): ScannedFood {
     basis: serving ? `1 serving (${servingSize})` : "100 g / 100 ml — check the package", source: "barcode",
   };
 }
-const barcodeCache = new Map<string, ScannedFood>();
 export async function lookupBarcode(code: string, signal?: AbortSignal): Promise<ScannedFood> {
   const [{ normalizeBarcode }, { rememberedProduct }] = await Promise.all([import("@/scanning/barcodes"), import("@/scanning/product-memory")]);
   const normalized = normalizeBarcode(code);
-  const key = normalized.gtin14;
-  if (barcodeCache.has(key)) return { ...barcodeCache.get(key)! };
+
   const remembered = await rememberedProduct(normalized.value);
   if (remembered) return { name: remembered.name ?? "Scanned food", calories: remembered.calories, protein: remembered.protein, carbs: remembered.carbs, fats: remembered.fat,
-    basis: remembered.basis === "per_100g" ? "100 g / 100 ml — check the package" : remembered.servingSize ? `1 serving (${remembered.servingSize})` : "1 serving — check the package", source: "barcode", barcode: key };
+    basis: remembered.basis === "per_100g" ? /^100\s*(g|ml)$/i.test(remembered.servingSize ?? "") ? remembered.servingSize! : "100 g / 100 ml — check the package" : remembered.servingSize || "1 serving — check the package", source: "barcode", barcode: normalized.gtin14, provider: remembered.source === "user_confirmed" ? "Your confirmed product" : "Open Food Facts", externalId: normalized.gtin14 };
   const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(normalized.value)}.json?fields=product_name,product_name_en,nutriments,serving_size,serving_quantity,serving_quantity_unit`, { signal });
   if (!response.ok) throw new Error(response.status === 429 ? "Product lookup is busy. Try again shortly or photograph the label." : "Could not look up this barcode. Check your connection or photograph the label.");
   const food = barcodeProduct(await response.json());
   food.barcode = normalized.gtin14;
-  if (barcodeCache.size >= 100) barcodeCache.delete(barcodeCache.keys().next().value!);
-  barcodeCache.set(key, food);
+  food.provider = "Open Food Facts";
+  food.externalId = normalized.gtin14;
+  food.sourceUrl = `https://world.openfoodfacts.org/product/${normalized.value}`;
   return { ...food };
 }
 export function parseNutritionLabel(text: string): ScannedFood {

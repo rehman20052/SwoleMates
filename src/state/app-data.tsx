@@ -1,3 +1,4 @@
+import { withDeadline } from "@/lib/network-deadline";
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState, Platform } from "react-native";
@@ -102,6 +103,9 @@ export type NutritionTotals = {
 };
 
 export type FoodLogEntry = {
+  dataVersion?: 2;
+  incompleteNutrients?: ("protein" | "carbs" | "fats")[];
+  recipe?: { servings: number; finishedWeightGrams?: number; ingredients: import("@/lib/food-scanner").ScanIngredient[] };
   id: string;
   date: string;
   meal: "Breakfast" | "Lunch" | "Dinner" | "Snack";
@@ -162,7 +166,7 @@ type AppDataContextValue = AppData & {
   updateNutrition: (nutrition: NutritionGoals) => Promise<boolean>;
   nutritionPlanReady: boolean;
   nutritionPlanError: string | null;
-  addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">, date?: string) => Promise<boolean>;
+  addFoodEntry: (entry: Omit<FoodLogEntry, "id" | "date">, date?: string, recordId?: string) => Promise<boolean>;
   updateFoodEntry: (entryId: string, entry: Omit<FoodLogEntry, "id" | "date">) => Promise<boolean>;
   deleteFoodEntry: (entryId: string) => Promise<boolean>;
   restoreFoodEntry: (entry: FoodLogEntry) => Promise<boolean>;
@@ -171,7 +175,7 @@ type AppDataContextValue = AppData & {
   foodJournalError: string | null;
   recipesReady: boolean;
   recipeStorageError: string | null;
-  saveMeal: (meal: Omit<SavedMeal, "id">) => Promise<boolean>;
+  saveMeal: (meal: Omit<SavedMeal, "id">, recordId?: string) => Promise<boolean>;
   updateSavedMeal: (mealId: string, meal: Omit<SavedMeal, "id">) => Promise<boolean>;
   deleteSavedMeal: (mealId: string) => Promise<boolean>;
   updateNutritionProfile: (profile: NutritionProfile) => Promise<boolean>;
@@ -384,6 +388,19 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     let refreshing = false;
     let refreshAgain = false;
     let currentOwner: string | null = null;
+    let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+    const cacheChanged = () => {
+      if (cacheTimer) return;
+      cacheTimer = setTimeout(() => {
+        cacheTimer = null;
+        const stores = accountStores.current;
+        const version = accountGeneration.current;
+        if (!active || !stores) return;
+        void cachedAccountStores(stores, defaultNutrition).then(snapshot => {
+          if (active && snapshot && version === accountGeneration.current && stores === accountStores.current) applySnapshot(snapshot);
+        }).catch(() => { /* Preserve the last valid view if device storage cannot be read. */ });
+      }, 16);
+    };
     function applySnapshot(snapshot: Awaited<ReturnType<typeof loadAccountStores>>) {
       const stores = accountStores.current;
       if (stores) setSaveFeedback({ food: stores.food.status(), recipes: stores.recipes.status(), plan: stores.plan.status(), lifts: stores.lifts.status(), workouts: stores.logs.status(), drafts: stores.settings.status() });
@@ -399,8 +416,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!active) return;
       if (refreshing) { refreshAgain = true; return; }
       if (owner !== currentOwner || force || (owner && !accountStores.current)) {
+        if (accountStores.current) for (const store of Object.values(accountStores.current)) if (typeof store === "object" && "dispose" in store) store.dispose();
         currentOwner = owner; loaded = false; accountGeneration.current++;
-        accountStores.current = owner ? createAccountStores(owner) : null;
+        accountStores.current = owner ? createAccountStores(owner, cacheChanged) : null;
         setDashboardHydrated(false); setData(seedData());
         setRecipeStorageError(null); setFoodJournalError(null); setWorkoutStorageError(null);
         setNutritionPlanError(null); setLiftStorageError(null); setSyncError(null);
@@ -410,7 +428,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!owner || !stores) return;
       const generation = accountGeneration.current;
       refreshing = true;
-      const operation = accountQueue.current.then(async () => {
+      const operation = (async () => {
         if (!active || generation !== accountGeneration.current) return;
         try {
           if (!loaded) {
@@ -437,8 +455,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             setNutritionPlanError(message); setLiftStorageError(message);
           }
         }
-      });
-      accountQueue.current = operation.catch(() => undefined);
+      })();
       await operation; refreshing = false;
       if (refreshAgain) { refreshAgain = false; foreground(); }
     };
@@ -454,18 +471,19 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         .on("postgres_changes", { event: "*", schema: "public", table: "account_records", filter: `user_id=eq.${owner}` }, () => foreground())
         .subscribe(status => { if (!active || channelOwner !== owner) return; realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
     };
-    void supabase.auth.getSession().then(({ data }) => {
+    void withDeadline(supabase.auth.getSession()).then(({ data }) => {
       if (!active) return;
       const owner = data.session?.user.id ?? null;
       bindAccountChannel(owner);
       if (owner === currentOwner && accountStores.current) return;
       return refresh(owner);
-    });
+    }).catch(() => { if (active) setSyncError("Could not verify your account. Retry the connection or sign in again."); });
     const { data: auth } = supabase.auth.onAuthStateChange((event, session) => {
       const owner = session?.user.id ?? null;
-      bindAccountChannel(owner);
+      setTimeout(() => { if (active && currentOwner === owner) bindAccountChannel(owner); }, 0);
       if (event === "SIGNED_OUT" || owner !== currentOwner) {
         // Clear the old account synchronously, even while a server call is pending.
+        if (accountStores.current) for (const store of Object.values(accountStores.current)) if (typeof store === "object" && "dispose" in store) store.dispose();
         accountGeneration.current++; accountStores.current = null;
         currentOwner = owner; loaded = false; setDashboardHydrated(false); setData(seedData());
         setTimeout(() => {
@@ -481,7 +499,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (stores && Object.values(stores).some(store => typeof store === "object" && "status" in store && store.status().phase === "pending")) foreground();
     }, 5000);
     return () => {
-      active = false; accountGeneration.current++; updates.stop(); clearInterval(retryTimer); if (channel) void supabase.removeChannel(channel); auth.subscription.unsubscribe();
+      if (accountStores.current) for (const store of Object.values(accountStores.current)) if (typeof store === "object" && "dispose" in store) store.dispose();
+      active = false; if (cacheTimer) clearTimeout(cacheTimer); accountGeneration.current++; updates.stop(); clearInterval(retryTimer); if (channel) void supabase.removeChannel(channel); auth.subscription.unsubscribe();
     };
   }, [retrySync]);
 
@@ -489,7 +508,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     let active = true;
 
     const applySaved = async () => {
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session } = await withDeadline(supabase.auth.getSession());
       if (!active) return;
       if (!session.session?.user.id) {
         setDiscoverPrefsLoaded(true);
@@ -505,13 +524,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       setDiscoverPrefsLoaded(true);
     };
 
-    void applySaved();
+    void applySaved().catch(() => { if (active) setDiscoverPrefsLoaded(true); });
     const { data: auth } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
         filtersTouched.current = false;
         setDiscoverPrefsLoaded(false);
         setTimeout(() => {
-          void applySaved();
+          void applySaved().catch(() => { if (active) setDiscoverPrefsLoaded(true); });
         }, 0);
       }
       if (event === "SIGNED_OUT") {
@@ -600,7 +619,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           const snapshot = await refreshAccountStores(stores, defaultNutrition);
           if (generation !== accountGeneration.current) return;
           setData(current => ({ ...current, savedMeals: snapshot.recipes, foodEntries: snapshot.foodEntries, logs: snapshot.logs, trackedLifts: snapshot.lifts, workspaceSettings: snapshot.workspaceSettings,
-            nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile }));
+            nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile, nutritionGoalSource: nutritionGoalSource(snapshot.plan) }));
           setSaveFeedback(current => ({ ...current, [area]: store.status() }));
         } catch (error) { if (generation === accountGeneration.current) setSyncError(accountSyncError(error)); }
       },
@@ -610,21 +629,22 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const retry = saveRetries.current[area];
         if (retry) return retry();
         const setError = area === "food" ? setFoodJournalError : area === "recipes" ? setRecipeStorageError : area === "plan" ? setNutritionPlanError : area === "lifts" ? setLiftStorageError : area === "drafts" ? setDraftStorageError : setWorkoutStorageError;
-        return persistAccount(async stores => {
-          const store = area === "food" ? stores.food : area === "recipes" ? stores.recipes : area === "plan" ? stores.plan : area === "lifts" ? stores.lifts : area === "drafts" ? stores.settings : stores.logs;
-          await store.retry();
-          if (store.status().phase === "error") throw new Error(store.status().message ?? "Could not sync this change. Please try again.");
-          if (area === "food") return { foodEntries: await stores.food.cached() ?? [] };
-          if (area === "recipes") return { savedMeals: await stores.recipes.cached() ?? [] };
-          if (area === "lifts") return { trackedLifts: await stores.lifts.cached() ?? [] };
-          if (area === "drafts") return { workspaceSettings: await stores.settings.cached() ?? [] };
-          if (area === "plan") {
-            const plan = (await stores.plan.cached())?.[0];
-            if (!plan) throw new Error("Could not read your saved nutrition plan.");
-            return { nutrition: { ...defaultNutrition, ...plan.goals }, nutritionProfile: plan.profile, nutritionGoalSource: nutritionGoalSource(plan) };
-          }
-          return { logs: mergeVerifiedLogs(await stores.logs.cached() ?? [], data.logs.filter(log => log.checkedIn && log.plannedWorkoutId), data.deletedWorkoutIds) };
-        }, setError);
+        const stores = accountStores.current;
+        if (!stores) return Promise.resolve(false);
+        const generation = accountGeneration.current;
+        return (async () => {
+          try {
+            const store = area === "food" ? stores.food : area === "recipes" ? stores.recipes : area === "plan" ? stores.plan : area === "lifts" ? stores.lifts : area === "drafts" ? stores.settings : stores.logs;
+            await store.retry();
+            if (generation !== accountGeneration.current || stores !== accountStores.current) return false;
+            const snapshot = await cachedAccountStores(stores, defaultNutrition);
+            if (snapshot && generation === accountGeneration.current) setData(current => ({ ...current, foodEntries: snapshot.foodEntries, savedMeals: snapshot.recipes, trackedLifts: snapshot.lifts, workspaceSettings: snapshot.workspaceSettings, nutrition: { ...defaultNutrition, ...snapshot.plan.goals }, nutritionProfile: snapshot.plan.profile, nutritionGoalSource: nutritionGoalSource(snapshot.plan) }));
+            const status = store.status();
+            setSaveFeedback(current => ({ ...current, [area]: status }));
+            setError(status.phase === "error" ? status.message ?? "Could not sync. Try again." : null);
+            return status.phase === "saved";
+          } catch (error) { if (generation === accountGeneration.current) setError(accountSyncError(error)); return false; }
+        })();
       },
       liftStorageError,
       accountSyncError: syncError,
@@ -790,13 +810,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       updateNutrition(nutrition) {
         return persistPlan((current) => ({ ...current, goals: nutrition, goalSource: "manual" }));
       },
-      async addFoodEntry(entry, date = daysFromToday(0)) {
-        const nextEntry: FoodLogEntry = { ...entry, id: `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, date };
+      async addFoodEntry(entry, date = daysFromToday(0), recordId) {
+        const nextEntry: FoodLogEntry = { ...entry, id: recordId ?? `food-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, date };
         if (!isFoodEntry(nextEntry)) return false;
-        return persistFood((current) => [nextEntry, ...current]);
+        return persistFood((current) => current.some(item => item.id === nextEntry.id) ? current : [nextEntry, ...current]);
       },
       async updateFoodEntry(entryId, entry) {
-        return persistFood((current) => current.map((saved) => saved.id === entryId ? { ...saved, ...entry } : saved));
+        return persistFood((current) => {
+          if (!current.some(saved => saved.id === entryId)) throw new Error("This food was deleted on another device. Close the editor and refresh your journal.");
+          return current.map((saved) => saved.id === entryId ? { ...saved, ...entry } : saved);
+        });
       },
       async deleteFoodEntry(entryId) {
         return persistFood((current) => current.filter((item) => item.id !== entryId));
@@ -805,17 +828,25 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return persistAccount(async stores => ({ foodEntries: await stores.food.change(current => current.some(item => item.id===entry.id) ? current : [entry,...current], [entry.id]) }), setFoodJournalError);
       },
       copyFoodMeal(sourceDate, sourceMeal, destinationDate, destinationMeal) {
+        const ids = new Map<string, string>();
         return persistFood(current => {
-          const copies = current.filter(entry => entry.date===sourceDate && entry.meal===sourceMeal).map(entry => ({ ...entry,id:`food-${Date.now()}-${Math.random().toString(36).slice(2,10)}`,date:destinationDate,meal:destinationMeal }));
+          const copies = current.filter(entry => entry.date===sourceDate && entry.meal===sourceMeal && ![...ids.values()].includes(entry.id)).map(entry => {
+            if (!ids.has(entry.id)) ids.set(entry.id, `food-${Date.now()}-${Math.random().toString(36).slice(2,10)}`);
+            return { ...entry, id: ids.get(entry.id)!, date: destinationDate, meal: destinationMeal };
+          });
           if (!copies.length) throw new Error("No foods in that source meal.");
-          return [...copies,...current];
+          return [...copies.filter(copy => !current.some(entry => entry.id === copy.id)),...current];
         });
       },
-      async saveMeal(meal) {
-        return persistRecipes((current) => [{ ...meal, id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }, ...current]);
+      async saveMeal(meal, recordId) {
+        const id = recordId ?? `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        return persistRecipes((current) => current.some(item => item.id === id) ? current : [{ ...meal, id }, ...current]);
       },
       async updateSavedMeal(mealId, meal) {
-        return persistRecipes((current) => current.map((saved) => (saved.id === mealId ? { ...saved, ...meal } : saved)));
+        return persistRecipes((current) => {
+          if (!current.some(saved => saved.id === mealId)) throw new Error("This saved recipe was deleted on another device. Close the editor and refresh your library.");
+          return current.map((saved) => (saved.id === mealId ? { ...saved, ...meal } : saved));
+        });
       },
       async deleteSavedMeal(mealId) {
         return persistRecipes((current) => current.filter((saved) => saved.id !== mealId));
@@ -824,7 +855,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return persistPlan((current) => {
           const weighIns = new Map([...(profile.weighIns ?? []), ...(current.profile?.weighIns ?? [])].map((entry) => [entry.date, entry]));
           const savedProfile = { ...profile, weighIns: [...weighIns.values()].sort((a, b) => a.date.localeCompare(b.date)) };
-          return { profile: savedProfile, goals: goalsFromProfile(savedProfile), goalSource: "estimated" };
+          return { ...current, profile: savedProfile, goals: goalsFromProfile(savedProfile), goalSource: "estimated" };
         });
       },
       logWeighIn(weightLb) {

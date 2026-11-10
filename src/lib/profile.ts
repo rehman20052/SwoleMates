@@ -5,6 +5,7 @@ import { readLocalBytes } from "@/lib/local-file";
 import { supabase } from "@/lib/supabase";
 import { legacyLiftFields, profileLifts, type ProfileLift } from "./profile-lifts";
 import { lookupUsZip } from "@/lib/zip-location";
+import { withDeadline, ACCOUNT_WRITE_TIMEOUT, MEDIA_UPLOAD_TIMEOUT } from "./network-deadline";
 
 export type ProfileGender = "" | "Male" | "Female" | "Other";
 
@@ -495,14 +496,14 @@ function pounds(value: string) {
   return Number.isFinite(number) ? number : null;
 }
 
-async function saveGym(account: AccountProfile): Promise<string | null> {
+async function saveGym(account: AccountProfile, signal: AbortSignal): Promise<string | null> {
   if (!account.primaryGym) return null;
 
   // Search results without an OpenStreetMap ID get a stand-in like "place:<address>", which isn't stable.
   const osmId = account.gymPlaceId && !account.gymPlaceId.startsWith("place:") ? account.gymPlaceId : null;
 
   if (osmId) {
-    const { data: byOsm, error } = await supabase.from("gym").select("id").eq("osm_id", osmId).limit(1);
+    const { data: byOsm, error } = await supabase.from("gym").select("id").eq("osm_id", osmId).limit(1).abortSignal(signal);
     if (error) throw error;
     if (byOsm && byOsm.length > 0) return byOsm[0].id as string;
   }
@@ -512,13 +513,13 @@ async function saveGym(account: AccountProfile): Promise<string | null> {
     .from("gym")
     .select("id, osm_id")
     .eq("address", account.gymAddress)
-    .limit(1);
+    .limit(1).abortSignal(signal);
   if (addressError) throw addressError;
   if (byAddress && byAddress.length > 0) {
     const gym = byAddress[0] as { id: string; osm_id: string | null };
     if (osmId && !gym.osm_id) {
       // Fill in the missing ID. Skipped quietly if the gym table has no update policy.
-      await supabase.from("gym").update({ osm_id: osmId }).eq("id", gym.id);
+      await supabase.from("gym").update({ osm_id: osmId }).eq("id", gym.id).abortSignal(signal);
     }
     return gym.id;
   }
@@ -531,23 +532,23 @@ async function saveGym(account: AccountProfile): Promise<string | null> {
     address: account.gymAddress,
     latitude: account.gymLatitude,
     longitude: account.gymLongitude,
-  });
+  }).abortSignal(signal);
   if (error) throw error;
   return id;
 }
 
-async function replaceRows(table: string, userId: string, rows: Record<string, unknown>[]) {
-  const { error: deleteError } = await supabase.from(table).delete().eq("user_id", userId);
+async function replaceRows(table: string, userId: string, rows: Record<string, unknown>[], signal: AbortSignal) {
+  const { error: deleteError } = await supabase.from(table).delete().eq("user_id", userId).abortSignal(signal);
   if (deleteError) throw deleteError;
   if (rows.length === 0) return;
-  const { error } = await supabase.from(table).insert(rows);
+  const { error } = await supabase.from(table).insert(rows).abortSignal(signal);
   if (error) throw error;
 }
 
 // Writes the profile to user_account and its child tables. The gym goes first
 // because user_account points to it, and the user row goes before the rows that point to it.
-async function saveProfileTables(userId: string, account: AccountProfile) {
-  const homeGymId = await saveGym(account);
+async function saveProfileTables(userId: string, account: AccountProfile, signal: AbortSignal) {
+  const homeGymId = await saveGym(account, signal);
 
   const { error } = await supabase.from("user_account").upsert({
     id: userId,
@@ -567,7 +568,7 @@ async function saveProfileTables(userId: string, account: AccountProfile) {
     custom_lift_name: account.customLiftName || null,
     custom_lift_lbs: pounds(account.customLift),
     updated_at: new Date().toISOString(),
-  });
+  }).abortSignal(signal);
   if (error) throw error;
 
   await replaceRows(
@@ -579,48 +580,53 @@ async function saveProfileTables(userId: string, account: AccountProfile) {
       storage_path: path,
       caption: account.photoCaptions[index] || null,
       sort_order: index + 1,
-    })),
+    })), signal,
   );
   await replaceRows(
     "profile_prompt",
     userId,
-    account.prompts.map((item, index) => ({ user_id: userId, prompt: item.prompt, answer: item.answer, sort_order: index + 1 })),
+    account.prompts.map((item, index) => ({ user_id: userId, prompt: item.prompt, answer: item.answer, sort_order: index + 1 })), signal,
   );
   await replaceRows(
     "user_availability",
     userId,
-    account.availabilityDays.flatMap((day) => account.availabilityTimes.map((time) => ({ user_id: userId, day, time_of_day: time }))),
+    account.availabilityDays.flatMap((day) => account.availabilityTimes.map((time) => ({ user_id: userId, day, time_of_day: time }))), signal,
   );
   await replaceRows(
     "user_goal",
     userId,
-    account.selectedGoals.map((goal) => ({ user_id: userId, goal })),
+    account.selectedGoals.map((goal) => ({ user_id: userId, goal })), signal,
   );
 }
 
 export async function loadProfile(): Promise<UserProfile | null> {
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await withDeadline(supabase.auth.getUser());
   if (error) throw error;
   return profileFromUser(data.user);
 }
 
 async function sessionForSave() {
-  const current = await supabase.auth.getSession();
+  const current = await withDeadline(supabase.auth.getSession());
   if (!current.data.session) throw new Error("Sign in again before saving your profile.");
 
-  const authed = await supabase.auth.getUser();
+  const authed = await withDeadline(supabase.auth.getUser());
   if (!authed.error && authed.data.user) {
-    return (await supabase.auth.getSession()).data.session ?? current.data.session;
+    return (await withDeadline(supabase.auth.getSession())).data.session ?? current.data.session;
   }
 
-  const refreshed = await supabase.auth.refreshSession();
+  const refreshed = await withDeadline(supabase.auth.refreshSession());
   if (refreshed.error || !refreshed.data.session) {
     throw new Error("Sign in again before saving your profile.");
   }
   return refreshed.data.session;
 }
 
-export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
+export class PartialProfileSaveError extends Error {
+  readonly stage = "profile-tables";
+  constructor(readonly profile: UserProfile) { super("Your profile details were saved, but account synchronization did not finish. Your edits are preserved; save again to retry."); }
+}
+
+export async function saveProfile(profile: UserProfile, onProgress?: (message: string) => void): Promise<UserProfile> {
   if (profile.photos[0] && profileMediaKind(profile.photos[0], profile.photoMedia[0]) === "video") {
     throw new Error("Choose a photo for the first slot. Videos can go in the other slots.");
   }
@@ -639,7 +645,7 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
   let place = null;
   if (zip) {
     try {
-      place = await lookupUsZip(zip);
+        place = await withDeadline(lookupUsZip(zip));
     } catch (error) {
       if (error instanceof Error && error.message !== "Failed to fetch") throw error;
       throw new Error("Could not look up that zip code. Check your connection and try again.");
@@ -654,46 +660,59 @@ export async function saveProfile(profile: UserProfile): Promise<UserProfile> {
   let account: AccountProfile;
   let avatarPath: string | undefined;
   const mediaUploads: string[] = [];
+  let metadataStarted = false;
+  const assertOwner = async () => {
+    const { data } = await withDeadline(supabase.auth.getSession());
+    if (data.session?.user.id !== userId) throw new Error("Your account changed. Reopen your profile before saving.");
+  };
   try {
     const chosen = profile.photos.slice(0, 6);
     for (let index = 0; index < chosen.length; index += 1) {
-      const path = await uploadProfileMedia(userId, chosen[index], profile.photoMedia[index] ?? "image");
+      onProgress?.(`Saving photo or video ${index + 1} of ${chosen.length}…`);
+      await assertOwner();
+      const path = await withDeadline(uploadProfileMedia(userId, chosen[index], profile.photoMedia[index] ?? "image"), MEDIA_UPLOAD_TIMEOUT);
       uploaded.push(path); mediaUploads.push(path);
     }
 
     if (profile.avatar && chosen.length > 0) {
-      avatarPath = await uploadProfileMedia(userId, profile.avatar, "image");
+      onProgress?.("Saving your profile picture…");
+      avatarPath = await withDeadline(uploadProfileMedia(userId, profile.avatar, "image"), MEDIA_UPLOAD_TIMEOUT);
       mediaUploads.push(avatarPath);
     }
     account = accountProfile(profile, uploaded, location, avatarPath);
-    const { error } = await supabase.auth.updateUser({
+    await assertOwner();
+    onProgress?.("Saving your profile details…");
+    metadataStarted = true;
+    const { error } = await withDeadline(supabase.auth.updateUser({
       data: { profile: account },
-    });
+    }), ACCOUNT_WRITE_TIMEOUT);
     if (error) {
       if (/auth session missing/i.test(error.message)) throw new Error("Sign in again before saving your profile.");
       throw error;
     }
   } catch (error) {
     const freshUploads = mediaUploads.filter((path) => !previous.includes(path));
-    if (freshUploads.length > 0) {
-      await supabase.storage.from(PHOTO_BUCKET).remove(freshUploads);
+    if (freshUploads.length > 0 && !metadataStarted) {
+      void withDeadline(supabase.storage.from(PHOTO_BUCKET).remove(freshUploads), ACCOUNT_WRITE_TIMEOUT).catch(() => undefined);
     }
     throw error;
   }
 
-  const removed = previous.filter((path) => !mediaUploads.includes(path));
-  if (removed.length > 0) {
-    await supabase.storage.from(PHOTO_BUCKET).remove(removed);
+  // The JSON copy above still drives the app while the screens move over to the tables.
+  const saved = { ...profile, ...location, avatar: avatarPath ? publicPhotoUrl(avatarPath) : undefined, photos: uploaded.map(publicPhotoUrl) };
+  try {
+    await assertOwner();
+    onProgress?.("Synchronizing your account profile…");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ACCOUNT_WRITE_TIMEOUT);
+    try { await saveProfileTables(userId, account, controller.signal); } finally { clearTimeout(timer); }
+  } catch (error) {
+    // Keep newly uploaded media paths in the editable form, so retrying a
+    // partial save does not upload duplicates or delete still-referenced media.
+    throw new PartialProfileSaveError(saved);
   }
   clearStoredPhotos(userId);
-
-  // The JSON copy above still drives the app while the screens move over to the tables.
-  try {
-    await saveProfileTables(userId, account);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : (error as { message?: string })?.message ?? "";
-    throw new Error(`Your profile was saved, but not to the user_account tables. ${detail}`.trim());
-  }
-
-  return { ...profile, ...location, avatar: avatarPath ? publicPhotoUrl(avatarPath) : undefined, photos: uploaded.map(publicPhotoUrl) };
+  const removed = previous.filter(path => !mediaUploads.includes(path));
+  if (removed.length) void withDeadline(supabase.storage.from(PHOTO_BUCKET).remove(removed), ACCOUNT_WRITE_TIMEOUT).catch(() => undefined);
+  return saved;
 }

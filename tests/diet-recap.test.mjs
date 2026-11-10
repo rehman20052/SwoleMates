@@ -59,3 +59,31 @@ test('unknown maintenance, invalid rows and year boundaries are handled without 
     assert.equal(result.loggedDays, 1); assert.equal(result.balance, null);
   }
 });
+
+test('coverage distinguishes missing past days from today and upcoming dates', () => {
+  const partial = dietWeek('2026-11-03', '2026-11-03', 0, [row('2026-11-03', 718)], 2500);
+  assert.equal(partial.elapsedDays, 2);
+  assert.equal(partial.pastDays, 1);
+  assert.equal(partial.missingDays, 1);
+  assert.equal(partial.coverage, 'missing');
+  assert.equal(partial.canEstimate, false);
+  assert.equal(partial.averageCalories, 718); // Missing days are unknown, never zero.
+  const monday = dietWeek('2026-11-02', '2026-11-02', 0, [], 2500);
+  assert.equal(monday.coverage, 'in-progress');
+  assert.equal(monday.missingDays, 0);
+  assert.equal(monday.canEstimate, false);
+});
+
+test('estimates require a finished period with every day marked complete', () => {
+  const food = ['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31','2026-11-01'].map(date => row(date, 2000));
+  const complete = dietWeek('2026-11-03', '2026-11-03', -1, food, 2500);
+  assert.equal(complete.coverage, 'recorded');
+  assert.equal(complete.canEstimate, true);
+  assert.equal(complete.missingDays, 0);
+  assert.equal(dietWeek('2026-11-01', '2026-11-01', 0, food, 2500).canEstimate, false);
+  const partial = dietWeek('2026-11-03', '2026-11-03', -1, food.slice(1), 2500);
+  assert.equal(partial.coverage, 'partial');
+  assert.equal(partial.canEstimate, false);
+  assert.equal(partial.averageCalories, 2000);
+  assert.equal(dietWeek('2026-11-03', '2026-11-03', -1, food, null).canEstimate, false);
+});

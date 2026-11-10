@@ -44,11 +44,18 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SwoleMates uses your photos for your profile."
+          "photosPermission": "SwoleMates uses selected photos for your profile and nutrition labels."
         }
       ],
       "expo-video",
-      "react-native-compressor"
+      "react-native-compressor",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SwoleMates uses your camera to scan food barcodes and nutrition labels.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

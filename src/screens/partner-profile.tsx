@@ -1,3 +1,4 @@
+import { useWeightUnit } from "@/state/weight-unit";
 import { AppAlert as Alert } from "@/components/app-alert";
 import { Image } from "expo-image";
 import { PropsWithChildren, ReactNode } from "react";
@@ -91,6 +92,7 @@ export function PartnerDetails({
   onRemoved?: () => void;
 }) {
   const theme = useAppTheme();
+  const { unit, formatWeight } = useWeightUnit();
   const nav = useNavigation();
   const { block, review } = useAppData();
 
@@ -198,9 +200,9 @@ export function PartnerDetails({
         </Section>
 
         <Section title="Key Lifts">
-          <StatBox label="Bench Press" value={`${partner.lifts.bench} lb`} />
-          <StatBox label="Squat" value={`${partner.lifts.squat} lb`} />
-          <StatBox label="Deadlift" value={`${partner.lifts.deadlift} lb`} />
+          <StatBox label="Bench Press" value={`${formatWeight(partner.lifts.bench)} ${unit}`} />
+          <StatBox label="Squat" value={`${formatWeight(partner.lifts.squat)} ${unit}`} />
+          <StatBox label="Deadlift" value={`${formatWeight(partner.lifts.deadlift)} ${unit}`} />
         </Section>
 
         <Section title="Scores">

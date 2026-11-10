@@ -1,7 +1,5 @@
 import { AppAlert as Alert } from "@/components/app-alert";
 import { FoodLogSheet } from "@/components/food-log-sheet";
-import { FoodScanner } from "@/components/food-scanner";
-import { ingredientTotals, scannedIngredient, type ScanIngredient } from "@/lib/food-scanner";
 import { HomeBackdrop } from "@/components/home-backdrop";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
@@ -9,6 +7,7 @@ import Svg, { Circle } from "react-native-svg";
 
 import { AppText, Card, Field, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
 import { sumFoodEntries } from "@/lib/food-journal";
+import { savedRecipeServing } from "@/lib/food-log-draft";
 import { daysFromToday, type FoodLogEntry, type SavedMeal, useAppData } from "@/state/app-data";
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
 import { SaveFeedback } from "@/components/save-feedback";
@@ -16,7 +15,6 @@ import { MacroPlanCard } from "@/components/macro-plan-card";
 import { useNavigation } from "@/navigation";
 import { Image } from "expo-image";
 import { TrainingCard } from "@/components/training-card";
-import { saveArtworkPhoto, type ArtworkDraft } from "@/lib/artwork-photo";
 import { useAppTheme } from "@/theme";
 
 type Meal = FoodLogEntry["meal"];
@@ -38,7 +36,7 @@ const journalTabs = [
   { value: "Recipes", label: "Recipes" },
 ] as const;
 
-function FuelMacroRow({ label, current, target, color }: { label: string; current: number; target: number; color: string }) {
+function FuelMacroRow({ label, current, target, color, incomplete }: { label: string; current: number; target: number; color: string; incomplete?: boolean }) {
   const theme = useAppTheme();
   const progress = Math.min(1, current / Math.max(1, target));
   return (
@@ -47,7 +45,7 @@ function FuelMacroRow({ label, current, target, color }: { label: string; curren
         <View style={[styles.fuelMacroDot, { backgroundColor: color }]} />
         <AppText size={13} weight="semibold" style={{ flex: 1 }}>{label}</AppText>
         <AppText size={13} weight="bold" style={{ fontVariant: ["tabular-nums"] }}>
-          {Math.round(current)}<AppText size={11} muted> / {target}g</AppText>
+          {incomplete ? "Known " : ""}{Math.round(current)}<AppText size={11} muted> / {target}g</AppText>
         </AppText>
       </View>
       <View
@@ -62,7 +60,7 @@ function FuelMacroRow({ label, current, target, color }: { label: string; curren
   );
 }
 
-function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein, proteinGoal, carbs, carbGoal, fats, fatGoal, onEditGoals }: {
+function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein, proteinGoal, carbs, carbGoal, fats, fatGoal, onEditGoals, incomplete = [] }: {
   dayLabel: string;
   entryCount: number;
   calories: number;
@@ -74,6 +72,7 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   fats: number;
   fatGoal: number;
   onEditGoals: () => void;
+  incomplete?: string[];
 }) {
   const theme = useAppTheme();
   const overGoal = calories > calorieGoal;
@@ -84,9 +83,9 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringColor = overGoal ? theme.colors.warning : theme.colors.accent;
   const macros = [
-    { label: "Protein", current: protein, target: proteinGoal, color: theme.colors.protein },
-    { label: "Carbs", current: carbs, target: carbGoal, color: theme.colors.carbs },
-    { label: "Fat", current: fats, target: fatGoal, color: theme.colors.fat },
+    { label: "Protein", current: protein, target: proteinGoal, incomplete: incomplete.includes("protein"), color: theme.colors.protein },
+    { label: "Carbs", current: carbs, target: carbGoal, incomplete: incomplete.includes("carbs"), color: theme.colors.carbs },
+    { label: "Fat", current: fats, target: fatGoal, incomplete: incomplete.includes("fats"), color: theme.colors.fat },
   ];
 
   return (
@@ -163,20 +162,16 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
   const nav = useNavigation();
   const framed = Platform.OS === "web" && frame.width > 450;
   const phoneHeight = Math.min(874, frame.height - 32);
-  const { addFoodEntry, updateFoodEntry, deleteFoodEntry, deleteSavedMeal, foodEntries, foodJournalReady, foodJournalError, logWeighIn, nutrition, nutritionProfile, nutritionGoalSource, nutritionPlanReady, nutritionPlanError, recipesReady, recipeStorageError, saveMeal, savedMeals, updateNutrition, updateNutritionProfile, updateSavedMeal } = useAppData();
+  const { addFoodEntry, deleteFoodEntry, deleteSavedMeal, foodEntries, foodJournalReady, foodJournalError, logWeighIn, nutrition, nutritionProfile, nutritionGoalSource, nutritionPlanReady, nutritionPlanError, recipesReady, recipeStorageError, saveMeal, savedMeals, updateNutrition, updateNutritionProfile } = useAppData();
   const [savingPlan, setSavingPlan] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [savingRecipe, setSavingRecipe] = useState(false);
   const addingSavedMeal = useRef(false);
+  const savedMealAttempts = useRef(new Map<string, { id: string; serving: ReturnType<typeof savedRecipeServing> }>());
+  const lastSavedMeal = useRef<{ key: string; at: number; category: Meal } | null>(null);
   const [addingSavedMealId, setAddingSavedMealId] = useState<string | null>(null);
   const [savedMealFeedback, setSavedMealFeedback] = useState<{ id: string; date: string; account: string | null; message: string; success: boolean } | null>(null);
-  const [showAddFood, setShowAddFood] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [scannedIngredients, setScannedIngredients] = useState<ScanIngredient[]>([]);
-  const [savingNewRecipe, setSavingNewRecipe] = useState(false);
-  const [editingRecipe, setEditingRecipe] = useState<SavedMeal | null>(null);
-  const [editingFood, setEditingFood] = useState<FoodLogEntry | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [foodForm, setFoodForm] = useState<{ date: string; recipeOnly: boolean; entry: FoodLogEntry | SavedMeal | null } | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showGoals, setShowGoals] = useState(false);
   const [journalTab, setJournalTab] = useState<"Journal" | "Recipes" | "Plan">("Journal");
@@ -184,13 +179,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
   const [collapsedMeals, setCollapsedMeals] = useState<Meal[]>([]);
   const [expandedFoodId, setExpandedFoodId] = useState<string | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
-  const [meal, setMeal] = useState<Meal>("Breakfast");
-  const [name, setName] = useState("");
-  const [artwork, setArtwork] = useState<ArtworkDraft>();
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fats, setFats] = useState("");
   const [goalValues, setGoalValues] = useState({ calories: "", protein: "", carbs: "", fats: "" });
   const { accountUserId, workspaceSettings, saveWorkspaceSetting, restoreFoodEntry, copyFoodMeal } = useAppData();
   const [undo, setUndo] = useState<{ entry: FoodLogEntry; until: number } | null>(null);
@@ -223,8 +211,9 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
     try {
       const duplicate = savedMeals.some(meal => meal.name.trim().toLowerCase() === entry.name.trim().toLowerCase()
         && meal.meal === entry.meal && meal.calories === entry.calories && meal.protein === entry.protein && meal.carbs === entry.carbs && meal.fats === entry.fats);
-      const { name, meal, calories, protein, carbs, fats, artwork, scannedIngredients } = entry;
-      if (!duplicate && !await saveMeal({ name, meal, calories, protein, carbs, fats, artwork, scannedIngredients })) {
+      const { id: _id, date: _date, ...savedPortion } = entry;
+      const { name } = entry;
+      if (!duplicate && !await saveMeal(savedPortion)) {
         setShortcutError('Could not save this meal. Please try again.'); return;
       }
       // Existing favorites can be moved without losing them if the meal save fails.
@@ -302,150 +291,48 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
     }
   }
 
-  function resetForm() {
-    setScannedIngredients([]);
-    setArtwork(undefined);
-    const hour = new Date().getHours();
-    setMeal(hour < 11 ? "Breakfast" : hour < 16 ? "Lunch" : hour < 21 ? "Dinner" : "Snack");
-    setName("");
-    setCalories("");
-    setProtein("");
-    setCarbs("");
-    setFats("");
-  }
-
   function openFoodForm(recipeOnly: boolean) {
-    resetForm();
-    setSavingNewRecipe(recipeOnly);
-    setEditingFood(null);
-    setFormError(null);
-    setShowAddFood(true);
-  }
-
-  function openScanner() {
-    // Adding an ingredient to an existing meal must preserve its previous nutrition.
-    if (!scannedIngredients.length && [calories, protein, carbs, fats].some(value => value.trim())) {
-      const read = (value: string) => value.trim() && Number.isFinite(Number(value.replace(",", "."))) && Number(value.replace(",", ".")) >= 0 ? Number(value.replace(",", ".")) : null;
-      setScannedIngredients([scannedIngredient({ name: name.trim() || "Existing food", basis: "1 portion of your existing food or recipe", source: "manual",
-        calories: read(calories), protein: read(protein), carbs: read(carbs), fats: read(fats) })]);
-    }
-    setShowScanner(true);
-  }
-
-  function updateIngredients(items: ScanIngredient[]) {
-    setScannedIngredients(items);
-    const total = ingredientTotals(items);
-    setCalories(items.length && total.calories !== null ? String(total.calories) : "");
-    setProtein(items.length && total.protein !== null ? String(total.protein) : "");
-    setCarbs(items.length && total.carbs !== null ? String(total.carbs) : "");
-    setFats(items.length && total.fats !== null ? String(total.fats) : "");
-  }
-
-  function ingredientValidationError() {
-    for (const [index, item] of scannedIngredients.entries()) {
-      const label = `Ingredient ${index + 1}${item.name.trim() ? ` (${item.name.trim()})` : ""}`;
-      if (!item.name.trim()) return `${label}: enter a food name.`;
-      const amount = Number(item.servings.trim().replace(",", "."));
-      if (!item.servings.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100) return `${label}: enter a serving amount greater than 0 and no more than 100 servings.`;
-      for (const key of ["calories", "protein", "carbs", "fats"] as const) {
-        const value = Number(item[key].trim().replace(",", "."));
-        if (!item[key].trim() || !Number.isFinite(value) || value < 0 || value > 100000) return `${label}: enter valid ${key === "fats" ? "fat" : key} (0 is allowed).`;
-      }
-    }
-    return "Open the ingredient list and complete the missing nutrition values and servings.";
+    setFoodForm({ date: journalDate, recipeOnly, entry: null });
   }
 
   function openFoodEditor(entry: FoodLogEntry) {
-    setScannedIngredients(entry.scannedIngredients ?? []);
-    setArtwork(entry.artwork);
-    setMeal(entry.meal);
-    setName(entry.name);
-    setCalories(`${entry.calories}`);
-    setProtein(`${entry.protein}`);
-    setCarbs(`${entry.carbs}`);
-    setFats(`${entry.fats}`);
-    setEditingFood(entry);
-    setSavingNewRecipe(false);
-    setFormError(null);
-    setShowAddFood(true);
+    setFoodForm({ date: entry.date, recipeOnly: false, entry });
   }
 
-  function openRecipeEditor(saved: SavedMeal) {
-    setScannedIngredients(saved.scannedIngredients ?? []);
-    setArtwork(saved.artwork);
+  function openRecipeEditor(entry: SavedMeal) {
     setConfirmDeleteId(null);
-    setMeal(saved.meal);
-    setName(saved.name);
-    setCalories(`${saved.calories}`);
-    setProtein(`${saved.protein}`);
-    setCarbs(`${saved.carbs}`);
-    setFats(`${saved.fats}`);
-    setEditingRecipe(saved);
+    setFoodForm({ date: journalDate, recipeOnly: true, entry });
   }
 
-  function closeRecipeEditor() {
-    setEditingRecipe(null);
-    resetForm();
-  }
-
-  async function saveRecipeEdits() {
-    if (!editingRecipe || savingRecipe || !recipesReady) return;
-    if (scannedIngredients.length && !ingredientTotals(scannedIngredients).complete) {
-      setFormError(ingredientValidationError()); return;
-    }
-    const trimmedName = name.trim();
-    const calorieValue = numberFrom(calories);
-    if (!trimmedName || calorieValue <= 0) {
-      Alert.alert("Add a name and calories", "A saved recipe needs a name and calories.");
-      return;
-    }
-    setSavingRecipe(true);
-    setFormError(null);
-    let savedArtwork;
-    try { savedArtwork = await saveArtworkPhoto(artwork); setArtwork(savedArtwork); }
-    catch (err) { setFormError(err instanceof Error ? err.message : "Could not save your image."); setSavingRecipe(false); return; }
-    const saved = await updateSavedMeal(editingRecipe.id, {
-      scannedIngredients: scannedIngredients.length ? scannedIngredients : undefined,
-      artwork: savedArtwork,
-      meal,
-      name: trimmedName,
-      calories: calorieValue,
-      protein: numberFrom(protein),
-      carbs: numberFrom(carbs),
-      fats: numberFrom(fats),
-    });
-    setSavingRecipe(false);
-    if (saved) closeRecipeEditor();
-  }
-
-  async function addSavedMeal(savedMeal: SavedMeal) {
-    if (addingSavedMeal.current || !foodJournalReady) return;
-    addingSavedMeal.current = true;
-    setAddingSavedMealId(savedMeal.id);
-    setSavedMealFeedback(null);
-    const targetDate = journalDate;
-    const targetAccount = accountUserId;
-    const targetLabel = dayLabel.toLowerCase();
+  async function logSavedMeal(recipe: SavedMeal, targetDate: string): Promise<Meal | null> {
+    if (addingSavedMeal.current || !foodJournalReady || !accountUserId) return null;
+    const key = JSON.stringify([accountUserId, targetDate, recipe.id]);
+    const last = lastSavedMeal.current;
+    if (last?.key === key && Date.now() - last.at < 750) return last.category;
+    const attempt = savedMealAttempts.current.get(key) ?? {
+      id: `food-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      serving: savedRecipeServing(recipe),
+    };
+    savedMealAttempts.current.set(key, attempt);
+    addingSavedMeal.current = true; setAddingSavedMealId(recipe.id);
     try {
-    const added = await addFoodEntry({
-      scannedIngredients: savedMeal.scannedIngredients,
-      artwork: savedMeal.artwork,
-      meal: savedMeal.meal,
-      name: savedMeal.name,
-      calories: savedMeal.calories,
-      protein: savedMeal.protein,
-      carbs: savedMeal.carbs,
-      fats: savedMeal.fats,
-    }, targetDate);
-    setSavedMealFeedback({ id: savedMeal.id, date: targetDate, account: targetAccount, success: added, message: added
-      ? `Added ${savedMeal.name} (${savedMeal.calories} cal) to ${savedMeal.meal.toLowerCase()} for ${targetLabel}. Your daily intake is updated.`
-      : "Could not add this recipe. Please try again." });
+      if (!await addFoodEntry(attempt.serving, targetDate, attempt.id)) return null;
+      savedMealAttempts.current.delete(key);
+      lastSavedMeal.current = { key, at: Date.now(), category: attempt.serving.meal };
+      return attempt.serving.meal;
     } catch {
-      setSavedMealFeedback({ id: savedMeal.id, date: targetDate, account: targetAccount, success: false, message: "Could not add this recipe. Please try again." });
+      return null;
     } finally {
-      addingSavedMeal.current = false;
-      setAddingSavedMealId(null);
+      addingSavedMeal.current = false; setAddingSavedMealId(null);
     }
+  }
+
+  async function addSavedMeal(recipe: SavedMeal) {
+    if (addingSavedMeal.current) return;
+    setSavedMealFeedback(null);
+    const category = await logSavedMeal(recipe, journalDate);
+    setSavedMealFeedback({ id: recipe.id, date: journalDate, account: accountUserId, success: Boolean(category),
+      message: category ? `${recipe.name} logged to ${category.toLowerCase()}.` : `Could not log ${recipe.name}. Please try again.` });
   }
 
   function openGoals() {
@@ -521,6 +408,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
         {nutritionPlanError ? <AppText color={theme.colors.danger}>{nutritionPlanError}</AppText> : null}
         {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
         {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
+        {journalTab === "Journal" ? <SaveFeedback area="food" hideSaved /> : journalTab === "Recipes" ? <SaveFeedback area="recipes" hideSaved /> : null}
 
         <View accessibilityRole="tablist" style={[styles.viewTabs, { backgroundColor: theme.colors.segmentSurface, borderColor: theme.colors.panelBorder }]}>
           {journalTabs.map(tab => {
@@ -539,6 +427,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
           carbGoal={currentNutrition.carbGoal}
           fats={currentNutrition.fats}
           fatGoal={currentNutrition.fatGoal}
+          incomplete={[...new Set(todayEntries.flatMap(entry => entry.incompleteNutrients ?? []))]}
           onEditGoals={openGoals}
         /> : null}
         {journalTab === "Plan" ? <>
@@ -616,14 +505,13 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                 <Pressable accessibilityRole="button" accessibilityLabel={`${mealName}, ${entries.length} foods`} accessibilityState={{ expanded: !collapsedMeals.includes(mealName) }} onPress={() => setCollapsedMeals(current => current.includes(mealName) ? current.filter(value => value !== mealName) : [...current, mealName])} style={{ flex: 1, minHeight: 44, justifyContent: "center", gap: 3 }}>
                   <AppText size={15} weight="extrabold">{mealName} {collapsedMeals.includes(mealName) ? "+" : "−"}</AppText><AppText size={12} muted>{entries.length} item{entries.length === 1 ? "" : "s"} · {Math.round(entries.reduce((total, entry) => total + entry.calories, 0))} cal</AppText>
                 </Pressable>
-                <SecondaryButton height={44} fontSize={12} onPress={() => { openFoodForm(false); setMeal(mealName); }}>+ Add</SecondaryButton>
               </View>
               {!collapsedMeals.includes(mealName) && entries.map((entry) => (
                 <View key={entry.id} style={{ borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 12, gap: 8 }}>
                   <Pressable accessibilityRole="button" accessibilityLabel={`${entry.name}, ${Math.round(entry.calories)} calories, show details`} accessibilityState={{ expanded: expandedFoodId === entry.id }} onPress={() => setExpandedFoodId(current => current === entry.id ? null : entry.id)} style={[styles.foodRow, { minHeight: 48 }]}>
                     <View style={{ flex: 1, gap: 3 }}>
                       <AppText weight="bold">{entry.name}</AppText>
-                      <AppText size={12} muted>{entry.protein}g protein · {entry.carbs}g carbs · {entry.fats}g fat</AppText>
+                      <AppText size={12} muted>{entry.incompleteNutrients?.length ? "Known amounts · " : ""}{entry.protein}g protein · {entry.carbs}g carbs · {entry.fats}g fat{entry.incompleteNutrients?.length ? " · macros incomplete" : ""}</AppText>
                     </View>
                     <View style={styles.foodRight}>
                       <AppText size={15} weight="extrabold">{entry.calories}</AppText>
@@ -693,8 +581,8 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
                   </View>
                 ) : (
                   <View style={[styles.recipeActions, { borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 12 }]}>
-                    <SecondaryButton height={34} fontSize={12} style={styles.savedAddButton} disabled={!foodJournalReady || addingSavedMealId !== null} onPress={() => void addSavedMeal(savedMeal)}>
-                      {addingSavedMealId === savedMeal.id ? "Adding..." : isToday ? "Add to today" : "Add to this day"}
+                    <SecondaryButton height={44} fontSize={12} style={styles.savedAddButton} accessibilityLabel={`Add 1 serving of ${savedMeal.name} ${isToday ? "to today" : "to this day"}`} disabled={!foodJournalReady || addingSavedMealId !== null} onPress={() => void addSavedMeal(savedMeal)}>
+                      {addingSavedMealId === savedMeal.id ? "Adding…" : "Add 1 serving"}
                     </SecondaryButton>
                     <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${savedMeal.name}`} hitSlop={6} onPress={() => openRecipeEditor(savedMeal)}>
                       <AppText size={13} weight="extrabold" primary>Edit</AppText>
@@ -720,63 +608,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
 
   const sheets = (
     <>
-      <Modal animationType="slide" visible={showScanner} onRequestClose={() => setShowScanner(false)}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.background, paddingTop: 16 }}>
-          {showScanner ? <FoodScanner initialIngredients={scannedIngredients} onChange={updateIngredients} onClose={() => setShowScanner(false)} onUse={food => {
-            if (!name.trim()) setName(food.name); setCalories(String(food.calories ?? "")); setProtein(String(food.protein ?? ""));
-            setCarbs(String(food.carbs ?? "")); setFats(String(food.fats ?? "")); setFormError(null); setShowScanner(false);
-          }} /> : null}
-        </View>
-      </Modal>
-      <FoodLogSheet visible={showAddFood} date={journalDate} initialMeal={meal} entry={editingFood} recipeOnly={savingNewRecipe} onClose={() => setShowAddFood(false)} />
-
-      <Modal animationType="slide" transparent visible={editingRecipe != null && !showScanner} onRequestClose={closeRecipeEditor}>
-        <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
-          <Pressable style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]} onPress={closeRecipeEditor}>
-            <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-              <ScrollBody contentContainerStyle={styles.sheetBody}>
-                <View style={styles.sheetHeader}>
-                  <View>
-                    <SectionLabel>Saved recipes</SectionLabel>
-                    <AppText size={23} weight="black">Edit recipe</AppText>
-                  </View>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Close recipe editor" onPress={closeRecipeEditor}>
-                    <AppText size={25} muted>×</AppText>
-                  </Pressable>
-                </View>
-                <Field label="Meal">
-                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
-                </Field>
-                <Field label="Recipe name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
-                {Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{scannedIngredients.length ? `Edit or add ingredients (${scannedIngredients.length})` : "Scan barcode"}</SecondaryButton> : null}
-                {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
-                <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                <View style={styles.inputRow}>
-                  <Field label="Protein (g)" style={styles.inputHalf}><Input value={protein} onChangeText={setProtein} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                </View>
-        {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
-                <SaveFeedback area="recipes" onRetried={closeRecipeEditor} />
-                <PrimaryButton disabled={savingRecipe || !recipesReady} onPress={() => void saveRecipeEdits()}>{savingRecipe ? "Saving..." : "Save changes"}</PrimaryButton>
-                <SecondaryButton
-                  textColor={theme.colors.danger}
-                  disabled={savingRecipe}
-                  onPress={async () => {
-                    if (!editingRecipe || savingRecipe) return;
-                    setSavingRecipe(true);
-                    const saved = await deleteSavedMeal(editingRecipe.id);
-                    setSavingRecipe(false);
-                    if (saved) closeRecipeEditor();
-                  }}
-                >
-                  Delete recipe
-                </SecondaryButton>
-              </ScrollBody>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
+      {foodForm ? <FoodLogSheet visible {...foodForm} addingSavedMealId={addingSavedMealId} onAddSavedMeal={logSavedMeal} onClose={() => setFoodForm(null)} /> : null}
 
       <Modal animationType="slide" transparent visible={showGoals} onRequestClose={() => setShowGoals(false)}>
         <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>

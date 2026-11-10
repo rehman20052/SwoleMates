@@ -1,6 +1,7 @@
 import { experienceLevels } from "@/data/partners";
 import { normalizeProfile, type UserProfile } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
+import { withDeadline } from "@/lib/network-deadline";
 
 export type DiscoverGender = "Male" | "Female";
 
@@ -57,9 +58,10 @@ function publicProfile(profile: UserProfile) {
   };
 }
 
-export async function publishDiscoverProfile(profile: UserProfile) {
-  const { data } = await supabase.auth.getSession();
+export async function publishDiscoverProfile(profile: UserProfile, expectedOwner?: string | null) {
+  const { data } = await withDeadline(supabase.auth.getSession());
   const userId = data.session?.user.id;
+  if (expectedOwner !== undefined && userId !== expectedOwner) return;
   if (!userId || !profile.fullName.trim()) return;
 
   const { error } = await supabase.from("discover_profiles").upsert({

@@ -32,10 +32,12 @@ import { isHeicMedia } from '@/lib/heic-media';
 import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomingMessages } from '@/lib/matches';
 import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { socialAlertCount, subscribeSocialNotices } from '@/lib/social';
-import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
+import { PartialProfileSaveError, MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
 import { DeleteAccountScreen } from '@/screens/delete-account';
 import { supabase } from '@/lib/supabase';
+import { resetSafetyCheck } from '@/lib/safety';
+import { withDeadline, ACCOUNT_WRITE_TIMEOUT } from '@/lib/network-deadline';
 import { ChatScreen } from '@/screens/chat';
 import { DashboardScreen } from '@/screens/dashboard';
 import { DiscoverScreen } from '@/screens/discover';
@@ -185,7 +187,10 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [chatAlerts, setChatAlerts] = useState(0);
-  const [safetyNotice, setSafetyNotice] = useState<string | null>(null);
+  const profileSaveInFlight = useRef(false);
+  const profileSaveVersion = useRef(0);
+  const sessionOwner = useRef<string | null>(null);
+  const [profileSaveProgress, setProfileSaveProgress] = useState("");
   const [socialAlerts, setSocialAlerts] = useState(0);
   const finishStartup = useCallback(() => setShowStartup(false), []);
 
@@ -194,9 +199,9 @@ export default function App() {
     let active = true;
     const refresh = () => {
       return chatAlertCount().then((count) => {
-        if (active) { setChatAlerts(count); setSafetyNotice(null); }
+        if (active) { setChatAlerts(count); }
       }).catch((error: unknown) => {
-        if (active) { setChatAlerts(0); setSafetyNotice(error instanceof Error ? error.message : "Safety protection is temporarily unavailable."); }
+        // A badge refresh must not put a safety failure above private tracking screens.
       });
     };
     const updates = foregroundRefresh(refresh, 30000);
@@ -250,12 +255,13 @@ export default function App() {
     // The cached session can be older than a save made on another device. Publishing that
     // copy would wipe the newer Discover card, so always read the account from the server first.
     const profileFromServer = async () => {
-      const fresh = await supabase.auth.getUser();
+      const fresh = await withDeadline(supabase.auth.getUser());
       if (fresh.error || !fresh.data.user) return null;
       return profileFromUser(fresh.data.user);
     };
 
     const publishLatest = async (profile: UserProfile) => {
+      const owner = sessionOwner.current;
       let current = profile;
       if (current.photos.some((photo) => isHeicMedia(photo))) {
         try {
@@ -267,11 +273,11 @@ export default function App() {
         }
       }
       if (!active) return;
-      publishDiscoverProfile(current).catch(() => {});
+      publishDiscoverProfile(current, owner).catch(() => {});
     };
 
     const restoreSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await withDeadline(supabase.auth.getSession());
       if (!active) return;
 
       if (error || !data.session) {
@@ -281,10 +287,11 @@ export default function App() {
         return;
       }
 
+      sessionOwner.current = data.session.user.id;
       const profile = await profileFromServer();
       if (!active) return;
       if (!profile) {
-        const cached = await supabase.auth.getSession();
+        const cached = await withDeadline(supabase.auth.getSession());
         if (!active) return;
         continueAfterAuth(profileFromUser(cached.data.session?.user ?? null));
         restored = true;
@@ -302,20 +309,32 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active || !restored) return;
       if (event === 'INITIAL_SESSION') return;
+      const owner = session?.user.id ?? null;
+      if (owner !== sessionOwner.current) {
+        sessionOwner.current = owner; profileSaveVersion.current++;
+        profileSaveInFlight.current = false; setSavingProfile(false); setProfileSaveProgress('');
+      }
 
       if (event === 'SIGNED_OUT') {
+        resetSafetyCheck();
         resetToLaunch();
         return;
       }
 
-      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session) {
-        void profileFromServer().then((profile) => {
-          if (active) continueAfterAuth(profile);
-        });
+      if (event === 'SIGNED_IN') resetSafetyCheck();
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session && !profileSaveInFlight.current) {
+        // Auth listeners run while the auth client holds its lock. Starting
+        // another auth operation here can stall every subsequent save.
+        setTimeout(() => {
+          if (!active) return;
+          void profileFromServer().then((profile) => {
+            if (active && profile && sessionOwner.current === session.user.id) continueAfterAuth(profile);
+          }).catch(() => { /* Retain the current profile and editable form. */ });
+        }, 0);
       }
     });
 
-    void restoreSession();
+    void restoreSession().catch(() => { if (active) { setCheckingSession(false); setProfileError('Could not check your account. Your saved information is preserved; try again.'); } });
 
     return () => {
       active = false;
@@ -355,15 +374,19 @@ export default function App() {
       return false;
     }
 
+    if (profileSaveInFlight.current) return false;
+    profileSaveInFlight.current = true;
+    const saveVersion = ++profileSaveVersion.current;
+    const saveOwner = sessionOwner.current;
     setSavingProfile(true);
+    setProfileSaveProgress("Checking your account…");
     setProfileError(null);
     try {
-      const saved = await saveProfile(profileData);
-      try {
-        await publishDiscoverProfile(saved);
-      } catch {
-        // Discover shows its own message if the listing table is not ready.
-      }
+      const saved = await saveProfile(profileData, message => { if (saveVersion === profileSaveVersion.current) setProfileSaveProgress(message); });
+      if (saveVersion !== profileSaveVersion.current) return false;
+      void withDeadline(publishDiscoverProfile(saved, saveOwner), ACCOUNT_WRITE_TIMEOUT).catch(() => {
+        if (saveVersion === profileSaveVersion.current) setProfileError('Your profile is saved. Its Discover listing could not refresh; save again to retry.');
+      });
       setProfileData(saved);
       setProfileSaved(true);
       setStack([]);
@@ -371,6 +394,8 @@ export default function App() {
       setCurrentScreen('main-app');
       return true;
     } catch (err) {
+      if (saveVersion !== profileSaveVersion.current) return false;
+      if (err instanceof PartialProfileSaveError) setProfileData(err.profile);
       const message = err instanceof Error ? err.message : 'Could not save your profile.';
       setProfileError(
         message === 'Failed to fetch'
@@ -381,7 +406,9 @@ export default function App() {
       );
       return false;
     } finally {
-      setSavingProfile(false);
+      if (saveVersion === profileSaveVersion.current) {
+        profileSaveInFlight.current = false; setSavingProfile(false); setProfileSaveProgress("");
+      }
     }
   };
 
@@ -491,7 +518,7 @@ export default function App() {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
           <ProfileScreen
             profile={profileData}
-            saving={savingProfile}
+            saving={savingProfile} saveProgress={profileSaveProgress}
             error={profileError}
             title="Create your profile"
             initialMode="edit"
@@ -587,7 +614,6 @@ export default function App() {
         screen edge instead of leaving a band of background under the tabs. */}
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View nativeID="app-bottom-safe-area" style={[styles.mainAppContainer, hideTabBar && { paddingBottom: insets.bottom }]}>
-        {safetyNotice ? <Text accessibilityRole="alert" style={{color:theme.colors.danger,padding:12,fontSize:12}}>{safetyNotice}</Text> : null}
         <View style={styles.tabStage}>
           {activeTab === 'Social' ? (
             <SocialScreen me={{ name: profileData.fullName, photo: profilePortrait(profileData) ?? undefined }} />

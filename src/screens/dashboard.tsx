@@ -1,3 +1,5 @@
+import { nutritionSummary } from "@/lib/nutrition-tracking";
+import { useWeightUnit } from "@/state/weight-unit";
 import { BRAND_LIME } from "@/theme";
 import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { TrainAppearance, TrainPrototype, PrototypeWorkout } from "@/components/train-prototype";
@@ -187,6 +189,7 @@ function SegmentSwitch<T extends string>({
 
 export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: ReactNode; lifts: DashboardProfile }) {
   const theme = useAppTheme();
+  const { unit, formatWeight } = useWeightUnit();
   const nav = useNavigation();
   const [notice, setNotice] = useState<string | null>(null);
   const trainPalette = useTrainPalette();
@@ -258,17 +261,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
   const weeklyStreak = getWeeklyStreak(logs, weeklyWorkoutGoal);
   const selectedDayLogs = [...(logsByDate.get(selectedCalendarDate) ?? [])].sort(sortByDateDesc);
   const selectedDayFood = foodEntries.filter((entry) => entry.date === selectedCalendarDate);
-  const selectedDayNutrition = selectedDayFood.length
-    ? selectedDayFood.reduce(
-        (total, entry) => ({
-          calories: total.calories + entry.calories,
-          protein: total.protein + entry.protein,
-          carbs: total.carbs + entry.carbs,
-          fats: total.fats + entry.fats,
-        }),
-        { calories: 0, protein: 0, carbs: 0, fats: 0 },
-      )
-    : null;
+  const selectedDayNutrition = selectedDayFood.length ? nutritionSummary(selectedDayFood) : null;
 
   function showNotice(message: string) {
     setNotice(message);
@@ -567,8 +560,8 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                               <TrainText size={11} muted style={{ width: 16 }}>{index + 1}</TrainText>
                               <TrainText size={12} weight="bold" style={{ flex: 1 }}>{exercise.name}</TrainText>
                               <View style={{ alignItems: "flex-end", gap: 2 }}>{exercise.setDetails?.some(set => set.weight !== exercise.weight || set.reps !== exercise.reps)
-                                ? exercise.setDetails.map((set, setIndex) => <TrainText key={setIndex} size={11} muted>{set.weight} {exercise.unit} × {set.reps}</TrainText>)
-                                : <><TrainText size={12} weight="bold">{exercise.weight} {exercise.unit}</TrainText><TrainText size={11} muted>{exercise.sets} × {exercise.reps}</TrainText></>}</View>
+                                ? exercise.setDetails.map((set, setIndex) => <TrainText key={setIndex} size={11} muted>{formatWeight(set.weight, exercise.unit)} {unit} × {set.reps}</TrainText>)
+                                : <><TrainText size={12} weight="bold">{formatWeight(exercise.weight, exercise.unit)} {unit}</TrainText><TrainText size={11} muted>{exercise.sets} × {exercise.reps}</TrainText></>}</View>
                             </View>)}
                           </View> : null}
 
@@ -616,7 +609,7 @@ export function DashboardScreen({ empty: _empty, lifts: profile }: { empty: Reac
                         <View style={{ flex: 1, gap: 3 }}>
                           <TrainText weight="bold">Consumed {selectedDayNutrition.calories.toLocaleString()} calories</TrainText>
                           <TrainText size={12} muted>
-                            {selectedDayNutrition.protein}g protein • {selectedDayNutrition.carbs}g carbs • {selectedDayNutrition.fats}g fats
+                            {selectedDayNutrition.incomplete.length ? "Known amounts · " : ""}{selectedDayNutrition.protein}g protein • {selectedDayNutrition.carbs}g carbs • {selectedDayNutrition.fats}g fats{selectedDayNutrition.incomplete.length ? " · macros incomplete" : ""}
                           </TrainText>
                         </View>
                       </View>

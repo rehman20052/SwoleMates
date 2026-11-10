@@ -1,3 +1,4 @@
+import { useWeightUnit } from "@/state/weight-unit";
 import { TrainTelemetry, TrainNumber, trainingVolume, TrainText as AppText, TrainInput as Input, useTrainPalette } from "./train-ui";
 import { TrainSecondary as SecondaryButton } from "./train-ui";
 import { useState } from "react";
@@ -11,6 +12,7 @@ import { useAppTheme } from "@/theme";
 
 export function WeeklyRecap() {
   const theme = useAppTheme();
+  const { unit } = useWeightUnit();
   const trainPalette = useTrainPalette();
   const { logs, foodEntries, trackedLifts, weeklyWorkoutGoal, foodJournalReady } = useAppData();
   const [offset, setOffset] = useState(0);
@@ -40,7 +42,7 @@ export function WeeklyRecap() {
         </View>
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", borderBottomWidth: 1, borderColor: trainPalette.border }}>
-        {[{ label: "Workouts", value: String(recap.sessions) }, ...(weekLogs.some(log => log.exercises?.length) ? [{ label: "Sets", value: String(setCount) }] : []), ...(trainingVolume(weekLogs) ? [{ label: "Volume", value: trainingVolume(weekLogs) }] : [])].map((metric, index) => <View key={metric.label} style={{ flex: 1, minWidth: 72, paddingVertical: 16, paddingHorizontal: index ? 8 : 0, gap: 8, borderLeftWidth: index ? 1 : 0, borderColor: trainPalette.border }}><TrainNumber size={20} style={{ letterSpacing: -0.5 }}>{metric.value}</TrainNumber><AppText size={11} muted>{metric.label}</AppText></View>)}
+        {[{ label: "Workouts", value: String(recap.sessions) }, ...(weekLogs.some(log => log.exercises?.length) ? [{ label: "Sets", value: String(setCount) }] : []), ...(trainingVolume(weekLogs, unit) ? [{ label: "Volume", value: trainingVolume(weekLogs, unit) }] : [])].map((metric, index) => <View key={metric.label} style={{ flex: 1, minWidth: 72, paddingVertical: 16, paddingHorizontal: index ? 8 : 0, gap: 8, borderLeftWidth: index ? 1 : 0, borderColor: trainPalette.border }}><TrainNumber size={20} style={{ letterSpacing: -0.5 }}>{metric.value}</TrainNumber><AppText size={11} muted>{metric.label}</AppText></View>)}
       </View>
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}><AppText size={12} weight="bold">Training consistency</AppText><AppText size={12} muted>{recap.workoutDays} of 7 days</AppText></View>

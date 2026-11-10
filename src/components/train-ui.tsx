@@ -1,3 +1,4 @@
+import { convertWeight, type WeightUnit } from "@/lib/weight-unit";
 import { BRAND_LIME } from "@/theme";
 import { StyleSheet, View } from "react-native";
 import { Icon } from "./ui";
@@ -72,13 +73,14 @@ export function trainingSummary(log: SessionLog) {
   const sets = log.exercises.reduce((sum, row) => sum + (row.setDetails?.length ?? row.sets), 0);
   return log.exercises.length + (log.exercises.length === 1 ? " exercise · " : " exercises · ") + sets + (sets === 1 ? " set" : " sets");
 }
-export function trainingVolume(logs: SessionLog[]) {
+export function trainingVolume(logs: SessionLog[], unit: WeightUnit = "lb") {
   const totals = { lb: 0, kg: 0 };
   for (const log of logs) for (const row of log.exercises ?? []) {
     const sets = row.setDetails ?? Array.from({ length: row.sets }, () => ({ weight: row.weight, reps: row.reps }));
     for (const set of sets) totals[row.unit] += set.weight * set.reps;
   }
-  return (["lb", "kg"] as const).filter(unit => totals[unit] > 0).map(unit => Math.round(totals[unit]).toLocaleString() + " " + unit).join(" + ");
+  const total = convertWeight(totals.lb, "lb", unit) + convertWeight(totals.kg, "kg", unit);
+  return total > 0 ? Math.round(total).toLocaleString() + " " + unit : "";
 }
 
 export function TrainSetInput({ style, completed = false, ...props }: ComponentProps<typeof BaseInput> & { completed?: boolean }) {

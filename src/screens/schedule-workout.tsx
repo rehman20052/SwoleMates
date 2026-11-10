@@ -39,6 +39,9 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
   const { workspaceSettings, accountUserId } = useAppData();
   const [partnerName, setPartnerName] = useState("");
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [matchLoading, setMatchLoading] = useState(true);
+  const [matchLoadError, setMatchLoadError] = useState<string | null>(null);
+  const [matchLoadAttempt, setMatchLoadAttempt] = useState(0);
   const [plans, setPlans] = useState<PlannedWorkout[]>([]);
   const [myGym, setMyGym] = useState('');
   const [partnerGym, setPartnerGym] = useState('');
@@ -81,6 +84,9 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
 
   useEffect(() => {
     let active = true;
+    setMatchLoading(true);
+    setMatchLoadError(null);
+    setMatchId(null);
     void listConnections().then(async (connections) => {
       if (!active) return;
       const person = connections.find((item) => item.userId === partnerId && item.status === "accepted");
@@ -91,14 +97,18 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
       const workouts = await listMatchWorkouts(person.requestId).catch(() => []);
       if (!active) return;
       setPlans(workouts);
+    }).catch((err: unknown) => {
+      if (active) setMatchLoadError(err instanceof Error ? err.message : "Could not check this match. Try again.");
+    }).finally(() => {
+      if (active) setMatchLoading(false);
     });
     return () => {
       active = false;
     };
-  }, [partnerId]);
+  }, [partnerId, matchLoadAttempt]);
 
   async function send() {
-    if (busy || !matchId || !timeOptions.includes(time)) return;
+    if (busy || matchLoading || !matchId || !timeOptions.includes(time)) return;
     setBusy(true);
     setError(null);
     try {
@@ -144,8 +154,13 @@ function MatchSchedule({ partnerId }: { partnerId: string }) {
           {timeOptions.length === 0 ? (
             <AppText muted>No open times that day. Pick another day, or a time at least 30 minutes from now.</AppText>
           ) : null}
-          {!matchId ? <AppText muted>This chat is not an accepted match yet.</AppText> : null}
-          <PrimaryButton disabled={busy || !matchId || !timeOptions.includes(time) || !location.trim()} onPress={() => void send()}>
+          {matchLoading ? <AppText muted>Checking this match…</AppText> : matchLoadError ? (
+            <View style={{ gap: 8 }}>
+              <AppText muted accessibilityLiveRegion="polite">{matchLoadError}</AppText>
+              <SecondaryButton onPress={() => setMatchLoadAttempt(value => value + 1)}>Retry match check</SecondaryButton>
+            </View>
+          ) : !matchId ? <AppText muted>This chat is not an accepted match yet.</AppText> : null}
+          <PrimaryButton disabled={busy || matchLoading || !matchId || !timeOptions.includes(time) || !location.trim()} onPress={() => void send()}>
             {busy ? "Sending..." : "Send invite"}
           </PrimaryButton>
         </ScrollBody>

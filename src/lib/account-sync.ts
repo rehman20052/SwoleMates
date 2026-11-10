@@ -79,9 +79,9 @@ function newestSetting(local: RecordChange, server: AccountRecord | undefined): 
   if (mine == null || theirs == null) return "local";
   return mine >= theirs ? "local" : "server";
 }
-export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T) {
+export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T, onChange?: () => void) {
   return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats",
-    resolveConflict: namespace === "settings" ? newestSetting : undefined });
+    localFirst: true, onChange, resolveConflict: namespace === "settings" ? newestSetting : undefined });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
 // may import them; signing into a second account never inherits the first one's data.

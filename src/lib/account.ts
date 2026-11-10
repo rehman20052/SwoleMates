@@ -1,9 +1,10 @@
+import { withDeadline, ACCOUNT_WRITE_TIMEOUT } from "@/lib/network-deadline";
 import { supabase } from "@/lib/supabase";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function signedInEmail() {
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await withDeadline(supabase.auth.getUser());
   const email = data.user?.email;
   if (error || !email) throw new Error("Sign in again before changing your account.");
   return email;
@@ -11,7 +12,7 @@ async function signedInEmail() {
 
 async function confirmCurrentPassword(password: string) {
   const email = await signedInEmail();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await withDeadline(supabase.auth.signInWithPassword({ email, password }));
   if (error) throw new Error("Current password is incorrect.");
 }
 
@@ -23,7 +24,7 @@ export async function changePassword(currentPassword: string, nextPassword: stri
   if (nextPassword.length < 6) throw new Error("Password must be at least 6 characters.");
   if (nextPassword === currentPassword) throw new Error("Choose a different password.");
   await confirmCurrentPassword(currentPassword);
-  const { error } = await supabase.auth.updateUser({ password: nextPassword });
+  const { error } = await withDeadline(supabase.auth.updateUser({ password: nextPassword }), ACCOUNT_WRITE_TIMEOUT);
   if (error) throw new Error(error.message);
 }
 
@@ -33,12 +34,12 @@ export async function changeEmail(nextEmail: string, currentPassword: string) {
   const current = await signedInEmail();
   if (email.toLowerCase() === current.toLowerCase()) throw new Error("That is already your email.");
   await confirmCurrentPassword(currentPassword);
-  const { error } = await supabase.auth.updateUser({ email });
+  const { error } = await withDeadline(supabase.auth.updateUser({ email }), ACCOUNT_WRITE_TIMEOUT);
   if (error) throw new Error(error.message);
 }
 
 export async function discoverPaused() {
-  const { data: session } = await supabase.auth.getSession();
+  const { data: session } = await withDeadline(supabase.auth.getSession());
   const userId = session.session?.user.id;
   if (!userId) return false;
   const { data, error } = await supabase.from("discover_profiles").select("paused").eq("id", userId).maybeSingle();
@@ -50,7 +51,7 @@ export async function discoverPaused() {
 }
 
 export async function setDiscoverPaused(paused: boolean) {
-  const { data: session } = await supabase.auth.getSession();
+  const { data: session } = await withDeadline(supabase.auth.getSession());
   const userId = session.session?.user.id;
   if (!userId) throw new Error("Sign in again before changing this.");
   const { data, error } = await supabase.from("discover_profiles").update({ paused }).eq("id", userId).select("id");
