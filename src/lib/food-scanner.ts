@@ -4,6 +4,7 @@ export type ScannedFood = {
 };
 export const nutritionKeys = ["calories", "protein", "carbs", "fats"] as const;
 export type ScanIngredient = {
+  gramsPerServing?: number;
   id: string; name: string; basis: string; source: ScannedFood["source"]; servings: string;
   calories: string; protein: string; carbs: string; fats: string; barcode?: string;
 };

@@ -1,4 +1,5 @@
 import { useSavedDraft } from "@/lib/use-saved-draft";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type KeyboardEvent } from "react-native";
 import { BlurView } from "expo-blur";
@@ -155,7 +156,7 @@ export function MatchChat({ userId }: { userId: string }) {
     if (!person || !me) return;
     let active = true;
     const pull = () => {
-      void Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
+      return Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
         .then(([items, workouts]) => {
           if (!active) return;
           setMessages((current) => {
@@ -182,16 +183,22 @@ export function MatchChat({ userId }: { userId: string }) {
         })
         .catch(() => undefined);
     };
-    const timer = setInterval(pull, 2000);
+    // Messages, reactions and plans arrive live. Poll slowly for attendance and
+    // missed events; retain the fast fallback when Realtime is unavailable.
+    let realtime = false, lastPoll = 0;
+    const refresh = foregroundRefresh(pull, 2000, () => {
+      if (realtime && Date.now() - lastPoll < 15000) return false;
+      lastPoll = Date.now(); return true;
+    });
     const channel = supabase
       .channel(`match-messages-${person.requestId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, pull)
-      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, pull)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, pull)
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, refresh.request)
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refresh.request)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, refresh.request)
+      .subscribe(status => { if (!active) return; realtime = status === 'SUBSCRIBED'; if (realtime) refresh.request(); });
     return () => {
       active = false;
-      clearInterval(timer);
+      refresh.stop();
       void supabase.removeChannel(channel);
     };
   }, [person, me]);

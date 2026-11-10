@@ -30,6 +30,7 @@ import { AppText as Text } from '@/components/ui';
 import { publishDiscoverProfile } from '@/lib/discover';
 import { isHeicMedia } from '@/lib/heic-media';
 import { chatAlertCount, notifyChatAlerts, subscribeChatAlerts, subscribeIncomingMessages } from '@/lib/matches';
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { socialAlertCount, subscribeSocialNotices } from '@/lib/social';
 import { MIN_PROFILE_PROMPTS, answeredPrompts, birthDateError, profileFromUser, profilePortrait, saveProfile, type UserProfile } from '@/lib/profile';
 import { fullScreenRoutes, NavigationContext, Route, Tab } from '@/navigation';
@@ -192,44 +193,31 @@ export default function App() {
     if (currentScreen !== 'main-app') return;
     let active = true;
     const refresh = () => {
-      void chatAlertCount().then((count) => {
+      return chatAlertCount().then((count) => {
         if (active) { setChatAlerts(count); setSafetyNotice(null); }
       }).catch((error: unknown) => {
         if (active) { setChatAlerts(0); setSafetyNotice(error instanceof Error ? error.message : "Safety protection is temporarily unavailable."); }
       });
     };
-    refresh();
-    const unsubscribe = subscribeChatAlerts(refresh);
+    const updates = foregroundRefresh(refresh, 30000);
+    updates.request();
+    const unsubscribe = subscribeChatAlerts(updates.request);
     const unsubscribeMessages = subscribeIncomingMessages();
     // New messages arrive instantly through subscribeIncomingMessages. This slower check is only
     // a backup, and it skips while the app is in the background or the browser tab is hidden.
-    const timer = setInterval(() => {
-      const hidden =
-        Platform.OS === 'web'
-          ? typeof document !== 'undefined' && document.visibilityState !== 'visible'
-          : AppState.currentState !== 'active';
-      if (!hidden) notifyChatAlerts();
-    }, 30000);
-    const appState = AppState.addEventListener('change', (next) => {
-      if (next === 'active') notifyChatAlerts();
-    });
-    const onFocus = () => notifyChatAlerts();
-    if (Platform.OS === 'web' && typeof window !== 'undefined') window.addEventListener('focus', onFocus);
     return () => {
       active = false;
       unsubscribe();
       unsubscribeMessages();
-      clearInterval(timer);
-      appState.remove();
-      if (Platform.OS === 'web' && typeof window !== 'undefined') window.removeEventListener('focus', onFocus);
+      updates.stop();
     };
-  }, [currentScreen, activeTab, stack.length]);
+  }, [currentScreen]);
 
   useEffect(() => {
     if (currentScreen !== 'main-app') return;
     let active = true;
     const refresh = () => {
-      void socialAlertCount()
+      return socialAlertCount()
         .then((count) => {
           if (active) setSocialAlerts(count);
         })

@@ -1,4 +1,5 @@
 import { AppAlert as Alert } from "@/components/app-alert";
+import { FoodLogSheet } from "@/components/food-log-sheet";
 import { FoodScanner } from "@/components/food-scanner";
 import { ingredientTotals, scannedIngredient, type ScanIngredient } from "@/lib/food-scanner";
 import { HomeBackdrop } from "@/components/home-backdrop";
@@ -11,9 +12,7 @@ import { sumFoodEntries } from "@/lib/food-journal";
 import { daysFromToday, type FoodLogEntry, type SavedMeal, useAppData } from "@/state/app-data";
 import { MacroCalculator, WeightTrendCard } from "@/screens/macro-calculator";
 import { SaveFeedback } from "@/components/save-feedback";
-import { FoodSearch } from "@/components/food-search";
 import { MacroPlanCard } from "@/components/macro-plan-card";
-import type { FoodChoice } from "@/lib/food-search";
 import { useNavigation } from "@/navigation";
 import { Image } from "expo-image";
 import { TrainingCard } from "@/components/training-card";
@@ -83,7 +82,7 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   const ringSize = 108;
   const ringRadius = 45;
   const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringColor = overGoal ? theme.colors.warning : theme.colors.primary;
+  const ringColor = overGoal ? theme.colors.warning : theme.colors.accent;
   const macros = [
     { label: "Protein", current: protein, target: proteinGoal, color: theme.colors.protein },
     { label: "Carbs", current: carbs, target: carbGoal, color: theme.colors.carbs },
@@ -136,8 +135,7 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
               strokeLinecap="round"
               strokeDasharray={`${ringCircumference} ${ringCircumference}`}
               strokeDashoffset={ringCircumference * (1 - progress)}
-              rotation={-90}
-              origin={`${ringSize / 2}, ${ringSize / 2}`}
+              transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
             />
           </Svg>
           <AppText size={22} weight="black" color={ringColor} style={{ fontVariant: ["tabular-nums"] }}>{remaining.toLocaleString()}</AppText>
@@ -157,9 +155,11 @@ function FuelDailySummary({ dayLabel, entryCount, calories, calorieGoal, protein
   );
 }
 
-export function NutritionTrackerScreen({ embedded = false, header, date }: { embedded?: boolean; header?: ReactNode; date?: string }) {
+export function NutritionTrackerScreen({ embedded = false, header, date, onScrolledChange }: { embedded?: boolean; header?: ReactNode; date?: string; onScrolledChange?: (scrolled: boolean) => void }) {
   const theme = useAppTheme();
   const frame = useWindowDimensions();
+  const scrolled = useRef(false);
+
   const nav = useNavigation();
   const framed = Platform.OS === "web" && frame.width > 450;
   const phoneHeight = Math.min(874, frame.height - 32);
@@ -172,18 +172,15 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [savedMealFeedback, setSavedMealFeedback] = useState<{ id: string; date: string; account: string | null; message: string; success: boolean } | null>(null);
   const [showAddFood, setShowAddFood] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const [addFoodTab, setAddFoodTab] = useState<"Food" | "Recent">("Food");
   const [scannedIngredients, setScannedIngredients] = useState<ScanIngredient[]>([]);
-  const [buildFromIngredients, setBuildFromIngredients] = useState(false);
   const [savingNewRecipe, setSavingNewRecipe] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<SavedMeal | null>(null);
   const [editingFood, setEditingFood] = useState<FoodLogEntry | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [customServingTarget, setCustomServingTarget] = useState<string | null>(null);
-  const [customServingDraft, setCustomServingDraft] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showGoals, setShowGoals] = useState(false);
   const [journalTab, setJournalTab] = useState<"Journal" | "Recipes" | "Plan">("Journal");
+  useEffect(() => { scrolled.current = false; onScrolledChange?.(false); }, [journalTab, onScrolledChange]);
   const [collapsedMeals, setCollapsedMeals] = useState<Meal[]>([]);
   const [expandedFoodId, setExpandedFoodId] = useState<string | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
@@ -201,9 +198,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   const [copyingMeal, setCopyingMeal] = useState(false);
   const [copySource, setCopySource] = useState<Meal>("Breakfast");
   const [copyDestination, setCopyDestination] = useState<Meal>("Breakfast");
-  const [savingDayComplete, setSavingDayComplete] = useState(false);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [journalNotice, setJournalNotice] = useState<string | null>(null);
+  const savingPortion = useRef(false);
+  const [savingPortionId, setSavingPortionId] = useState<string | null>(null);
   useEffect(() => { if (!undo) return; const timer = setTimeout(() => setUndo(null), Math.max(0, undo.until - Date.now())); return () => clearTimeout(timer); }, [undo]);
   useEffect(() => { setUndo(null); setCopying(false); setShortcutError(null); setJournalNotice(null); }, [accountUserId, date]);
   const favorites = workspaceSettings.flatMap(item => {
@@ -218,13 +216,28 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     const saved = await saveWorkspaceSetting(id, content, accountUserId, Date.now());
     setShortcutError(saved ? null : "Could not save this change."); return saved;
   }
+  async function savePortionAsMeal(entry: FoodLogEntry, legacySettingId?: string) {
+    if (savingPortion.current || !recipesReady || !accountUserId) return;
+    savingPortion.current = true; setSavingPortionId(entry.id);
+    setShortcutError(null); setJournalNotice(null);
+    try {
+      const duplicate = savedMeals.some(meal => meal.name.trim().toLowerCase() === entry.name.trim().toLowerCase()
+        && meal.meal === entry.meal && meal.calories === entry.calories && meal.protein === entry.protein && meal.carbs === entry.carbs && meal.fats === entry.fats);
+      const { name, meal, calories, protein, carbs, fats, artwork, scannedIngredients } = entry;
+      if (!duplicate && !await saveMeal({ name, meal, calories, protein, carbs, fats, artwork, scannedIngredients })) {
+        setShortcutError('Could not save this meal. Please try again.'); return;
+      }
+      // Existing favorites can be moved without losing them if the meal save fails.
+      if (legacySettingId) await saveShortcut(legacySettingId, '');
+      setJournalNotice(duplicate ? `${name} is already in saved recipes.` : `${name} saved as a meal. Find it in Recipes.`);
+    } catch { setShortcutError('Could not save this meal. Please try again.'); }
+    finally { savingPortion.current = false; setSavingPortionId(null); }
+  }
   async function removeFood(entry: FoodLogEntry) {
     if (await deleteFoodEntry(entry.id)) setUndo({ entry, until: Date.now() + 10000 });
   }
 
   const journalDate = date ?? daysFromToday(0);
-  const completeSetting = workspaceSettings.find(item => item.id === `nutrition-day:${journalDate}`)?.value;
-  const dayComplete = typeof completeSetting === "object" && completeSetting.content === "complete";
   const [jy,jm,jd] = journalDate.split("-").map(Number);
   const yesterday = new Date(jy,jm-1,jd-1);
   const yesterdayDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,"0")}-${String(yesterday.getDate()).padStart(2,"0")}`;
@@ -247,21 +260,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
 
   if (!nutrition) return null;
   const currentNutrition = { ...nutrition, ...sumFoodEntries(foodEntries, journalDate) };
-  const dayCanBeChanged = foodJournalReady && journalDate <= daysFromToday(0) && Boolean(accountUserId) && (dayComplete || todayEntries.length > 0);
   const canRepeatYesterday = foodJournalReady && yesterdayMealOptions.length > 0;
-
-  async function toggleDayComplete() {
-    if (savingDayComplete || !dayCanBeChanged) return;
-    setSavingDayComplete(true);
-    setShortcutError(null);
-    setJournalNotice(null);
-    try {
-      const saved = await saveShortcut(`nutrition-day:${journalDate}`, dayComplete ? "" : "complete");
-      if (saved) setJournalNotice(dayComplete ? "Day reopened. You can keep logging food." : "Day marked complete.");
-    } finally {
-      setSavingDayComplete(false);
-    }
-  }
 
   function toggleMealCopy() {
     setShortcutError(null);
@@ -304,18 +303,15 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
   }
 
   function resetForm() {
-    setAddFoodTab("Food");
     setScannedIngredients([]);
-    setBuildFromIngredients(false);
     setArtwork(undefined);
-    setMeal("Breakfast");
+    const hour = new Date().getHours();
+    setMeal(hour < 11 ? "Breakfast" : hour < 16 ? "Lunch" : hour < 21 ? "Dinner" : "Snack");
     setName("");
     setCalories("");
     setProtein("");
     setCarbs("");
     setFats("");
-    setCustomServingTarget(null);
-    setCustomServingDraft("");
   }
 
   function openFoodForm(recipeOnly: boolean) {
@@ -326,14 +322,9 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setShowAddFood(true);
   }
 
-  function openBarcodeForm() {
-    openFoodForm(false);
-    setShowScanner(true);
-  }
-
   function openScanner() {
     // Adding an ingredient to an existing meal must preserve its previous nutrition.
-    if (!buildFromIngredients && !scannedIngredients.length && [calories, protein, carbs, fats].some(value => value.trim())) {
+    if (!scannedIngredients.length && [calories, protein, carbs, fats].some(value => value.trim())) {
       const read = (value: string) => value.trim() && Number.isFinite(Number(value.replace(",", "."))) && Number(value.replace(",", ".")) >= 0 ? Number(value.replace(",", ".")) : null;
       setScannedIngredients([scannedIngredient({ name: name.trim() || "Existing food", basis: "1 portion of your existing food or recipe", source: "manual",
         calories: read(calories), protein: read(protein), carbs: read(carbs), fats: read(fats) })]);
@@ -350,22 +341,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setFats(items.length && total.fats !== null ? String(total.fats) : "");
   }
 
-  function addManualIngredient() {
-    updateIngredients([...scannedIngredients, scannedIngredient({
-      name: "",
-      basis: "1 portion",
-      source: "manual",
-      calories: null,
-      protein: null,
-      carbs: null,
-      fats: null,
-    })]);
-  }
-
-  function editManualIngredient(id: string, patch: Partial<ScanIngredient>) {
-    updateIngredients(scannedIngredients.map((item) => item.id === id ? { ...item, ...patch } : item));
-  }
-
   function ingredientValidationError() {
     for (const [index, item] of scannedIngredients.entries()) {
       const label = `Ingredient ${index + 1}${item.name.trim() ? ` (${item.name.trim()})` : ""}`;
@@ -377,57 +352,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
         if (!item[key].trim() || !Number.isFinite(value) || value < 0 || value > 100000) return `${label}: enter valid ${key === "fats" ? "fat" : key} (0 is allowed).`;
       }
     }
-    const hasScannedIngredient = scannedIngredients.some(item => item.source !== "manual");
-    if (buildFromIngredients && !hasScannedIngredient) {
-      return "Complete each ingredient's name, calories, protein, carbs, and fat. Enter 0 for any macro the ingredient doesn't contain.";
-    }
-    if (buildFromIngredients) {
-      return "Complete the missing name or nutrition values for each ingredient. Enter 0 for any macro the ingredient doesn't contain.";
-    }
     return "Open the ingredient list and complete the missing nutrition values and servings.";
   }
 
-  async function saveFood(recipeOnly = false) {
-    if (savingRecipe || (recipeOnly ? !recipesReady : !foodJournalReady)) return;
-    const trimmedName = name.trim();
-    if (buildFromIngredients && !recipeOnly && !editingFood && !scannedIngredients.length) {
-      setFormError("Add at least one ingredient to calculate this meal."); return;
-    }
-    if (scannedIngredients.length && !ingredientTotals(scannedIngredients).complete) {
-      setFormError(ingredientValidationError()); return;
-    }
-    const calorieValue = Number(calories.trim().replace(",", "."));
-    if (!trimmedName || !calories.trim() || !Number.isFinite(calorieValue) || calorieValue < 0) {
-      setFormError("Enter a food name and valid calories (0 is allowed).");
-      return;
-    }
-    const entry = {
-      scannedIngredients: scannedIngredients.length ? scannedIngredients : undefined,
-      meal,
-      name: trimmedName,
-      calories: calorieValue,
-      protein: numberFrom(protein),
-      carbs: numberFrom(carbs),
-      fats: numberFrom(fats),
-    };
-    setSavingRecipe(true);
-    setFormError(null);
-    let savedArtwork;
-    try { savedArtwork = await saveArtworkPhoto(artwork); setArtwork(savedArtwork); }
-    catch (err) { setFormError(err instanceof Error ? err.message : "Could not save your image."); setSavingRecipe(false); return; }
-    const withImage = { ...entry, artwork: savedArtwork };
-    const saved = recipeOnly ? await saveMeal(withImage)
-      : editingFood ? await updateFoodEntry(editingFood.id, withImage)
-      : await addFoodEntry(withImage, journalDate);
-    setSavingRecipe(false);
-    if (!saved) return;
-    resetForm();
-    setShowAddFood(false);
-    setEditingFood(null);
-  }
-
   function openFoodEditor(entry: FoodLogEntry) {
-    setBuildFromIngredients(false);
     setScannedIngredients(entry.scannedIngredients ?? []);
     setArtwork(entry.artwork);
     setMeal(entry.meal);
@@ -440,78 +368,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     setSavingNewRecipe(false);
     setFormError(null);
     setShowAddFood(true);
-  }
-
-  function reuseFood(choice: FoodChoice) {
-    openFoodForm(false);
-    if (choice.source === "common") {
-      const food = choice.food;
-      const values = food.per100g;
-      setScannedIngredients([scannedIngredient({ name: food.name, basis: "100 g", source: "manual", ...values })]);
-      setName(food.name); setCalories(`${values.calories}`); setProtein(`${values.protein}`);
-      setCarbs(`${values.carbs}`); setFats(`${values.fats}`);
-      return;
-    }
-    const food = choice.food;
-    setScannedIngredients(food.scannedIngredients ?? []);
-    setArtwork(food.artwork);
-    setMeal(food.meal); setName(food.name);
-    setCalories(`${food.calories}`); setProtein(`${food.protein}`);
-    setCarbs(`${food.carbs}`); setFats(`${food.fats}`);
-  }
-
-  function useCommonFood(choice: FoodChoice) {
-    if (choice.source !== "common") return;
-    const values = choice.food.per100g;
-    if (!buildFromIngredients) {
-      const selectedMeal = meal;
-      reuseFood(choice);
-      setMeal(selectedMeal);
-      return;
-    }
-    const ingredient = scannedIngredient({ name: choice.food.name, basis: "100 g", source: "manual", ...values });
-    const blankIndex = scannedIngredients.findIndex(item => item.source === "manual" && !item.name.trim() && !item.calories.trim() && !item.protein.trim() && !item.carbs.trim() && !item.fats.trim());
-    updateIngredients(blankIndex < 0
-      ? [...scannedIngredients, ingredient]
-      : scannedIngredients.map((item, index) => index === blankIndex ? { ...ingredient, id: item.id } : item));
-  }
-
-  function useCommonFoodForIngredient(id: string, choice: FoodChoice) {
-    if (choice.source !== "common") return;
-    const values = choice.food.per100g;
-    const ingredient = scannedIngredient({ name: choice.food.name, basis: "100 g", source: "manual", ...values });
-    updateIngredients(scannedIngredients.map(item => item.id === id ? { ...ingredient, id } : item));
-  }
-
-  function useRecentFood(choice: FoodChoice) {
-    if (choice.source === "common") return;
-    if (buildFromIngredients) {
-      const food = choice.food;
-      const ingredient = scannedIngredient({
-        name: food.name,
-        basis: "1 serving",
-        source: "manual",
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fats: food.fats,
-      });
-      const blankIndex = scannedIngredients.findIndex(item => item.source === "manual" && !item.name.trim() && !item.calories.trim() && !item.protein.trim() && !item.carbs.trim() && !item.fats.trim());
-      updateIngredients(blankIndex < 0
-        ? [...scannedIngredients, ingredient]
-        : scannedIngredients.map((item, index) => index === blankIndex ? { ...ingredient, id: item.id } : item));
-      setAddFoodTab("Food");
-      return;
-    }
-    reuseFood(choice);
-  }
-
-  function updateCommonServing(grams: string) {
-    const item = scannedIngredients[0];
-    if (!item || item.basis !== "100 g") return;
-    const amount = Number(grams.trim().replace(",", "."));
-    const servings = grams.trim() && Number.isFinite(amount) && amount >= 0 ? String(amount / 100) : "";
-    updateIngredients([{ ...item, servings }]);
   }
 
   function openRecipeEditor(saved: SavedMeal) {
@@ -631,8 +487,27 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     return saved;
   }
 
+  const fuelActions = (
+    <View style={[styles.fuelActionBar, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+      <View style={styles.fuelIntroActions}>
+        <PrimaryButton
+          accessibilityLabel="Log food"
+          disabled={!foodJournalReady}
+          height={46}
+          style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
+          onPress={() => openFoodForm(false)}
+        >
+          Log food
+        </PrimaryButton>
+      </View>
+    </View>
+  );
+
   const journal = (
-      <ScrollBody key={journalTab} contentContainerStyle={styles.body}>
+      <ScrollBody key={journalTab} contentContainerStyle={styles.body} scrollEventThrottle={16} onScroll={event => {
+        const next = event.nativeEvent.contentOffset.y > 0;
+        if (next !== scrolled.current) { scrolled.current = next; onScrolledChange?.(next); }
+      }}>
         <View style={styles.fuelIntro}>
           <View style={{ flex: 1, minWidth: 220, gap: 8 }}>
             <AppText size={frame.width > 700 ? 44 : 34} weight="black">
@@ -640,28 +515,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             </AppText>
             <AppText size={15} muted>Eat with intent. Recover. Come back stronger.</AppText>
           </View>
-          <View style={styles.fuelIntroActions}>
-            {Platform.OS === "web" ? (
-              <SecondaryButton
-                accessibilityLabel="Scan a food barcode"
-                disabled={!foodJournalReady}
-                height={46}
-                style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
-                onPress={openBarcodeForm}
-              >
-                Scan barcode
-              </SecondaryButton>
-            ) : null}
-            <PrimaryButton
-              accessibilityLabel="Log food"
-              disabled={!foodJournalReady}
-              height={46}
-              style={[styles.fuelIntroButton, { opacity: foodJournalReady ? 1 : 0.5 }]}
-              onPress={() => openFoodForm(false)}
-            >
-              Log food
-            </PrimaryButton>
-          </View>
+
         </View>
         {!nutritionPlanReady ? <AppText muted>Loading saved daily targets...</AppText> : null}
         {nutritionPlanError ? <AppText color={theme.colors.danger}>{nutritionPlanError}</AppText> : null}
@@ -674,7 +528,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             return <Pressable key={tab.value} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setJournalTab(tab.value)} style={({ pressed }) => [styles.viewTab, selected && { backgroundColor: theme.colors.surfaceRaised }, pressed && { opacity: 0.72 }]}><AppText size={13} weight={selected ? "extrabold" : "semibold"} primary={selected} muted={!selected}>{tab.label}</AppText></Pressable>;
           })}
         </View>
-        {journalTab === "Journal" ? <FuelDailySummary
+        {journalTab === "Journal" && foodJournalReady ? <FuelDailySummary
           dayLabel={dayLabel}
           entryCount={todayEntries.length}
           calories={currentNutrition.calories}
@@ -717,7 +571,6 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             <AppText size={20} weight="extrabold">Food journal</AppText>
             <AppText size={13} muted>{todayEntries.length ? `${todayEntries.length} item${todayEntries.length === 1 ? "" : "s"} logged ${isToday ? "today" : "for this day"}` : "Meals and snacks will appear here"}</AppText>
           </View>
-          {dayComplete ? <View style={[styles.completePill, { backgroundColor: theme.colors.primaryTint }]}><AppText size={11} weight="bold" primary>DAY COMPLETE</AppText></View> : null}
         </View>
         {!foodJournalReady ? (
           <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
@@ -729,21 +582,8 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
             <View style={{ flex: 1, gap: 3 }}><AppText size={15} weight="extrabold">Start with your first meal</AppText><AppText size={12} muted>Log it once. We’ll keep the day’s numbers moving.</AppText></View>
           </View>
         </View> : null}
-        {dayCanBeChanged || canRepeatYesterday || copying ? (
+        {canRepeatYesterday || copying ? (
           <View style={styles.journalActions}>
-            {dayCanBeChanged ? (
-            <SecondaryButton
-              accessibilityLabel={dayComplete ? "Mark day incomplete" : "Mark day complete"}
-              accessibilityState={{ disabled: savingDayComplete }}
-              disabled={savingDayComplete}
-              height={44}
-              fontSize={12}
-              onPress={() => void toggleDayComplete()}
-              style={[styles.journalActionButton, { opacity: savingDayComplete ? 0.5 : 1 }]}
-            >
-              {savingDayComplete ? "Saving…" : dayComplete ? "Reopen day" : "Finish day"}
-            </SecondaryButton>
-            ) : null}
             {canRepeatYesterday || copying ? (
             <SecondaryButton
               accessibilityLabel="Copy a meal from yesterday"
@@ -765,9 +605,10 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
           <Field label={isToday ? "Add to today" : "Add to this day"}><View style={styles.mealOptions}>{meals.map(option => <SecondaryButton key={option} height={40} fontSize={12} disabled={copyingMeal} onPress={() => setCopyDestination(option)}>{copyDestination === option ? `✓ ${option}` : option}</SecondaryButton>)}</View></Field>
           <PrimaryButton disabled={copyingMeal} style={{ opacity: copyingMeal ? 0.55 : 1 }} onPress={() => void repeatMeal()}>{copyingMeal ? "Copying meal…" : "Copy meal"}</PrimaryButton>
         </TrainingCard> : null}
-        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Favorite portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><SecondaryButton onPress={() => reuseFood({ key: settingId,source:"recent",food })}>{food.name} · {food.calories} cal</SecondaryButton><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${food.name} from favorites`} onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove favorite</AppText></Pressable></View>)}</TrainingCard> : null}
+        {favorites.length ? <TrainingCard padding={12} gap={8}><AppText weight="bold">Previously favorited portions</AppText>{favorites.map(({ settingId,food }) => <View key={settingId} style={{ gap: 6 }}><AppText>{food.name} · {food.calories} cal</AppText><SecondaryButton disabled={!recipesReady || savingPortionId !== null} onPress={() => void savePortionAsMeal(food, settingId)}>Save as meal in Recipes</SecondaryButton><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${food.name} from favorites`} onPress={() => void saveShortcut(settingId, "")}><AppText size={12} muted>Remove</AppText></Pressable></View>)}</TrainingCard> : null}
         {undo ? <TrainingCard padding={12} gap={8}><AppText>{undo.entry.name} deleted</AppText><SecondaryButton onPress={async () => { if (Date.now() >= undo.until) { setUndo(null); return; } if (await restoreFoodEntry(undo.entry)) setUndo(null); }}>Undo (10 seconds)</SecondaryButton></TrainingCard> : null}
         {journalNotice ? <View accessibilityLiveRegion="polite"><AppText size={13} weight="semibold" color={theme.colors.success}>{journalNotice}</AppText></View> : null}
+        {journalNotice?.includes('saved') ? <SecondaryButton onPress={() => setJournalTab('Recipes')}>View saved recipes</SecondaryButton> : null}
         {shortcutError ? <View accessibilityLiveRegion="assertive"><AppText size={13} weight="semibold" color={theme.colors.danger}>{shortcutError}</AppText></View> : null}
         {entriesByMeal.map(({ meal: mealName, entries }) => (
           entries.length ? <TrainingCard key={mealName} padding={14} gap={12}>
@@ -794,7 +635,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
                   <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${entry.name}`} onPress={() => openFoodEditor(entry)} style={{ minHeight: 44, justifyContent: "center", flex: 1 }}>
                     <AppText size={12} weight="bold" primary>Edit food</AppText>
                   </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Favorite ${entry.name} portion`} onPress={() => void saveShortcut(`favorite-food:${entry.id}`,JSON.stringify(entry))} style={{ minHeight:44,justifyContent:"center" }}><AppText size={12} primary>Favorite portion</AppText></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Save ${entry.name} as a meal`} disabled={!recipesReady || !accountUserId || savingPortionId !== null} onPress={() => void savePortionAsMeal(entry)} style={{ minHeight:44,justifyContent:"center", opacity: recipesReady && savingPortionId === null ? 1 : 0.5 }}><AppText size={12} primary>{savingPortionId === entry.id ? 'Saving…' : 'Save as meal'}</AppText></Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${entry.name}`} onPress={() => void removeFood(entry)} style={{ minHeight: 44, justifyContent: "center" }}><AppText size={12} color={theme.colors.danger}>Delete</AppText></Pressable>
                   </View> : null}
                 </View>
@@ -887,125 +728,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
           }} /> : null}
         </View>
       </Modal>
-      <Modal animationType="slide" transparent visible={showAddFood && !showScanner} onRequestClose={() => setShowAddFood(false)}>
-        <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
-          <Pressable style={[styles.overlay, { backgroundColor: theme.colors.sheetOverlay }]} onPress={() => setShowAddFood(false)}>
-            <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-              <ScrollBody style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={styles.sheetBody}>
-                <View style={styles.sheetHeader}>
-                  <View><SectionLabel>{savingNewRecipe ? "Saved recipes" : dayLabel}</SectionLabel><AppText size={23} weight="black">{savingNewRecipe ? "Save recipe" : editingFood ? "Edit food" : "Add food"}</AppText></View>
-                  <Pressable accessibilityRole="button" accessibilityLabel={savingNewRecipe ? "Close recipe form" : "Close add food"} onPress={() => setShowAddFood(false)}><AppText size={25} muted>×</AppText></Pressable>
-                </View>
-                {!savingNewRecipe && !editingFood ? <>
-                  <View accessibilityRole="tablist" style={[styles.viewTabs, { backgroundColor: theme.colors.surfaceRaised }]}>
-                    {(["Food", "Recent"] as const).map(tab => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: addFoodTab === tab }} onPress={() => setAddFoodTab(tab)} style={[styles.viewTab, { backgroundColor: addFoodTab === tab ? theme.colors.primaryTint : "transparent" }]}><AppText size={13} weight="bold" primary={addFoodTab === tab}>{tab === "Food" ? "Food & database" : "Recent foods"}</AppText></Pressable>)}
-                  </View>
-                  {addFoodTab === "Food" ? <>{Platform.OS === "web" ? <SecondaryButton height={44} onPress={openScanner}>{buildFromIngredients ? "Scan ingredient" : scannedIngredients.length ? `Edit ingredients (${scannedIngredients.length})` : "Scan barcode"}</SecondaryButton> : null}</> : <FoodSearch entries={foodEntries} recipes={savedMeals} ready={foodJournalReady && recipesReady} onSelect={useRecentFood} />}
-                </> : null}
-                {addFoodTab !== "Recent" ? <>
-                {!savingNewRecipe && !editingFood && !buildFromIngredients && scannedIngredients.length === 1 && scannedIngredients[0].basis === "100 g" ? <View style={{ gap: 8 }}>
-                  <AppText size={12} weight="bold">Serving: {scannedIngredients[0].servings ? Number(scannedIngredients[0].servings) * 100 : "—"}g</AppText>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[50, 100, 150, 200].map(grams => <SecondaryButton key={grams} height={34} style={{ flexGrow: 1 }} onPress={() => { setCustomServingTarget(null); setCustomServingDraft(""); updateCommonServing(String(grams)); }}>{grams}g</SecondaryButton>)}<SecondaryButton height={34} style={{ flexGrow: 1 }} onPress={() => { setCustomServingDraft(scannedIngredients[0].servings ? String(Number(scannedIngredients[0].servings) * 100) : ""); setCustomServingTarget("food"); }}>Custom</SecondaryButton></View>
-                  {customServingTarget === "food" ? <Field label="Custom serving size (g)"><Input autoFocus bordered accessibilityLabel="Custom common food serving size in grams" keyboardType="decimal-pad" value={customServingDraft} placeholder="Enter grams" onChangeText={(value) => { setCustomServingDraft(value); updateCommonServing(value); }} /></Field> : null}
-                  <AppText size={11} muted>Macros below are calculated from the catalog values per 100 g.</AppText>
-                </View> : null}
-                {!savingNewRecipe && !editingFood ? <Pressable
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: buildFromIngredients }}
-                  accessibilityLabel="Build macros from ingredients"
-                  onPress={() => {
-                    const next = !buildFromIngredients;
-                    setBuildFromIngredients(next);
-                    if (next && !scannedIngredients.length) addManualIngredient();
-                  }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: buildFromIngredients ? theme.colors.primary : theme.colors.border, backgroundColor: buildFromIngredients ? theme.colors.primaryTint : theme.colors.surfaceRaised }}
-                >
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <AppText size={14} weight="bold">Build macros from ingredients</AppText>
-                    <AppText size={11} muted>{scannedIngredients.length ? `${scannedIngredients.length} ${scannedIngredients.length === 1 ? "ingredient" : "ingredients"} included in this one meal.` : "Enter each ingredient and we’ll calculate one meal total."}</AppText>
-                  </View>
-                  <View style={{ width: 46, height: 27, borderRadius: 14, padding: 3, justifyContent: "center", backgroundColor: buildFromIngredients ? theme.colors.primary : theme.colors.border }}>
-                    <View style={{ width: 21, height: 21, borderRadius: 11, backgroundColor: buildFromIngredients ? theme.colors.primaryText : theme.colors.surface, transform: [{ translateX: buildFromIngredients ? 19 : 0 }] }} />
-                  </View>
-                </Pressable> : null}
-                {buildFromIngredients && !savingNewRecipe && !editingFood ? <View style={{ gap: 12 }}>
-                  <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito" bordered /></Field>
-                  <View style={{ gap: 8 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <View style={{ flex: 1, gap: 2 }}><AppText size={14} weight="bold">Ingredients</AppText><AppText size={11} muted>Look up macros in each ingredient, or enter nutrition by hand.</AppText></View>
-                    </View>
-                  </View>
-                  {scannedIngredients.map((item, index) => {
-                    const catalogFood = item.basis === "100 g";
-                    const portionMacros = catalogFood ? ingredientTotals([item]) : null;
-                    const displayedMacro = (key: "calories" | "protein" | "carbs" | "fats") =>
-                      portionMacros ? (portionMacros[key] === null ? "" : String(portionMacros[key])) : item[key];
-                    return <View key={item.id} style={{ gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <AppText size={14} weight="bold">Ingredient {index + 1}</AppText>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`Remove ingredient ${index + 1}`} onPress={() => updateIngredients(scannedIngredients.filter((entry) => entry.id !== item.id))}>
-                        <AppText size={12} weight="bold" color={theme.colors.danger}>Remove</AppText>
-                      </Pressable>
-                    </View>
-                    {addFoodTab === "Food" ? <FoodSearch key={`food-lookup-${item.id}`} entries={[]} recipes={[]} ready onSelect={choice => useCommonFoodForIngredient(item.id, choice)} mode="find" /> : null}
-                    <Field label="Food name"><Input bordered value={item.name} placeholder="e.g. Chicken breast" onChangeText={(value) => editManualIngredient(item.id, { name: value })} /></Field>
-                    {!catalogFood ? <Field label={`Servings (${item.basis})`}><Input bordered accessibilityLabel={`Servings for ingredient ${index + 1}`} value={item.servings} keyboardType="decimal-pad" onChangeText={value => editManualIngredient(item.id, { servings: value })} /></Field> : null}
-                    {item.basis === "100 g" ? <View style={{ gap: 8, padding: 10, borderRadius: 12, backgroundColor: theme.colors.primaryTint }}>
-                      <AppText size={11} weight="bold" primary>MACROS FOR YOUR SELECTED AMOUNT</AppText>
-                      <AppText size={12} weight="bold">Amount in meal: {item.servings ? Number(item.servings) * 100 : "—"}g</AppText>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{[50, 100, 150, 200].map(grams => <SecondaryButton key={grams} height={32} style={{ flexGrow: 1 }} onPress={() => { setCustomServingTarget(null); setCustomServingDraft(""); editManualIngredient(item.id, { servings: String(grams / 100) }); }}>{grams}g</SecondaryButton>)}<SecondaryButton height={32} style={{ flexGrow: 1 }} onPress={() => { setCustomServingDraft(item.servings ? String(Number(item.servings) * 100) : ""); setCustomServingTarget(item.id); }}>Custom</SecondaryButton></View>
-                      {customServingTarget === item.id ? <Field label="Custom amount (g)"><Input autoFocus bordered accessibilityLabel={`Custom serving grams for ingredient ${index + 1}`} keyboardType="decimal-pad" value={customServingDraft} placeholder="Enter grams" onChangeText={(value) => {
-                        setCustomServingDraft(value);
-                        const grams = Number(value.trim().replace(",", "."));
-                        editManualIngredient(item.id, { servings: value.trim() && Number.isFinite(grams) && grams >= 0 ? String(grams / 100) : "" });
-                      }} /></Field> : null}
-                    </View> : null}
-                    <View style={styles.inputRow}>
-                      <Field label="Calories" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("calories")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { calories: value })} /></Field>
-                      <Field label="Protein (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("protein")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { protein: value })} /></Field>
-                    </View>
-                    <View style={styles.inputRow}>
-                      <Field label="Carbs (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("carbs")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { carbs: value })} /></Field>
-                      <Field label="Fat (g)" style={styles.inputHalf}><Input bordered editable={!catalogFood} value={displayedMacro("fats")} keyboardType="decimal-pad" placeholder={catalogFood ? "—" : "0"} onChangeText={(value) => editManualIngredient(item.id, { fats: value })} /></Field>
-                    </View>
-                  </View>; })}
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <SecondaryButton style={{ flex: 1 }} onPress={addManualIngredient}>Add ingredient</SecondaryButton>
-                  </View>
-                  <View style={{ padding: 12, borderRadius: 14, backgroundColor: theme.colors.primaryTint, gap: 3 }}>
-                    <AppText size={11} weight="bold" primary>ONE MEAL TOTAL</AppText>
-                    <AppText size={16} weight="black">{calories || "—"} calories</AppText>
-                    <AppText size={11} muted>{protein || "—"}g protein · {carbs || "—"}g carbs · {fats || "—"}g fat</AppText>
-                  </View>
-                </View> : <>
-                  {scannedIngredients.length ? <AppText size={12} muted>{scannedIngredients.length} scanned ingredients. Totals include the servings you chose. You can also adjust the totals below.</AppText> : null}
-                </>}
-                {!buildFromIngredients && !savingNewRecipe && !editingFood && addFoodTab === "Food" ? <View style={{ gap: 12 }}>
-                  <View style={{ flex: 1, gap: 7 }}><AppText size={12} weight="bold" muted>MEAL</AppText><View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View></View>
-                  <FoodSearch entries={[]} recipes={[]} ready onSelect={useCommonFood} mode="find" compact />
-                </View> : <Field label="Meal">
-                  <View style={styles.mealOptions}>{meals.map((option) => <Pressable key={option} accessibilityRole="button" accessibilityLabel={`Use ${option}`} accessibilityState={{ selected: meal === option }} onPress={() => setMeal(option)} style={[styles.mealOption, { borderColor: meal === option ? theme.colors.primary : theme.colors.border, backgroundColor: meal === option ? theme.colors.primaryTint : theme.colors.surfaceRaised }]}><AppText size={12} weight="bold" primary={meal === option}>{option}</AppText></Pressable>)}</View>
-                </Field>}
-                {!buildFromIngredients ? <>
-                  <Field label="Food or meal name"><Input value={name} onChangeText={setName} placeholder="e.g. Chicken burrito bowl" bordered /></Field>
-                  <Field label="Calories"><Input value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  <View style={styles.inputRow}>
-                    <Field label="Protein (g)" style={styles.inputHalf}><Input value={protein} onChangeText={setProtein} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                    <Field label="Carbs (g)" style={styles.inputHalf}><Input value={carbs} onChangeText={setCarbs} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                    <Field label="Fat (g)" style={styles.inputHalf}><Input value={fats} onChangeText={setFats} keyboardType="number-pad" placeholder="0" bordered /></Field>
-                  </View>
-                </> : null}
-                {recipeStorageError ? <AppText size={13} color={theme.colors.danger}>{recipeStorageError}</AppText> : null}
-        {foodJournalError ? <AppText size={13} color={theme.colors.danger}>{foodJournalError}</AppText> : null}
-                {formError ? <AppText size={13} color={theme.colors.danger}>{formError}</AppText> : null}
-                <SaveFeedback area={savingNewRecipe ? "recipes" : "food"} onRetried={() => { setShowAddFood(false); resetForm(); }} />
-                <PrimaryButton disabled={savingRecipe || (savingNewRecipe ? !recipesReady : !foodJournalReady)} onPress={() => void saveFood(savingNewRecipe)}>{savingRecipe ? "Saving..." : savingNewRecipe ? "Save recipe" : editingFood ? "Save changes" : isToday ? "Add to today" : "Add to this day"}</PrimaryButton>
-                </> : null}
-              </ScrollBody>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
+      <FoodLogSheet visible={showAddFood} date={journalDate} initialMeal={meal} entry={editingFood} recipeOnly={savingNewRecipe} onClose={() => setShowAddFood(false)} />
 
       <Modal animationType="slide" transparent visible={editingRecipe != null && !showScanner} onRequestClose={closeRecipeEditor}>
         <KeyboardAvoidingView enabled={Platform.OS !== "web"} behavior="padding" style={styles.keyboardAvoiding}>
@@ -1099,6 +822,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     return (
       <View style={{ flex: 1 }}>
         {journal}
+        {fuelActions}
         {sheets}
       </View>
     );
@@ -1108,6 +832,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date }: { emb
     <Screen>
       <TitleBar title="Nutrition tracker" onBack={nav.back} />
       {journal}
+      {fuelActions}
       {sheets}
     </Screen>
   );
@@ -1127,12 +852,12 @@ const styles = StyleSheet.create({
   fuelMacroTrack: { height: 7, borderRadius: 4, overflow: "hidden" },
   fuelMacroFill: { height: "100%", borderRadius: 4 },
   fuelIntro: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 20, paddingTop: 8, paddingBottom: 6 },
+  fuelActionBar: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   fuelIntroActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, flexGrow: 1, justifyContent: "flex-end" },
   fuelIntroButton: { flexGrow: 1, minWidth: 126 },
   journalEmpty: { gap: 14, padding: 16, borderRadius: 18, borderCurve: "continuous" },
   journalEmptyHeader: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   emptyStateMark: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  completePill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 10, borderRadius: 15 },
   journalActions: { flexDirection: "row", gap: 8 },
   journalActionButton: { flex: 1, minWidth: 0, paddingHorizontal: 8 },
   body: { gap: 16, paddingBottom: 30 },

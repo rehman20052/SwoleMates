@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState, Platform } from "react-native";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 
 import { getPartner, WorkoutFocus } from "@/data/partners";
 import {
@@ -18,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { isFoodEntry, sumFoodEntries } from "@/lib/food-journal";
 import { mergeVerifiedLogs, workoutLogKey } from "@/lib/workout-log-sync";
 import { nutritionGoalSource, planWithUpdatedWeight, goalsFromProfile, type NutritionGoals, type SavedNutritionPlan } from "@/lib/nutrition-plan-storage";
-import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores } from "@/lib/account-app-data";
+import { type AccountSetting, createAccountStores, loadAccountStores, refreshAccountStores, cachedAccountStores } from "@/lib/account-app-data";
 import { accountSyncError } from "@/lib/account-sync";
 import { saveLiftDetails, type LiftDetails, type TrackedLift } from "@/lib/lift-progression";
 import { reconcileWorkoutLifts } from "@/lib/workout-lift-progression";
@@ -381,6 +382,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     let active = true;
     let loaded = false;
     let refreshing = false;
+    let refreshAgain = false;
     let currentOwner: string | null = null;
     function applySnapshot(snapshot: Awaited<ReturnType<typeof loadAccountStores>>) {
       const stores = accountStores.current;
@@ -394,8 +396,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       }));
     }
     const refresh = async (owner: string | null, force = false) => {
-      if (!active || refreshing) return;
-      if (owner !== currentOwner || force) {
+      if (!active) return;
+      if (refreshing) { refreshAgain = true; return; }
+      if (owner !== currentOwner || force || (owner && !accountStores.current)) {
         currentOwner = owner; loaded = false; accountGeneration.current++;
         accountStores.current = owner ? createAccountStores(owner) : null;
         setDashboardHydrated(false); setData(seedData());
@@ -410,6 +413,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       const operation = accountQueue.current.then(async () => {
         if (!active || generation !== accountGeneration.current) return;
         try {
+          if (!loaded) {
+            try {
+              const cached = await cachedAccountStores(stores, defaultNutrition);
+              if (!active || generation !== accountGeneration.current) return;
+              if (cached) { applySnapshot(cached); setDashboardHydrated(true); }
+            } catch { /* A cache read failure must not prevent recovery from the server. */ }
+          }
           const snapshot = loaded ? await refreshAccountStores(stores, defaultNutrition) : await loadAccountStores(stores, defaultNutrition);
           if (!active || generation !== accountGeneration.current) return;
           applySnapshot(snapshot);
@@ -430,39 +440,48 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       });
       accountQueue.current = operation.catch(() => undefined);
       await operation; refreshing = false;
+      if (refreshAgain) { refreshAgain = false; foreground(); }
     };
-    void supabase.auth.getSession().then(({ data }) => refresh(data.session?.user.id ?? null, true));
+    let realtime = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channelOwner: string | null = null;
+    const bindAccountChannel = (owner: string | null) => {
+      if (!active || channelOwner === owner) return;
+      if (channel) void supabase.removeChannel(channel);
+      channel = null; channelOwner = owner; realtime = false;
+      if (!owner) return;
+      channel = supabase.channel(`account-record-deltas-${owner}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "account_records", filter: `user_id=eq.${owner}` }, () => foreground())
+        .subscribe(status => { if (!active || channelOwner !== owner) return; realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
+    };
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      const owner = data.session?.user.id ?? null;
+      bindAccountChannel(owner);
+      if (owner === currentOwner && accountStores.current) return;
+      return refresh(owner);
+    });
     const { data: auth } = supabase.auth.onAuthStateChange((event, session) => {
       const owner = session?.user.id ?? null;
+      bindAccountChannel(owner);
       if (event === "SIGNED_OUT" || owner !== currentOwner) {
         // Clear the old account synchronously, even while a server call is pending.
         accountGeneration.current++; accountStores.current = null;
         currentOwner = owner; loaded = false; setDashboardHydrated(false); setData(seedData());
-        setTimeout(() => { refreshing = false; void refresh(owner, true); }, 0);
+        setTimeout(() => {
+          if (!active || currentOwner !== owner || (owner && accountStores.current?.userId === owner)) return;
+          refreshing = false; void refresh(owner, true);
+        }, 0);
       }
     });
-    const foreground = () => {
-      if (Platform.OS === "web" && typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      void refresh(currentOwner);
-    };
-    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") foreground(); });
-    let realtime = false;
-    const channel = supabase.channel("account-record-deltas")
-      .on("postgres_changes", { event: "*", schema: "public", table: "account_records" }, foreground)
-      .subscribe(status => { realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
-    const timer = setInterval(() => { if (!realtime) foreground(); }, 60000);
+    const updates = foregroundRefresh(() => refresh(currentOwner), 60000, () => !realtime);
+    const foreground = updates.request;
     const retryTimer = setInterval(() => {
       const stores = accountStores.current;
       if (stores && Object.values(stores).some(store => typeof store === "object" && "status" in store && store.status().phase === "pending")) foreground();
     }, 5000);
-    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", foreground);
-    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("focus", foreground);
-    if (Platform.OS === "web" && typeof document !== "undefined") document.addEventListener("visibilitychange", foreground);
     return () => {
-      active = false; accountGeneration.current++; clearInterval(timer); clearInterval(retryTimer); void supabase.removeChannel(channel); auth.subscription.unsubscribe(); subscription.remove();
-      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", foreground);
-      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("focus", foreground);
-      if (Platform.OS === "web" && typeof document !== "undefined") document.removeEventListener("visibilitychange", foreground);
+      active = false; accountGeneration.current++; updates.stop(); clearInterval(retryTimer); if (channel) void supabase.removeChannel(channel); auth.subscription.unsubscribe();
     };
   }, [retrySync]);
 

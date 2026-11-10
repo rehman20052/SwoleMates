@@ -1,17 +1,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 import { createAccountList, type AccountRemote, type AccountRecord, type RecordChange } from "./account-sync-core";
+import { withDeadline } from "./network-deadline";
 
 export function accountSyncError(error: unknown) {
   const value = error as { code?: string; message?: string };
   if (["42P01", "PGRST202", "PGRST205"].includes(value?.code ?? "")) return "Account sync needs the Supabase migration in supabase/account-sync.sql. Existing local data is preserved.";
-  if (value?.code === "40001") return "This record changed on another device. Refresh and try again.";
+  if (value?.code === "40001" || value?.code === "PT409") return "This record changed on another device. Refresh and try again.";
   return value?.message || "Could not sync with your account. Check your connection and try again.";
 }
 export function accountRemote(userId: string): AccountRemote {
   const snapshots = new Map<string, { rows: Map<string, AccountRecord>; sequence: number }>();
   async function checkOwner() {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await withDeadline(supabase.auth.getSession());
     if (error) throw error;
     if (data.session?.user.id !== userId) throw new Error("Your account changed. Reopen this screen before saving.");
   }

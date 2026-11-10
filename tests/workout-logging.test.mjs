@@ -2,10 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTs } from './helpers/load-ts.mjs';
 const { parseWorkoutDraft, uniqueWorkoutTemplates } = loadTs('src/lib/workout-drafts.ts');
-const { exerciseToDraft, draftSets, prefillExercise, completedExercises, workoutStats, workoutRecords, performanceHistory, lastPerformance, validDraftSet, volumeLabel } = loadTs('src/lib/workout-logging.ts');
+const { exerciseToDraft, draftSets, prefillExercise, prefillWorkoutRows, completedExercises, workoutStats, workoutRecords, performanceHistory, lastPerformance, validDraftSet, volumeLabel } = loadTs('src/lib/workout-logging.ts');
 const { validWorkoutExercises, exerciseSummary } = loadTs('src/lib/workout-session.ts');
 const exercise = { id: 'bench', name: 'Bench press', sets: 2, reps: 8, weight: 100, unit: 'lb', setDetails: [{ reps: 8, weight: 100 }, { reps: 6, weight: 110 }] };
 const history = [{ id: 'last', date: '2026-10-07', exercises: [exercise] }];
+
+test('reopening Leg Day uses saved reps and weights rather than the original template', () => {
+  const template = [{ ...exerciseToDraft({ ...exercise, name: 'Leg press', weight: 0, reps: 10, setDetails: undefined }, 'template'), repRange: '8-12', restSeconds: '90' }];
+  const entered = [{ ...template[0], setValues: [{ reps: '12', weight: '180', completed: true }, { reps: '9', weight: '200', completed: true }] }];
+  const saved = JSON.parse(JSON.stringify({ id: 'legs-today', date: '2026-11-03', exercises: completedExercises(entered) }));
+  const snapshot = JSON.stringify(template);
+  for (const date of ['2026-11-03', '2026-11-10']) {
+    const next = prefillWorkoutRows(template, [saved], date);
+    assert.equal(next[0].setValues[0].weight, '180');
+    assert.equal(next[0].setValues[0].reps, '12');
+    assert.equal(next[0].setValues[1].weight, '200');
+    assert.equal(next[0].setValues[1].reps, '9');
+    assert.equal(next[0].repRange, '8-12'); assert.equal(next[0].restSeconds, '90');
+    assert.equal(completedExercises(next).length, 0);
+  }
+  assert.equal(JSON.stringify(template), snapshot);
+});
+
+test('routine prefill selects latest eligible performance, keeps units and template set counts', () => {
+  const template = { ...exerciseToDraft(exercise, 'template'), sets: '3' };
+  const logs = [
+    { id: 'old', date: '2026-11-02', exercises: [exercise] },
+    { id: 'latest', date: '2026-11-03', loggedAt: '2026-11-03T14:00:00Z', exercises: [{ ...exercise, unit: 'kg', setDetails: [{ reps: 7, weight: 50 }] }] },
+    { id: 'future', date: '2026-11-10', exercises: [{ ...exercise, setDetails: [{ reps: 8, weight: 300 }] }] },
+  ];
+  const next = prefillWorkoutRows([template], logs, '2026-11-03')[0];
+  assert.equal(next.unit, 'kg'); assert.equal(next.setValues.length, 3);
+  assert.equal(next.setValues[2].weight, '50'); assert.equal(next.setValues[2].reps, '7');
+  assert.equal(prefillWorkoutRows([template], logs, '2026-11-03', 'latest')[0].weight, '100');
+  assert.equal(prefillWorkoutRows([template], [], '2026-11-03')[0].weight, '100');
+});
 test('template picker removes equivalent duplicates but retains different per-set prescriptions', () => {
   const original = { id: 'one', title: 'Chest day!', notes: '', rows: [exerciseToDraft(exercise, 'row')] };
   const duplicate = { ...original, id: 'two', title: 'CHEST DAY!', rows: [exerciseToDraft(exercise, 'another-row')] };

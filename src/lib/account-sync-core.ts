@@ -18,7 +18,7 @@ function serialized(value: unknown): string {
 }
 function failure(error: unknown): SyncPhase {
   const { code, message } = error as { code?: string; message?: string };
-  if (code === "40001" || /newer version|conflict/i.test(message ?? "")) return "conflict";
+  if (code === "40001" || code === "PT409" || /newer version|conflict/i.test(message ?? "")) return "conflict";
   if (code && !["08000", "08001", "08006", "57014", "PGRST000", "PGRST001", "PGRST002"].includes(code)) return "error";
   if (/account changed|sign in|permission|still loading/i.test(message ?? "")) return "error";
   return "pending";

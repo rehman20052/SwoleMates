@@ -656,6 +656,7 @@ export function WeightTrendCard({
       {editing ? (
         <View style={{ gap: 10 }}>
           <Stepper label="Current weight (lb)" value={weight} min={90} max={400} onChange={setWeight} />
+          <AppText size={12} muted>Updates daily calories and macros using this weight and your current goal. Custom targets will be recalculated.</AppText>
           <PrimaryButton
             height={44}
             disabled={disabled || saving}
@@ -667,7 +668,7 @@ export function WeightTrendCard({
               if (saved) setEditing(false);
             }}
           >
-            {saving ? "Saving…" : "Log weight"}
+            {saving ? "Saving…" : "Log weight & update targets"}
           </PrimaryButton>
           {latest ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Cancel weight edit" onPress={() => setEditing(false)}>

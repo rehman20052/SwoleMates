@@ -237,7 +237,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
         if (alive) setLoadError(errorMessage(err, "Could not load your feed."));
       });
     const stop = subscribeFeed(() => {
-      void reload().catch((err) => {
+      return reload().catch((err) => {
         if (alive) setLoadError(errorMessage(err, "Could not load your feed."));
       });
     }, channelName);
@@ -865,9 +865,7 @@ function NotificationBell() {
 
   useEffect(() => {
     void refresh();
-    return subscribeFeed(() => {
-      void refresh();
-    }, "social-notices");
+    return subscribeFeed(refresh, "social-notices");
   }, [refresh]);
 
   async function openBell() {
