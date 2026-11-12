@@ -437,6 +437,7 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
         {nutritionProfile && isToday ? (
           <WeightTrendCard
             profile={nutritionProfile}
+            manual={nutritionGoalSource === "manual"}
             onLog={logWeighIn}
             disabled={!nutritionPlanReady || savingPlan}
             error={nutritionPlanError}
@@ -465,12 +466,18 @@ export function NutritionTrackerScreen({ embedded = false, header, date, onScrol
           <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
             <AppText size={13} muted>Loading your food journal…</AppText>
           </View>
-        ) : todayEntries.length === 0 ? <View style={[styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }]}>
+        ) : todayEntries.length === 0 ? <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Start with your first meal"
+          disabled={!foodJournalReady}
+          onPress={() => openFoodForm(false)}
+          style={({ pressed }) => [styles.journalEmpty, { backgroundColor: theme.colors.insetSurface }, pressed && { opacity: 0.72 }]}
+        >
           <View style={styles.journalEmptyHeader}>
             <View style={[styles.emptyStateMark, { backgroundColor: theme.colors.primaryTint }]}><AppText size={22} weight="black" primary>+</AppText></View>
             <View style={{ flex: 1, gap: 3 }}><AppText size={15} weight="extrabold">Start with your first meal</AppText><AppText size={12} muted>Log it once. We’ll keep the day’s numbers moving.</AppText></View>
           </View>
-        </View> : null}
+        </Pressable> : null}
         {canRepeatYesterday || copying ? (
           <View style={styles.journalActions}>
             {canRepeatYesterday || copying ? (

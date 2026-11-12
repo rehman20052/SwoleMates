@@ -6,7 +6,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 
 (async () => {
-  const root = path.resolve(__dirname, '../.expo/train-prototype-web');
+  const root = path.resolve(__dirname, process.env.SMOKE_BUILD_DIR || '../.expo/train-prototype-web');
   const server = http.createServer((req, res) => {
     const relative = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).replace(/^\/(?:SwoleMates\/?)?/, '') || 'index.html';
     const file = path.resolve(root, relative);
@@ -162,8 +162,6 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'Monday routine: Rest day', exact: true }).click();
     await page.getByRole('radio', { name: 'Assign Prototype push to Monday', exact: true }).click();
     await page.getByRole('button', { name: 'Save weekly split', exact: true }).click();
-    await page.getByText('“My weekly split” saved. Your week is ready.', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Close create workout plan', exact: true }).click();
     await page.getByRole('button', { name: 'Close create workout plan', exact: true }).waitFor({ state: 'detached' });
     assert.ok(cloud.get('settings').some(r => r.record_id.startsWith('workout-split:')));
     await page.getByRole('button', { name: 'Use Prototype push', exact: true }).click();
@@ -281,6 +279,8 @@ const assert = require('node:assert/strict');
     assert.ok(exerciseScrolling?.scrollTop > 0, 'exercise picker still scrolls');
     await page.getByLabel('Search exercises', { exact: true }).fill('Cable lateral raise');
     await page.getByRole('button', { name: 'Add custom exercise Cable lateral raise', exact: true }).click();
+    await page.getByRole('checkbox', { name: 'Shoulders', exact: true }).click();
+    await page.getByRole('button', { name: 'Save muscles', exact: true }).click();
     await page.getByRole('button', { name: 'Add 1 exercise', exact: true }).click();
     await page.getByLabel('Cable lateral raise set 1 weight', { exact: true }).fill('20');
     await page.getByLabel('Cable lateral raise set 1 reps', { exact: true }).fill('12');

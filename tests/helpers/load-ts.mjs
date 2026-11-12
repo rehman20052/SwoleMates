@@ -12,6 +12,7 @@ export function loadTs(filename) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
   const localRequire = specifier => {
+    if (specifier.startsWith('.') && specifier.endsWith('.json')) return JSON.parse(readFileSync(path.resolve(path.dirname(resolved), specifier), 'utf8'));
     if (specifier.startsWith('.')) return loadTs(path.resolve(path.dirname(resolved), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`));
     throw new Error(`Unexpected test import: ${specifier}`);
   };

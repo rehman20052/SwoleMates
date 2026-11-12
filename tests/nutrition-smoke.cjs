@@ -65,6 +65,7 @@ const assert = require('node:assert/strict');
     ]);
     let failSave = false, safetyUnavailable = false, safetyStalled = false, profileTableFailure = false, authWriteFailure = false, holdPublish = false;
     let releasePublish = null;
+    let foodReadGate = null, failFoodRead = false;
     const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const previousDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
     const old = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
@@ -120,7 +121,14 @@ const assert = require('node:assert/strict');
         return route.fulfill({ json: messageRows });
       }
       if (url.includes('/rpc/account_read_delta')) return route.fulfill({ status: 404, json: { code: 'PGRST202', message: 'Use legacy reads in the test fixture' } });
-      if (url.includes('/rest/v1/account_records')) return route.fulfill({ json: cloud.get(new URL(url).searchParams.get('namespace')?.replace(/^eq\./, '')) ?? [] });
+      if (url.includes('/rest/v1/account_records')) {
+        const namespace = new URL(url).searchParams.get('namespace')?.replace(/^eq\./, '');
+        if (namespace === 'food' && foodReadGate) await foodReadGate;
+        if (namespace === 'food' && failFoodRead) {
+          return route.fulfill({ status: 403, json: { code: '42501', message: 'Food read unavailable in test' } });
+        }
+        return route.fulfill({ json: cloud.get(namespace) ?? [] });
+      }
       if (url.includes('/rpc/account_import_records') || url.includes('/rpc/account_save_records') || url.includes('/rpc/account_commit_operation')) {
         const body = route.request().postDataJSON();
         const rows = cloud.get(body.p_namespace) ?? [];
@@ -158,6 +166,29 @@ const assert = require('node:assert/strict');
     };
     await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
     await homeFuel();
+    const snapshot = page.getByTestId('nutrition-snapshot');
+    await button('Train').click();
+    await snapshot.getByText('Based on 1 logged meal across 1 day', { exact: true }).waitFor();
+    await snapshot.getByText('Calories per logged day', { exact: true }).waitFor();
+    assert.equal(await snapshot.getByTestId('calorie-day-bar').count(), 7);
+    assert.equal(await snapshot.getByTestId('macro-goal-bar').count(), 3);
+    const snapshotOrder = await snapshot.ariaSnapshot();
+    const readingOrder = ['Nutrition overview', 'Based on 1 logged meal across 1 day', 'Calories per logged day', 'Calories by day', 'Macros per logged day', 'Open Fuel']
+      .map(text => snapshotOrder.indexOf(text));
+    assert.ok(readingOrder.every((index, position) => index > (readingOrder[position - 1] ?? -1)), snapshotOrder);
+    assert.equal(await snapshot.getByRole('button').count(), 1);
+    assert.equal(await snapshot.getByRole('tab').count(), 0);
+    assert.equal(await snapshot.locator('img').count(), 0, 'custom meals use data graphics');
+    assert.ok(await snapshot.evaluate(card => {
+      const box = card.getBoundingClientRect();
+      return box.left >= 0 && box.right <= document.documentElement.clientWidth && card.scrollWidth <= card.clientWidth;
+    }), 'nutrition snapshot fits the mobile viewport');
+    const openSnapshot = snapshot.getByRole('button', { name: 'Open Fuel', exact: true });
+    await openSnapshot.focus();
+    await page.keyboard.press('Enter');
+    await page.getByText('Smoke yogurt', { exact: true }).first().waitFor();
+    await button('Train').click();
+    await button('Fuel').click();
     assert.equal(await tab('Food Library').count(), 0);
     await logFood();
     await field('Calories').waitFor();
@@ -333,6 +364,20 @@ const assert = require('node:assert/strict');
     await page.getByText('Offline meal', { exact: true }).first().waitFor();
     await page.getByText('Saved on this device. Sync pending.', { exact: true }).first().waitFor();
     assert.equal(foodNamed('Offline meal').length, 0);
+    const localMealCount = cloud.get('food')
+      .filter(row => !row.deleted && row.payload.date > oldDate && row.payload.date <= today)
+      .length + 1;
+    await button('Train').click();
+    await snapshot.getByText(new RegExp(`Based on ${localMealCount} logged meals across`)).waitFor();
+    assert.equal(await snapshot.getByTestId('calorie-day-bar').count(), 7);
+    assert.equal(await snapshot.getByTestId('calorie-target-line').count(), 1);
+    const ratios = await snapshot.getByTestId('macro-goal-bar').evaluateAll(bars => bars.map(bar =>
+      bar.getBoundingClientRect().width / bar.parentElement.getBoundingClientRect().width));
+    assert.equal(ratios.length, 3);
+    assert.ok(ratios.every(ratio => ratio >= 0 && ratio <= 1.01));
+    await snapshot.screenshot({ path: 'artifacts/nutrition-overview-mobile.png', animations: 'disabled' });
+    await openSnapshot.click();
+    await page.getByText('Offline meal', { exact: true }).first().waitFor();
     failSave = false;
     await button('Try syncing now').first().click();
     await wait(() => foodNamed('Offline meal').length === 1);
@@ -426,6 +471,54 @@ const assert = require('node:assert/strict');
     await retryMatch.click();
     await page.getByText('With Smoke', { exact: true }).waitFor();
     await page.getByText('Checking this match…', { exact: true }).waitFor({ state: 'hidden' });
+
+    // Use a fresh local cache so a failed first read has no entries to show.
+    await page.evaluate(() => localStorage.clear());
+    cloud.set('food', []);
+    failFoodRead = true;
+    let releaseFoodRead;
+    foodReadGate = new Promise(resolve => { releaseFoodRead = resolve; });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#app-bottom-navigation div[aria-label="Home"]').tap();
+    if (!await snapshot.count()) await button('Train').click();
+    await snapshot.getByText('Loading food history…', { exact: true }).waitFor();
+    releaseFoodRead();
+    await snapshot.getByText('Food history couldn’t refresh', { exact: true }).waitFor();
+    assert.equal(await snapshot.getByText('No meals logged in the last 7 days').count(), 0);
+    failFoodRead = false;
+    await button('Retry account sync').click();
+    await snapshot.getByText('No meals logged in the last 7 days', { exact: true }).waitFor();
+    await openSnapshot.click();
+    await page.getByText('Daily fuel', { exact: true }).locator('..').getByText(/^today$/i).waitFor();
+
+    // Unknown protein still gives an occasional logger a recent meal history.
+    const longName = 'Vegetable sandwich with homemade sauce and roasted vegetables '.repeat(2).trim();
+    cloud.set('food', [{ record_id: 'unknown-food', revision: 1, deleted: false,
+      payload: { ...yogurt, id: 'unknown-food', name: longName, date: today, protein: 0, incompleteNutrients: ['protein'] } }]);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#app-bottom-navigation div[aria-label="Home"]').tap();
+    if (!await snapshot.count()) await button('Train').click();
+    await snapshot.getByText('Some macro values weren’t entered', { exact: true }).waitFor();
+    await snapshot.getByText('Enter missing values to compare with your target', { exact: true }).waitFor();
+    assert.ok(await snapshot.evaluate(card => card.scrollWidth <= card.clientWidth), 'long names wrap within the card');
+
+    // Repeated meals remain useful without a known protein value.
+    cloud.get('food').push({ record_id: 'repeat-food', revision: 1, deleted: false,
+      payload: { ...cloud.get('food')[0].payload, id: 'repeat-food', date: previousDate } });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#app-bottom-navigation div[aria-label="Home"]').tap();
+    if (!await snapshot.count()) await button('Train').click();
+    await snapshot.getByText('Based on 2 logged meals across 2 days', { exact: true }).waitFor();
+    assert.equal(await snapshot.getByTestId('calorie-day-bar').count(), 7);
+    const calorieChart = await snapshot.ariaSnapshot();
+    assert.ok(calorieChart.includes('no meals logged'));
+    failFoodRead = true;
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#app-bottom-navigation div[aria-label="Home"]').tap();
+    if (!await snapshot.count()) await button('Train').click();
+    await snapshot.getByText('Food history couldn’t refresh', { exact: true }).waitFor();
+    await snapshot.getByText('Based on 2 logged meals across 2 days', { exact: true }).waitFor();
     assert.deepEqual(errors, [], 'no browser runtime errors');
     console.log('Browser checks passed: meal logging, offline sync, settings and profile saves, safety timeout retries, and workout scheduling recovery.');
   } catch (error) { console.error(error); console.error('Runtime errors:', errors); await page.screenshot({ path: 'artifacts/meal-tray-smoke-failure.png', fullPage: true }).catch(() => {}); console.error((await page.locator('body').innerText()).slice(-6500)); throw error; }

@@ -1,5 +1,7 @@
+import { ExerciseMusclePicker, useMuscleClassifications } from './exercise-muscle-picker';
+import { exerciseMuscles } from '@/lib/exercise-muscles';
 import { useWeightUnit, convertWeight } from "@/state/weight-unit";
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
@@ -86,6 +88,8 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
 }) {
   const palette = useWorkoutLogPalette();
   const theme = useAppTheme();
+  const classifications = useMuscleClassifications();
+  const [classifying, setClassifying] = useState('');
   const [picking, setPicking] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
@@ -113,9 +117,9 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
   }
   function choose(name: string) {
     const id = picking === 'new' ? `exercise-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : picking!;
-    const customName = name === 'Other' ? search.trim().slice(0, 100) : '';
-    if (name === 'Other' && !customName) { setError('Enter an exercise name.'); return; }
-    const previous = lastPerformance(history, customName || name);
+    const customName = '';
+
+    const previous = lastPerformance(history, name);
     const row: DraftExercise = { id, exercise: name, customName, sets: '3', reps: '', weight: '', unit: displayedUnit };
     const next = previous ? prefillExercise(row, previous) : row;
     change(current => picking === 'new' ? [...current, next] : current.map(item => item.id === id ? next : item));
@@ -123,6 +127,22 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
   }
   function toggleSelection(name: string) {
     setSelected(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
+  }
+  function selectExercise(name: string) {
+    if (picking === 'new') toggleSelection(name);
+    else choose(name);
+  }
+  function requestExercise(name: string) {
+    if ((picking === 'new' && selected.includes(name)) || exerciseMuscles(name, classifications).length) {
+      selectExercise(name);
+      return;
+    }
+    setClassifying(name);
+  }
+  function closePicker() {
+    setClassifying('');
+    setPicking(null);
+    setError('');
   }
   function addSelected() {
     if (!selected.length || disabled) return;
@@ -135,7 +155,8 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
     change(current => [...current, ...additions]);
     setPicking(null); setSearch(''); setSelected([]); setMenu(null);
   }
-  const candidates = exerciseOptions([...selected, ...history.flatMap(log => log.exercises?.map(e => e.name) ?? []), ...catalog], search).filter(name => !['Choose exercise', 'Other'].includes(name)).slice(0, 40);
+  const savedNames = [...classifications.values()].map(item => item.name);
+  const candidates = exerciseOptions([...selected, ...savedNames, ...history.flatMap(log => log.exercises?.map(e => e.name) ?? []), ...catalog], search).filter(name => !['Choose exercise', 'Other'].includes(name)).slice(0, 40);
   return <View style={{ gap: 16 }}>
     <View style={{ gap: 10 }}>
       <View style={styles.row}>
@@ -170,16 +191,22 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
     })}
     {error ? <AppText size={13} color={theme.colors.danger} accessibilityRole="alert">{error}</AppText> : null}
     <WorkoutLogButton accessibilityLabel="Add exercise" disabled={disabled || rows.length >= 30} onPress={() => { setPicking('new'); setSearch(''); setSelected([]); setError(''); }}>＋ Add exercise</WorkoutLogButton>
-    <Modal transparent visible={!!picking} animationType="fade" onRequestClose={() => setPicking(null)}>
+    <Modal transparent visible={!!picking} animationType="fade" onRequestClose={closePicker}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.overlay, { backgroundColor: theme.colors.modalOverlay }]}>
         <View accessibilityViewIsModal style={[styles.picker, { backgroundColor: palette.background, borderColor: palette.border }]}>
-          <View style={[styles.row, { paddingHorizontal: 18, paddingTop: 14 }]}><AppText display={false} size={20} weight="semibold" color={palette.text}>{picking === 'new' ? 'Add exercise' : 'Change exercise'}</AppText><Pressable accessibilityRole="button" accessibilityLabel="Cancel search" onPress={() => { setPicking(null); setError(''); }} style={styles.icon}><WorkoutLogIcon name="close" color={palette.muted} size={19} /></Pressable></View>
+          <View style={[styles.row, { paddingHorizontal: 18, paddingTop: 14 }]}><AppText display={false} size={20} weight="semibold" color={palette.text}>{picking === 'new' ? 'Add exercise' : 'Change exercise'}</AppText><Pressable accessibilityRole="button" accessibilityLabel="Cancel search" onPress={closePicker} style={styles.icon}><WorkoutLogIcon name="close" color={palette.muted} size={19} /></Pressable></View>
           <ScrollBody contentContainerStyle={{ padding: 18, gap: 12 }}>
+            {classifying ? <ExerciseMusclePicker name={classifying} onCancel={() => setClassifying('')} onSaved={() => {
+              selectExercise(classifying);
+              setClassifying('');
+              setSearch('');
+            }} /> : <>
             <Input autoFocus accessibilityLabel="Search exercises" placeholder="Search or add your own" value={search} onChangeText={value => setSearch(value.slice(0, 100))} style={[styles.search, { backgroundColor: palette.field, borderColor: palette.border, color: palette.text }]} />
-            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ maxHeight: 340 }}>{candidates.map(name => <Pressable key={name} accessibilityRole={picking === 'new' ? 'checkbox' : 'button'} accessibilityLabel={`Select ${name}`} accessibilityState={picking === 'new' ? { checked: selected.includes(name) } : undefined} disabled={disabled} onPress={() => picking === 'new' ? toggleSelection(name) : choose(name)} style={[styles.result, { borderColor: palette.border }]}><AppText size={15} color={palette.text} style={{ flex: 1 }}>{name}</AppText>{picking === 'new' ? <View style={[styles.checkMark, { borderColor: selected.includes(name) ? palette.accent : palette.border, backgroundColor: selected.includes(name) ? palette.complete : 'transparent' }]}>{selected.includes(name) ? <WorkoutLogIcon name="check" size={17} color={palette.accent} /> : null}</View> : <WorkoutLogIcon name="plus" size={17} color={palette.muted} />}</Pressable>)}
-              {search.trim() && !candidates.some(name => name.toLowerCase() === search.trim().toLowerCase()) ? <Pressable accessibilityRole="button" accessibilityLabel={`Add custom exercise ${search.trim()}`} disabled={disabled} onPress={() => { if (picking === 'new') { const name = search.trim(); setSelected(current => current.includes(name) ? current : [...current, name]); setSearch(''); } else choose('Other'); }} style={[styles.result, { borderColor: palette.border }]}><AppText size={15} color={palette.text}>Add “{search.trim()}”</AppText><WorkoutLogIcon name="plus" size={17} color={palette.muted} /></Pressable> : null}
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ maxHeight: 340 }}>{candidates.map(name => <Pressable key={name} accessibilityRole={picking === 'new' ? 'checkbox' : 'button'} accessibilityLabel={`Select ${name}`} accessibilityState={picking === 'new' ? { checked: selected.includes(name) } : undefined} disabled={disabled} onPress={() => requestExercise(name)} style={[styles.result, { borderColor: palette.border }]}><AppText size={15} color={palette.text} style={{ flex: 1 }}>{name}</AppText>{picking === 'new' ? <View style={[styles.checkMark, { borderColor: selected.includes(name) ? palette.accent : palette.border, backgroundColor: selected.includes(name) ? palette.complete : 'transparent' }]}>{selected.includes(name) ? <WorkoutLogIcon name="check" size={17} color={palette.accent} /> : null}</View> : <WorkoutLogIcon name="plus" size={17} color={palette.muted} />}</Pressable>)}
+              {search.trim() && !candidates.some(name => name.toLowerCase() === search.trim().toLowerCase()) ? <Pressable accessibilityRole="button" accessibilityLabel={`Add custom exercise ${search.trim()}`} disabled={disabled} onPress={() => { requestExercise(search.trim()); setSearch(''); }} style={[styles.result, { borderColor: palette.border }]}><AppText size={15} color={palette.text}>Add “{search.trim()}”</AppText><WorkoutLogIcon name="plus" size={17} color={palette.muted} /></Pressable> : null}
             </ScrollView>
             {picking === 'new' ? <><AppText size={12} color={palette.muted} accessibilityLiveRegion="polite">{selected.length} selected</AppText>{error ? <AppText size={13} color={palette.danger} accessibilityRole="alert">{error}</AppText> : null}<WorkoutLogButton primary disabled={disabled || !selected.length || rows.length + selected.length > 30} onPress={addSelected}>{selected.length ? `Add ${selected.length} ${selected.length === 1 ? 'exercise' : 'exercises'}` : 'Choose exercises to add'}</WorkoutLogButton></> : null}
+            </>}
           </ScrollBody>
         </View>
       </KeyboardAvoidingView>
@@ -187,11 +214,45 @@ export function WorkoutSetEditor({ rows, setRows, disabled, onChange, preserveCo
   </View>;
 }
 
-export function WorkoutRecordedSets({ exercises }: { exercises: WorkoutExercise[] }) {
+export function WorkoutRecordedSets({ exercises, highlightedExerciseId, highlightedSetIndex, onHighlightLayout }: {
+  exercises: WorkoutExercise[];
+  highlightedExerciseId?: string;
+  highlightedSetIndex?: number;
+  onHighlightLayout?: (card: View) => void;
+}) {
+  const highlightedCard = useRef<View>(null);
+  const highlightedSet = useRef<View>(null);
   const { unit, formatWeight } = useWeightUnit();
   exercises = exercises.map(exercise => ({ ...exercise, unit, weight: formatWeight(exercise.weight, exercise.unit), setDetails: exercise.setDetails?.map(set => ({ ...set, weight: formatWeight(set.weight, exercise.unit) })) }));
   const palette = useWorkoutLogPalette();
-  return <View style={{ gap: 16 }}>{exercises.map(exercise => <View key={exercise.id} style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}><AppText display={false} size={17} weight="semibold" color={palette.text}>{exercise.name}</AppText><View style={[styles.row, { paddingTop: 14 }]}><AppText size={12} color={palette.muted} style={{ width: 28 }}>Set</AppText><AppText size={12} color={palette.muted} style={styles.column}>Weight ({exercise.unit})</AppText><AppText size={12} color={palette.muted} style={styles.column}>Reps</AppText><AppText size={12} color={palette.muted}>Done</AppText></View>{(exercise.setDetails ?? Array.from({ length: exercise.sets }, () => ({ reps: exercise.reps, weight: exercise.weight }))).map((set, i) => <View key={i} style={[styles.row, { minHeight: 44 }]}><AppText size={12} color={palette.muted} style={{ width: 28 }}>{i + 1}</AppText><AppText size={17} color={palette.text} style={styles.column}>{set.weight}</AppText><AppText size={17} color={palette.text} style={styles.column}>{set.reps}</AppText><WorkoutLogIcon name="check" size={16} color={palette.accent} /></View>)}</View>)}</View>;
+  return <View style={{ gap: 16 }}>{exercises.map(exercise => {
+    const highlighted = exercise.id === highlightedExerciseId;
+    return <View key={exercise.id} ref={highlighted ? highlightedCard : undefined} collapsable={highlighted ? false : undefined}
+      testID={highlighted ? "highlighted-workout-exercise" : undefined}
+      onLayout={highlighted && highlightedSetIndex === undefined ? () => { if (highlightedCard.current) onHighlightLayout?.(highlightedCard.current); } : undefined}
+      style={[styles.card, { backgroundColor: palette.surface, borderColor: highlighted ? palette.accent : palette.border }, highlighted && { borderWidth: 2 }]}>
+      <AppText display={false} size={17} weight="semibold" color={palette.text}>{exercise.name}</AppText>
+      <View style={[styles.row, { paddingTop: 14 }]}>
+        <AppText size={12} color={palette.muted} style={{ width: 28 }}>Set</AppText>
+        <AppText size={12} color={palette.muted} style={styles.column}>Weight ({exercise.unit})</AppText>
+        <AppText size={12} color={palette.muted} style={styles.column}>Reps</AppText>
+        <AppText size={12} color={palette.muted}>Done</AppText>
+      </View>
+      {(exercise.setDetails ?? Array.from({ length: exercise.sets }, () => ({ reps: exercise.reps, weight: exercise.weight }))).map((set, i) => {
+        const source = highlighted && highlightedSetIndex === i;
+        return <View key={i} ref={source ? highlightedSet : undefined} collapsable={source ? false : undefined}
+          accessible={source || undefined} accessibilityLabel={source ? `Source set ${i + 1}, ${set.weight} ${exercise.unit}, ${set.reps} reps` : undefined}
+          testID={source ? 'highlighted-workout-set' : undefined}
+          onLayout={source ? () => { if (highlightedSet.current) onHighlightLayout?.(highlightedSet.current); } : undefined}
+          style={[styles.row, { minHeight: 44 }, source && { borderWidth: 1, borderColor: palette.accent, borderRadius: 7 }]}>
+          <AppText size={12} color={source ? palette.accent : palette.muted} style={{ width: 28 }}>{i + 1}</AppText>
+          <AppText size={17} color={palette.text} style={styles.column}>{set.weight}</AppText>
+          <AppText size={17} color={palette.text} style={styles.column}>{set.reps}</AppText>
+          <WorkoutLogIcon name="check" size={16} color={palette.accent} />
+        </View>;
+      })}
+    </View>;
+  })}</View>;
 }
 
 const styles = StyleSheet.create({

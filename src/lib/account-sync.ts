@@ -67,8 +67,11 @@ export function accountRemote(userId: string): AccountRemote {
     },
   };
 }
-export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T, onChange?: () => void) {
-  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats", localFirst: true, onChange });
+export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T, onChange?: () => void,
+  mergeConflict?: Parameters<typeof createAccountList<T>>[0]["mergeConflict"]) {
+  const reconcileConflicts = ["food", "recipes", "nutrition_plan"].includes(namespace);
+  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId),
+    allowRestore: namespace === "hidden_chats", localFirst: true, reconcileConflicts, mergeConflict, onChange });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
 // may import them; signing into a second account never inherits the first one's data.

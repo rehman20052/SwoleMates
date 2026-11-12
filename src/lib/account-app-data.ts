@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { accountList, mayImportLegacy } from "./account-sync";
 import { isFoodEntry } from "./food-journal";
-import { goalsFromProfile, isNutritionGoals, isSavedPlan, type NutritionGoals } from "./nutrition-plan-storage";
+import { goalsFromProfile, isNutritionGoals, isSavedPlan, mergeNutritionPlan, type NutritionGoals } from "./nutrition-plan-storage";
 import { parseNutritionProfile } from "./macro-calculator";
 import { workoutLogKey } from "./workout-log-sync";
 import { isLift } from "./lift-progression";
@@ -31,7 +31,7 @@ export function createAccountStores(userId: string, onChange?: () => void) {
     userId,
     recipes: accountList(userId, "recipes", (item: SavedMeal) => item.id, isRecipe, onChange),
     food: accountList(userId, "food", (item) => item.id, isFoodEntry, onChange),
-    plan: accountList(userId, "nutrition_plan", () => "plan", isSavedPlan, onChange),
+    plan: accountList(userId, "nutrition_plan", () => "plan", isSavedPlan, onChange, mergeNutritionPlan),
     logs: accountList(userId, "workout_logs", workoutLogKey, isWorkoutLog, onChange),
     deletions: accountList(userId, "workout_deletions", (item: string) => item, (value): value is string => typeof value === "string", onChange),
     settings: accountList(userId, "settings", (item: AccountSetting) => item.id, isSetting, onChange),

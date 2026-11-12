@@ -1,55 +1,84 @@
-import { weekBounds } from './progress-recap';
+import type { FoodLogEntry } from "@/state/app-data";
 
-type Food = { date: string; calories: number; protein: number; carbs: number; fats: number };
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+type MealGroup = {
+  latest: FoodLogEntry;
+  proteinPortion: FoodLogEntry | null;
+  count: number;
+  dates: Map<string, number>;
+};
 
-export function dietWeek(today: string, anchor: string, offset: number, food: Food[], maintenance: number | null) {
-  const { start, end } = weekBounds(anchor, offset);
-  return dietRange(today, start, end, food, maintenance);
-}
+const newestFirst = (a: FoodLogEntry, b: FoodLogEntry) =>
+  b.date.localeCompare(a.date) || b.id.localeCompare(a.id);
 
-export function dietPeriod(today: string, anchor: string, offset: number, period: 'week' | 'month', food: Food[], maintenance: number | null) {
-  if (period === 'week') return dietWeek(today, anchor, offset, food, maintenance);
-  const [y, m] = anchor.split('-').map(Number);
-  return dietRange(today, iso(new Date(y, m - 1 + offset, 1)), iso(new Date(y, m + offset, 0)), food, maintenance);
-}
+export function nutritionSnapshot(today: string, entries: readonly FoodLogEntry[]) {
+  // Shift local calendar labels without applying elapsed-hour arithmetic across DST.
+  const firstDate = new Date(`${today}T00:00:00Z`);
+  firstDate.setUTCDate(firstDate.getUTCDate() - 6);
+  const start = firstDate.toISOString().slice(0, 10);
+  const groups = new Map<string, MealGroup>();
+  let meals = 0;
+  let latestDate: string | null = null;
+  const days = new Map<string, { date: string; meals: number; calories: number }>();
+  const totals = { calories: 0, protein: 0, carbs: 0, fats: 0 };
+  const missing = { protein: false, carbs: false, fats: false };
 
-function dietRange(today: string, start: string, end: string, food: Food[], maintenance: number | null) {
-  const daily = new Map<string, { calories: number; protein: number; carbs: number; fats: number }>();
-  for (const row of food) {
-    if (row.date < start || row.date > end || row.date > today) continue;
-    if (![row.calories, row.protein, row.carbs, row.fats].every(value => Number.isFinite(value) && value >= 0)) continue;
-    const total = daily.get(row.date) ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
-    for (const key of ['calories', 'protein', 'carbs', 'fats'] as const) total[key] += row[key];
-    daily.set(row.date, total);
+  for (const entry of entries) {
+    if (entry.date < start || entry.date > today) continue;
+    meals += 1;
+    const day = days.get(entry.date) ?? { date: entry.date, meals: 0, calories: 0 };
+    day.meals += 1;
+    day.calories += entry.calories;
+    days.set(entry.date, day);
+    totals.calories += entry.calories;
+    for (const key of ["protein", "carbs", "fats"] as const) {
+      const valid = Number.isFinite(entry[key]) && entry[key] >= 0;
+      if (valid) totals[key] += entry[key];
+      if (!valid || entry.incompleteNutrients?.includes(key)) missing[key] = true;
+    }
+    if (latestDate === null || entry.date > latestDate) latestDate = entry.date;
+    const name = entry.name.trim().replace(/\s+/g, " ").toLowerCase();
+    const group = groups.get(name) ?? { latest: entry, proteinPortion: null, count: 0, dates: new Map<string, number>() };
+    group.count += 1;
+    group.dates.set(entry.date, (group.dates.get(entry.date) ?? 0) + 1);
+    if (newestFirst(entry, group.latest) < 0) group.latest = entry;
+    const knownProtein = Number.isFinite(entry.protein) && entry.protein > 0
+      && !entry.incompleteNutrients?.includes("protein");
+    if (knownProtein && (group.proteinPortion === null
+      || entry.protein > group.proteinPortion.protein
+      || (entry.protein === group.proteinPortion.protein && newestFirst(entry, group.proteinPortion) < 0))) {
+      group.proteinPortion = entry;
+    }
+    groups.set(name, group);
   }
-  const [endYear, endMonth, endDay] = end.split('-').map(Number);
-  const [startYear, startMonth, startDay] = start.split('-').map(Number);
-  const dayCount = Math.round((Date.UTC(endYear, endMonth - 1, endDay) - Date.UTC(startYear, startMonth - 1, startDay)) / 86400000) + 1;
-  const days = Array.from({ length: dayCount }, (_, i) => {
-    const [y, m, d] = start.split('-').map(Number);
-    const date = iso(new Date(y, m - 1, d + i));
-    return { date, totals: daily.get(date) ?? null, future: date > today };
-  });
-  const totals = [...daily.values()].reduce((sum, row) => ({ calories: sum.calories + row.calories, protein: sum.protein + row.protein, carbs: sum.carbs + row.carbs, fats: sum.fats + row.fats }), { calories: 0, protein: 0, carbs: 0, fats: 0 });
-  // Today's unfinished intake must not look like a large daily deficit.
-  const past = [...daily.entries()].filter(([date]) => date < today);
-  const elapsedDays = days.filter(day => !day.future).length;
-  const pastDays = days.filter(day => day.date < today).length;
-  const missingDays = days.filter(day => day.date < today && day.totals === null).length;
-  const coverage = pastDays === 0 ? 'in-progress' : missingDays === 0 ? 'recorded' : past.length === 0 ? 'missing' : 'partial';
-  const baseline = maintenance !== null && Number.isFinite(maintenance) && maintenance > 0 ? maintenance : null;
-  const balance = baseline !== null && past.length ? past.reduce((sum, [, row]) => sum + row.calories - baseline, 0) : null;
-  const canEstimate = end < today && pastDays > 0 && missingDays === 0 && balance !== null;
-  return { start, end, days, totals, elapsedDays, pastDays, missingDays, coverage, canEstimate, loggedDays: daily.size, balanceDays: past.length,
-    averageCalories: daily.size ? totals.calories / daily.size : null,
-    averageProtein: daily.size ? totals.protein / daily.size : null,
-    averageCarbs: daily.size ? totals.carbs / daily.size : null,
-    averageFats: daily.size ? totals.fats / daily.size : null,
-    balance, equivalentLb: balance === null ? null : balance / 3500 };
-}
 
-export function energyWeightLabel(pounds: number, unit: 'lb' | 'kg') {
-  const value = Math.abs(pounds) * (unit === 'kg' ? 0.45359237 : 1);
-  return `${value.toFixed(2)} ${unit} ${pounds < 0 ? 'loss' : pounds > 0 ? 'gain' : 'change'}`;
+  const distinctMeals = [...groups.values()];
+  const proteinPicks = distinctMeals
+    .filter((group): group is MealGroup & { proteinPortion: FoodLogEntry } => group.proteinPortion !== null)
+    .sort((a, b) => b.proteinPortion.protein - a.proteinPortion.protein
+      || newestFirst(a.proteinPortion, b.proteinPortion))
+    .slice(0, 3)
+    .map(group => ({ entry: group.latest, protein: group.proteinPortion.protein }));
+  const repeat = [...groups.entries()]
+    .filter(([, group]) => group.count >= 2)
+    .sort(([nameA, a], [nameB, b]) => b.count - a.count
+      || b.latest.date.localeCompare(a.latest.date) || nameA.localeCompare(nameB))[0]?.[1];
+  const recentMeals = distinctMeals.sort((a, b) => newestFirst(a.latest, b.latest))
+    .slice(0, 3).map(group => group.latest);
+  const repeatDays = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(firstDate);
+    date.setUTCDate(date.getUTCDate() + offset);
+    const label = date.toISOString().slice(0, 10);
+    return { date: label, count: repeat?.dates.get(label) ?? 0 };
+  });
+
+  return {
+    start, end: today, meals, latestDate, proteinPicks, recentMeals, totals, missing,
+    loggedDays: days.size,
+    averages: Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, days.size ? value / days.size : 0])) as typeof totals,
+    days: repeatDays.map(({ date }) => days.get(date) ?? { date, meals: 0, calories: 0 }),
+    repeatMeal: repeat ? {
+      entry: repeat.latest, count: repeat.count, days: repeatDays,
+      maxDailyCount: Math.max(...repeatDays.map(day => day.count)),
+    } : null,
+  };
 }

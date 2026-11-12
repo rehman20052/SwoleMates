@@ -157,8 +157,8 @@ export function weighInTrend(weighIns: WeighIn[]) {
     .filter((entry) => Number.isFinite(entry.weightLb) && /^\d{4}-\d{2}-\d{2}$/.test(entry.date))
     .sort((a, b) => a.date.localeCompare(b.date));
   if (points.length < 4) return null;
-  const start = Date.parse(`${points[0].date}T12:00:00`);
-  const xs = points.map((entry) => (Date.parse(`${entry.date}T12:00:00`) - start) / 86400000);
+  const start = Date.parse(points[0].date);
+  const xs = points.map((entry) => (Date.parse(entry.date) - start) / 86400000);
   const spanDays = xs[xs.length - 1];
   if (spanDays < 14) return null;
   const ys = points.map((entry) => entry.weightLb);
@@ -191,9 +191,9 @@ function pace(weeklyLb: number, unit: WeightUnit) {
 }
 
 export function calibrationAdvice(profile: NutritionProfile, unit: WeightUnit = "lb"): CalibrationAdvice | null {
-  const trend = weighInTrend(profile.weighIns);
+  const since = profile.calibratedThrough;
+  const trend = weighInTrend(since ? profile.weighIns.filter(entry => entry.date >= since) : profile.weighIns);
   if (!trend) return null;
-  if (profile.calibratedThrough && trend.latestDate <= profile.calibratedThrough) return null;
   const gap = trend.weeklyLb - profile.plannedWeeklyLb;
   if (Math.abs(gap) < 0.2) {
     return {

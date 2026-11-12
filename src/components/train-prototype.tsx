@@ -1,6 +1,7 @@
 import { nutritionSummary } from "@/lib/nutrition-tracking";
 import { WorkoutPlanner } from './workout-planner';
-import { DietRecap } from './diet-recap';
+import { NutritionSnapshot } from './diet-recap';
+import { WorkoutAnalytics } from './workout-analytics';
 import { WorkoutLogButton, WorkoutLogHeader, WorkoutSetEditor, WorkoutRecordedSets, WorkoutLogIcon, useWorkoutLogPalette } from './workout-log-editor';
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
@@ -77,6 +78,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
   const [selected, setSelected] = useState(today);
   const [week, setWeek] = useState(() => monday(today));
   const [logging, setLogging] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [resumeWorkouts, setResumeWorkouts] = useState<{ date: string; draft: WorkoutDraft }[]>([]);
   const resumeWorkout = resumeWorkouts[0] ?? null;
   const [planning, setPlanning] = useState(false);
@@ -144,6 +146,8 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View style={{ flex: 1, minWidth: 230, gap: 12 }}><T size={wide ? 44 : 34} weight="bold">Training<T size={wide ? 44 : 34} color={TRAIN_LIME}>.</T></T><T size={15} muted>Show up. Put in the work. Get stronger.</T></View>
       <View style={[s.row, { flexWrap: "wrap", gap: 10 }]}><Action label="Create workout plan" onPress={() => setPlanning(true)} /><Action label={resumeWorkout ? "↻  Resume workout" : "+  Log workout"} primary disabled={!foodJournalReady || !resumeWorkout && selected > today} onPress={() => { if (resumeWorkout) resumeActiveWorkout(); else setLogging(true); }} /></View>
     </View>
+    <Pressable accessibilityRole="button" accessibilityLabel="Open workout analytics" onPress={() => setAnalyticsOpen(true)} style={({ pressed }) => [s.row, { paddingVertical: 18, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, opacity: pressed ? 0.7 : 1 }]}><View style={{ flex: 1, gap: 6 }}><T size={17} weight="semibold">Workout Analytics</T><T size={13} muted>See your progress. Find your next best.</T></View><T size={23} color={theme.colors.accent}>↗</T></Pressable>
+    {analyticsOpen ? <WorkoutAnalytics key={accountUserId} templates={allTemplates} splits={splits} onClose={() => setAnalyticsOpen(false)} onLogWorkout={() => { setAnalyticsOpen(false); if (resumeWorkout) resumeActiveWorkout(); else { setSelected(today); setWeek(monday(today)); setInitialTemplate(undefined); setLogging(true); } }} /> : null}
     {checkIn}
     {resumeWorkout ? <View style={{ gap: 6 }}><T size={14} weight="semibold">Workout in progress: {resumeWorkout.draft.title || "Workout"}</T><T size={12} muted>{resumeWorkout.date} · Resume to continue your saved sets.</T></View> : null}
     {foodJournalReady && todayTemplate && !todayCompleted ? <View style={[s.card, { backgroundColor: theme.isDark ? "#141b0e" : "#F0F5E7", padding: 20, borderColor: theme.isDark ? "#43551b" : "#C8D8AC", gap: 12 }]}>
@@ -170,7 +174,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View style={[s.row, { justifyContent: "space-between" }]}><T size={16} weight="medium">{selected === today ? "Today" : dateOf(selected).toLocaleDateString("en-US", { weekday: "long" })}<T size={14} muted>{` · ${dateOf(selected).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</T></T><T size={12} muted>{dayLogs.length} workout{dayLogs.length === 1 ? "" : "s"}</T></View>
       {dayLogs.length ? dayLogs.map(log => <Pressable key={log.id} accessibilityRole="button" accessibilityLabel={`View ${log.title}`} onPress={() => setDetail(log)} style={[s.row, { gap: wide ? 18 : 12, minHeight: 64 }]}><View style={[s.badge, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><Icon source={icons.training} size={trainTokens.iconSize} tint={theme.colors.accent} /></View><View style={{ flex: 1, gap: 10 }}><T size={18} weight="semibold">{log.title}</T><T size={13} muted>{log.exercises?.length ?? 0} exercises{log.durationMinutes !== undefined ? `  ·  ${log.durationMinutes} min` : ""}</T></View><View style={[s.status, { backgroundColor: theme.isDark ? "#212b13" : "#EDF5D9" }]}><T size={11} weight="semibold" color={theme.colors.accent}>Completed</T></View><T size={22}>↗</T></Pressable>) : <T size={14} muted>{foodJournalReady ? "No workouts logged for this day." : "Loading your activity…"}</T>}
       <View style={s.separator} /><View style={[s.row, { justifyContent: "space-between", flexWrap: "wrap" }]}><View style={s.row}><Icon source={icons.flame} size={20} tint="#ffa845" /><T size={16} muted>Calories eaten</T></View><View style={[s.row, { flexWrap: "wrap" }]}><T size={16} weight="semibold">{Math.round(calories).toLocaleString()}<T size={12} muted> kcal</T></T><Pressable accessibilityRole="button" accessibilityLabel="View foods and macros for selected day" disabled={!foodJournalReady} onPress={() => setFoodOverviewOpen(true)} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8, opacity: foodJournalReady ? 1 : 0.45 }}><T size={13} weight="medium" color={theme.colors.accent}>View foods ↗</T></Pressable></View></View>
-      {plannedTemplate ? <View style={[s.row, { flexWrap: "wrap" }]}><View style={{ flex: 1, gap: 8, minWidth: 130 }}><T size={12} muted>Planned in your split</T><T weight="semibold">{plannedTemplate.title}</T></View>{plannedCompleted ? <T size={13} color={theme.colors.accent}>Completed</T> : <Action label="Start planned workout" disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} onPress={() => startTemplate(plannedTemplate)} />}</View> : null}
+      {plannedTemplate ? <View style={[s.row, { flexWrap: "wrap" }]}><View style={{ flex: 1, gap: 8, minWidth: 130 }}><T size={12} muted>Planned in your split</T><T weight="semibold">{plannedTemplate.title}</T></View>{plannedCompleted ? <T size={13} color={theme.colors.accent}>Completed</T> : <Action label={selected < today ? "Log missed workout" : "Start planned workout"} disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} onPress={() => startTemplate(plannedTemplate)} />}</View> : null}
     </View>
     {templates.length ? <WorkoutTemplates templates={templates} onUse={startTemplate} disabled={selected > today || resumeWorkouts.some(workout => workout.date === selected)} /> : null}
     <View style={{ height: wide ? 232 : 205, borderRadius: 12, overflow: "hidden", justifyContent: "center", backgroundColor: theme.isDark ? "#101214" : "#E8EDDF", borderWidth: 1, borderColor: palette.border }}>
@@ -190,7 +194,7 @@ export function TrainPrototype({ onCalendar, onEditLog, onGoal, onEditFoods, che
       <View accessibilityLabel="Workouts by weekday" style={[s.row, { alignItems: "flex-end", gap: wide ? 18 : 8 }]}>{days.map((d, i) => { const count = weekLogs.filter(log => log.date === iso(d)).length; const max = Math.max(1, ...days.map(day => weekLogs.filter(log => log.date === iso(day)).length)); return <View key={iso(d)} accessibilityLabel={`${weekdays[i]}: ${count} workouts`} style={{ flex: 1, height: 126, justifyContent: "flex-end", gap: 16, alignItems: "center" }}><View style={{ width: "100%", height: count ? Math.max(20, count / max * 80) : 8, backgroundColor: count ? "#212b13" : palette.field, borderTopWidth: count ? 3 : 0, borderTopColor: TRAIN_LIME, borderTopLeftRadius: 5, borderTopRightRadius: 5 }} /><T size={11} muted>{weekdays[i][0]}</T></View>; })}</View>
       <Pressable accessibilityRole="button" accessibilityLabel="Edit weekly workout goal" onPress={onGoal} style={[s.row, { minHeight: 44, marginTop: 8 }]}><View style={[s.badge, { width: 40, height: 40 }]}><T size={23} color={TRAIN_LIME}>ϟ</T></View><T size={14} style={{ flex: 1 }}>{workouts >= weeklyWorkoutGoal ? "You hit your weekly goal. Keep showing up." : `${weeklyWorkoutGoal - workouts} more session${weeklyWorkoutGoal - workouts === 1 ? "" : "s"} to hit your weekly goal.`}</T></Pressable>
     </View>
-    <DietRecap key={weekStart} weekStart={weekStart} onOpenFuel={() => onEditFoods(today)} />
+    <NutritionSnapshot today={today} onOpenFuel={onEditFoods} />
     {foodOverviewOpen ? <Sheet title="Foods eaten" onClose={() => setFoodOverviewOpen(false)}>
       <View style={{ gap: 8 }}>
         <T size={13} muted>{dateOf(selected).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</T>

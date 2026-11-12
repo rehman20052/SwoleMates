@@ -1,99 +1,110 @@
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { AppText } from './ui';
-import { useTrainPalette } from './train-ui';
-import { useAppTheme } from '@/theme';
-import { daysFromToday, useAppData } from '@/state/app-data';
-import { useWeightUnit } from '@/state/weight-unit';
-import { maintenanceCalories } from '@/lib/macro-calculator';
-import { dietPeriod, energyWeightLabel } from '@/lib/diet-recap';
-import { weekBounds } from '@/lib/progress-recap';
+import { useMemo } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { nutritionSnapshot } from "@/lib/diet-recap";
+import { formatDate, formatShortDate, useAppData } from "@/state/app-data";
+import { useAppTheme } from "@/theme";
+import { useTrainPalette } from "./train-ui";
+import { AppText } from "./ui";
 
-const short = (date: string) => { const [y, m, d] = date.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
-const number = (value: number) => Math.round(value).toLocaleString();
+const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+const amount = (value: number, missing: boolean) => missing ? value > 0 ? `At least ${number.format(value)}` : "—" : number.format(value);
 
-export function DietRecap({ weekStart, onOpenFuel }: { weekStart: string; onOpenFuel: () => void }) {
-  const { foodEntries, foodJournalReady, foodJournalError, nutritionProfile } = useAppData();
-  const palette = useTrainPalette(), theme = useAppTheme();
-  const { unit } = useWeightUnit();
-  const [offset, setOffset] = useState(0);
-  const [period, setPeriod] = useState<'week' | 'month'>('week');
-  const [details, setDetails] = useState(false);
-  const today = daysFromToday(0);
-  const maintenance = nutritionProfile ? maintenanceCalories(nutritionProfile) : null;
-  const [anchor, setAnchor] = useState(() => weekBounds(today).start === weekStart ? today : weekStart);
-  const selected = dietPeriod(today, anchor, offset, period, foodEntries, maintenance);
-  const next = dietPeriod(today, anchor, offset + 1, period, [], null);
-  const current = dietPeriod(today, today, 0, period, [], null);
-  const isCurrent = selected.start === current.start;
-  const size = period === 'week' ? 1 : 7;
-  const bars = Array.from({ length: Math.ceil(selected.days.length / size) }, (_, index) => {
-    const days = selected.days.slice(index * size, (index + 1) * size);
-    const elapsed = days.filter(day => !day.future);
-    const logged = elapsed.filter(day => day.totals !== null);
-    const missing = elapsed.filter(day => day.date < today && day.totals === null).length;
-    return { date: days[0].date, end: days.at(-1)!.date, count: logged.length, elapsed: elapsed.length, missing,
-      future: !elapsed.length, inProgress: days.some(day => day.date === today),
-      calories: logged.length ? logged.reduce((sum, day) => sum + day.totals!.calories, 0) / logged.length : null };
-  });
-  const max = Math.max(1, maintenance ?? 0, ...bars.map(bar => bar.calories ?? 0)) * 1.15;
-  const text = palette.text, muted = palette.muted, accent = theme.colors.accent;
-  const consistent = selected.pastDays > 0 && selected.missingDays === 0;
-  const estimateAvailable = selected.canEstimate && !foodJournalError;
-  const iconButton = { minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const };
-  return <View style={{ backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1, borderRadius: 12, padding: 20, gap: 20 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-      <AppText size={23} weight="bold" color={text}>Diet recap</AppText>
-      <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.field, borderRadius: 8, padding: 3 }}>
-        {(['week', 'month'] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityLabel={`Diet recap by ${value}`} accessibilityState={{ selected: period === value }} onPress={() => { setPeriod(value); setOffset(0); }} style={{ minHeight: 38, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 6, backgroundColor: period === value ? theme.colors.primaryTint : 'transparent' }}><AppText size={12} weight="semibold" color={period === value ? accent : muted}>{value === 'week' ? 'Week' : 'Month'}</AppText></Pressable>)}
-      </View>
+export function NutritionSnapshot({ today, onOpenFuel }: { today: string; onOpenFuel: (date: string) => void }) {
+  const { foodEntries, foodJournalReady, foodJournalError, accountSyncError, nutrition, nutritionProfile, nutritionGoalSource, nutritionPlanReady, nutritionPlanError } = useAppData();
+  const palette = useTrainPalette();
+  const theme = useAppTheme();
+  const snapshot = useMemo(() => nutritionSnapshot(today, foodEntries), [today, foodEntries]);
+  const refreshFailed = Boolean(foodJournalError || accountSyncError);
+  const showMeals = snapshot.meals > 0 && (foodJournalReady || refreshFailed);
+  const goals = nutritionPlanReady && !nutritionPlanError ? nutrition : null;
+  const calorieGoal = goals?.calorieGoal ?? 0;
+  const chartMax = Math.max(calorieGoal, ...snapshot.days.map(day => day.calories), 1) * 1.25;
+  const goalLabel = nutritionProfile ? { lose: "Weight loss", maintain: "Weight maintenance", gain: "Weight gain" }[nutritionProfile.goal] : "Daily nutrition";
+  const difference = Math.round(snapshot.averages.calories - calorieGoal);
+  const macros = [
+    { key: "protein", label: "Protein", goal: goals?.proteinGoal ?? 0, color: "#6CA9EE" },
+    { key: "carbs", label: "Carbs", goal: goals?.carbGoal ?? 0, color: "#E5B468" },
+    { key: "fats", label: "Fat", goal: goals?.fatGoal ?? 0, color: "#B79BE9" },
+  ] as const;
+  const pick = snapshot.proteinPicks[0];
+  const startLabel = snapshot.start.slice(0, 4) === snapshot.end.slice(0, 4) ? formatShortDate(snapshot.start) : formatDate(snapshot.start);
+
+  return <View testID="nutrition-snapshot" style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+    <View style={styles.section}>
+      <AppText accessibilityRole="header" size={23} weight="bold" color={palette.text}>Nutrition overview</AppText>
+      <AppText size={12} color={palette.muted}>{startLabel} – {formatDate(snapshot.end)}</AppText>
     </View>
-    <View style={{ flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: palette.border, paddingBottom: 8 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Previous ${period}`} onPress={() => setOffset(value => value - 1)} style={iconButton}><AppText size={24} color={text}>‹</AppText></Pressable>
-      <View style={{ flex: 1, alignItems: 'center', gap: 2 }}><AppText size={13} weight="semibold" color={text}>{short(selected.start)} – {short(selected.end)}, {selected.start.slice(0, 4)}{selected.start.slice(0, 4) !== selected.end.slice(0, 4) ? `–${selected.end.slice(0, 4)}` : ''}</AppText>
-        {!isCurrent ? <Pressable accessibilityRole="button" accessibilityLabel={`Return to this ${period}`} onPress={() => { setAnchor(today); setOffset(0); }} style={{ minHeight: 32, justifyContent: 'center' }}><AppText size={11} color={accent}>Back to this {period}</AppText></Pressable> : <AppText size={11} color={muted}>This {period} · in progress</AppText>}
-      </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Next ${period}`} disabled={next.start > current.start} onPress={() => setOffset(value => value + 1)} style={[iconButton, { opacity: next.start > current.start ? 0.3 : 1 }]}><AppText size={24} color={text}>›</AppText></Pressable>
-    </View>
-    {!foodJournalReady ? <AppText color={muted}>Loading your food history…</AppText> : <>
-      {foodJournalError ? <AppText size={12} color={theme.colors.danger}>Food history could not fully refresh. These are your saved entries; coverage may be incomplete.</AppText> : null}
-      <View style={{ gap: 8 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}><AppText size={13} weight="semibold" color={consistent ? accent : text}>{consistent ? 'Consistent logging' : selected.loggedDays ? 'Partial logging' : 'No entries yet'}</AppText><AppText size={12} color={muted}>{selected.loggedDays}/{selected.elapsedDays} days so far</AppText></View>
-        <View accessibilityLabel={`${selected.loggedDays} of ${selected.elapsedDays} elapsed days have food entries`} style={{ flexDirection: 'row', gap: 3, height: 5 }}>{selected.days.map(day => <View key={day.date} style={{ flex: 1, borderRadius: 3, backgroundColor: day.totals ? accent : palette.field, opacity: day.future ? 0.35 : day.date === today ? 0.6 : 1, borderWidth: !day.future && !day.totals ? 1 : 0, borderColor: palette.border }} />)}</View>
-        <AppText size={12} color={muted}>{selected.missingDays ? `${selected.missingDays} past ${selected.missingDays === 1 ? 'day has' : 'days have'} no food data. Averages reflect only days with entries.` : consistent ? 'Food entries on every past day. Individual meals may still be missing.' : 'Start logging in Fuel to build your food history.'}</AppText>
-      </View>
-      <View style={{ gap: 10 }}><AppText size={12} weight="semibold" color={muted}>{period === 'week' ? 'DAILY CALORIES' : 'CALORIES / LOGGED DAY · 7-DAY GROUPS'}</AppText>
-        <View style={{ height: 184, flexDirection: 'row', gap: 6 }}>
-          {bars.map((bar, index) => <View key={bar.date} accessible accessibilityLabel={`${short(bar.date)}${period === 'month' ? ` to ${short(bar.end)}` : ''}: ${bar.future ? 'upcoming' : bar.calories === null ? bar.inProgress ? 'today, no entries yet' : 'missing food data' : `${number(bar.calories)} calories per logged day, ${bar.count} of ${bar.elapsed} elapsed days logged${bar.missing ? ', incomplete coverage' : ''}${bar.inProgress ? ', today in progress' : ''}`}`} style={{ flex: 1, gap: 6 }}>
-            <AppText size={10} color={text} style={{ textAlign: 'center' }}>{bar.calories === null ? '—' : number(bar.calories)}</AppText>
-            <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: palette.field, borderRadius: 5, overflow: 'hidden', opacity: bar.future ? 0.3 : 1, borderWidth: bar.missing && !bar.count ? 1 : 0, borderStyle: 'dashed', borderColor: palette.border }}>
-              {bar.calories !== null ? <View style={{ height: `${Math.max(1, bar.calories / max * 100)}%`, backgroundColor: theme.colors.primaryTint, opacity: bar.missing || bar.inProgress ? 0.6 : 1, borderTopWidth: 3, borderTopColor: accent }} /> : null}
-              {maintenance !== null && !bar.future ? <View pointerEvents="none" style={{ position: 'absolute', bottom: `${maintenance / max * 100}%`, width: '100%', borderTopWidth: 1, borderStyle: 'dashed', borderColor: muted }} /> : null}
-            </View>
-            <AppText size={11} color={muted} style={{ textAlign: 'center' }}>{period === 'week' ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'][index] : `${Number(bar.date.slice(-2))}–${Number(bar.end.slice(-2))}`}</AppText>
-            <AppText size={9} color={muted} style={{ textAlign: 'center' }}>{bar.future ? 'Soon' : period === 'month' ? `${bar.count}/${bar.elapsed} days` : bar.inProgress ? 'Today*' : bar.count ? 'Logged' : 'No data'}</AppText>
-          </View>)}
+    {refreshFailed ? <AppText size={13} color={palette.muted}>Food history couldn’t refresh</AppText> : null}
+    {showMeals ? <>
+      <AppText size={12} color={palette.muted}>{`Based on ${snapshot.meals} logged ${snapshot.meals === 1 ? "meal" : "meals"} across ${snapshot.loggedDays} ${snapshot.loggedDays === 1 ? "day" : "days"}`}</AppText>
+      <View style={[styles.summary, { backgroundColor: palette.field }]}>
+        <AppText size={13} weight="semibold" color={palette.text}>{goals ? `${goalLabel} · ${nutritionGoalSource === "manual" ? "custom Fuel targets" : "Fuel targets"}` : "Fuel targets unavailable"}</AppText>
+        <AppText size={12} color={palette.muted}>Calories per logged day</AppText>
+        <View style={styles.valueRow}>
+          <AppText size={32} weight="bold" color={palette.text}>{number.format(snapshot.averages.calories)}</AppText>
+          <AppText size={13} color={palette.muted}>{calorieGoal > 0 ? `/ ${number.format(calorieGoal)} kcal daily target` : "kcal recorded"}</AppText>
         </View>
-        <AppText size={11} color={muted}>No data ≠ zero calories{selected.days.some(day => day.date === today) ? ' · *Today is still in progress' : ''}{maintenance !== null ? `\nDashed line: maintenance estimate, ${number(maintenance)} kcal/day` : ''}</AppText>
+        {calorieGoal > 0 ? <AppText size={13} color={palette.text}>{difference === 0 ? "Recorded average matches your daily target" : `${number.format(Math.abs(difference))} kcal ${difference > 0 ? "above" : "below"} your daily target`}</AppText> : null}
+        <AppText size={12} color={palette.muted}>{number.format(snapshot.totals.calories)} kcal recorded in this window</AppText>
       </View>
-      {selected.loggedDays ? <View style={{ flexDirection: 'row', gap: 16 }}>
-        <View style={{ flex: 1, gap: 4 }}><AppText size={26} weight="bold" color={text}>{number(selected.averageCalories!)}</AppText><AppText size={12} color={muted}>kcal / day with entries</AppText></View>
-        <View style={{ flex: 1, gap: 4 }}><AppText size={26} weight="bold" color={text}>{number(selected.totals.calories)}</AppText><AppText size={12} color={muted}>kcal recorded{consistent ? '' : ' · partial'}</AppText></View>
-      </View> : null}
-      {estimateAvailable && selected.balance !== null ? <View style={{ backgroundColor: theme.colors.primaryTint, padding: 14, borderRadius: 8, gap: 5 }}>
-        <AppText size={13} weight="bold" color={accent}>Estimated {selected.balance < 0 ? 'deficit' : selected.balance > 0 ? 'surplus' : 'balance'} · {number(Math.abs(selected.balance))} kcal</AppText>
-        <AppText size={20} weight="bold" color={text}>≈ {energyWeightLabel(selected.equivalentLb!, unit)}</AppText>
-        <AppText size={11} color={muted}>Energy equivalent from recorded intake, assuming all meals were entered. Not measured weight change.</AppText>
-      </View> : <AppText size={12} color={muted}>{selected.missingDays ? 'Not enough coverage for a weight-change estimate.' : isCurrent ? 'Weight-change estimates appear after the period ends, with entries on every day.' : 'Set up your macro profile in Fuel for an energy-balance estimate.'}</AppText>}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: details }} accessibilityLabel="How diet recap is calculated" onPress={() => setDetails(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><AppText size={12} color={muted}>{details ? 'Hide details' : 'About this data'} {details ? '−' : '+'}</AppText></Pressable>
-        <Pressable accessibilityRole="button" onPress={onOpenFuel} style={{ minHeight: 44, justifyContent: 'center' }}><AppText size={13} weight="semibold" color={accent}>Open Fuel ↗</AppText></Pressable>
+      <View style={styles.section}>
+        <AppText accessibilityRole="header" size={15} weight="semibold" color={palette.text}>Calories by day</AppText>
+        <AppText size={11} color={palette.muted}>{calorieGoal > 0 ? `Dashed line: current Fuel target · ${number.format(calorieGoal)} kcal` : "Recorded calories"}</AppText>
+        <View accessible accessibilityRole="image" accessibilityLabel={`Calories by day. ${calorieGoal > 0 ? `Current daily target ${calorieGoal} calories. ` : ""}${snapshot.days.map(day => `${formatShortDate(day.date)}: ${day.meals ? `${day.calories} calories recorded` : "no meals logged"}`).join(". ")}`}>
+          <View style={styles.chart}>
+            {calorieGoal > 0 ? <View testID="calorie-target-line" style={[styles.targetLine, { bottom: `${calorieGoal / chartMax * 100}%`, borderColor: palette.muted }]} /> : null}
+            {snapshot.days.map(day => <View key={day.date} style={styles.column}>
+              <AppText size={9} color={palette.muted}>{day.meals ? number.format(day.calories) : "—"}</AppText>
+              <View testID="calorie-day-bar" style={[styles.calorieBar, { height: day.meals ? Math.max(2, day.calories / chartMax * 100) : 2, backgroundColor: day.meals ? "#6CA9EE" : palette.border }]} />
+            </View>)}
+          </View>
+          <View style={styles.dates}>{snapshot.days.map(day => <View key={day.date} style={styles.date}><AppText size={10} color={palette.muted}>{day.date.slice(-5).replace("-", "/")}</AppText></View>)}</View>
+        </View>
       </View>
-      {details ? <View style={{ gap: 8 }}>
-        {selected.loggedDays ? <AppText size={12} color={muted}>Per day with entries: {number(selected.averageProtein!)}g protein · {number(selected.averageCarbs!)}g carbs · {number(selected.averageFats!)}g fat.</AppText> : null}
-        <AppText size={12} color={muted}>Missing days are unknown and excluded, never counted as zero. Today is included in recorded intake and averages while in progress. Month bars average only days with entries; each shows its logging coverage. A logged day may still omit meals.</AppText>
-        <AppText size={12} color={muted}>Energy estimates require a finished period with entries on every day. They use your current maintenance estimate and roughly 3,500 kcal per lb (7,700 per kg). Water, activity and metabolism affect actual weight.</AppText>
+      <View style={styles.section}>
+        <AppText accessibilityRole="header" size={15} weight="semibold" color={palette.text}>Macros per logged day</AppText>
+        {macros.map(({ key, label, goal, color }) => {
+          const value = snapshot.averages[key];
+          const missing = snapshot.missing[key];
+          const percent = goal > 0 ? Math.round(value / goal * 100) : null;
+          return <View key={key} style={styles.section} accessible accessibilityLabel={`${label}: ${amount(value, missing)} grams per logged day${goal > 0 ? `, daily target ${goal} grams` : ""}. ${missing ? "Some values were not entered." : ""}`}>
+            <View style={styles.valueRow}>
+              <AppText size={14} weight="semibold" color={color}>{label}</AppText>
+              <AppText size={13} color={palette.text}>{amount(value, missing)}{missing && value === 0 ? "" : " g"}{goal > 0 ? ` / ${number.format(goal)} g` : ""}</AppText>
+            </View>
+            {goal > 0 ? <>
+              <View style={[styles.track, { backgroundColor: palette.field }]}><View testID="macro-goal-bar" style={[styles.bar, { width: `${Math.min(100, value / goal * 100)}%`, backgroundColor: color }]} /></View>
+              <AppText size={11} color={palette.muted}>{missing ? value > 0 ? `At least ${percent}% of daily target recorded` : "Enter missing values to compare with your target" : `${percent}% of daily target recorded`}</AppText>
+            </> : null}
+          </View>;
+        })}
+      </View>
+      <AppText size={12} color={palette.muted}>Logged days only; partial logs can understate intake. Targets reflect your current Fuel plan, not a weight-change prediction.</AppText>
+      {Object.values(snapshot.missing).some(Boolean) ? <AppText size={12} color={palette.muted}>Some macro values weren’t entered</AppText> : null}
+      {pick && (goals?.proteinGoal ?? 0) > 0 ? <View style={[styles.summary, { backgroundColor: palette.field }]}>
+        <AppText size={13} weight="semibold" color={palette.text}>A meal that helps with protein</AppText>
+        <AppText size={13} color={palette.text}>{pick.entry.name}</AppText>
+        <AppText size={12} color={palette.muted}>{number.format(pick.protein)} g protein in a logged portion · {number.format(pick.protein / goals!.proteinGoal * 100)}% of your daily protein target</AppText>
       </View> : null}
-    </>}
+    </> : !refreshFailed ? <AppText size={13} color={palette.muted}>{foodJournalReady ? "No meals logged in the last 7 days" : "Loading food history…"}</AppText> : null}
+    <Pressable accessibilityRole="button" onPress={() => onOpenFuel(snapshot.latestDate ?? today)} style={styles.action}>
+      <AppText size={14} weight="semibold" color={theme.colors.accent}>Open Fuel</AppText>
+    </Pressable>
   </View>;
 }
+
+const styles = StyleSheet.create({
+  card: { borderWidth: 1, borderRadius: 12, padding: 20, gap: 18 },
+  section: { gap: 6 },
+  summary: { padding: 14, borderRadius: 10, gap: 6 },
+  valueRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 6, flexWrap: "wrap" },
+  chart: { height: 112, flexDirection: "row", gap: 6, alignItems: "flex-end", marginTop: 8 },
+  targetLine: { position: "absolute", left: 0, right: 0, borderTopWidth: 1, borderStyle: "dashed" },
+  column: { flex: 1, minWidth: 0, height: "100%", justifyContent: "flex-end", alignItems: "center", gap: 3 },
+  calorieBar: { width: "65%", borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  dates: { flexDirection: "row", gap: 6, marginTop: 5 },
+  date: { flex: 1, alignItems: "center", minWidth: 0 },
+  track: { height: 7, borderRadius: 4, overflow: "hidden" },
+  bar: { height: "100%", borderRadius: 4 },
+  action: { minHeight: 44, alignSelf: "flex-start", justifyContent: "center" },
+});

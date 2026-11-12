@@ -1,89 +1,143 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTs } from './helpers/load-ts.mjs';
-const { dietWeek, dietPeriod, energyWeightLabel } = loadTs('src/lib/diet-recap.ts');
-const row = (date, calories, protein = 100) => ({ date, calories, protein, carbs: 150, fats: 50 });
 
-test('month navigation uses calendar boundaries, including leap years and January', () => {
-  const feb = dietPeriod('2028-03-31', '2028-03-31', -1, 'month', [row('2028-02-29', 2000), row('2028-03-01', 2400)], 2500);
-  assert.equal(feb.start, '2028-02-01'); assert.equal(feb.end, '2028-02-29');
-  assert.equal(feb.days.length, 29); assert.equal(feb.totals.calories, 2000); assert.equal(feb.balance, -500);
-  const dec = dietPeriod('2027-01-10', '2027-01-10', -1, 'month', [], null);
-  assert.equal(dec.start, '2026-12-01'); assert.equal(dec.end, '2026-12-31'); assert.equal(dec.days.length, 31);
-  const march = dietPeriod('2026-04-05', '2026-04-05', -1, 'month', [], null);
-  assert.equal(march.days.length, 31); assert.equal(march.days.at(-1).date, '2026-03-31');
+const { nutritionSnapshot } = loadTs('src/lib/diet-recap.ts');
+const meal = (date, overrides = {}) => ({
+  id: date, name: 'Sandwich', date, meal: 'Lunch', calories: 450,
+  protein: 25, carbs: 40, fats: 15, ...overrides,
 });
 
-test('week navigation moves exactly one Monday-based week at a time', () => {
-  const first = dietPeriod('2026-11-03', '2026-11-03', 0, 'week', [], null);
-  const previous = dietPeriod('2026-11-03', '2026-11-03', -1, 'week', [], null);
-  const older = dietPeriod('2026-11-03', '2026-11-03', -2, 'week', [], null);
-  assert.equal(first.start, '2026-11-02'); assert.equal(previous.start, '2026-10-26'); assert.equal(older.start, '2026-10-19');
-  assert.equal(previous.days.length, 7);
+test('one meal is enough for a protein pick without a repeat', () => {
+  const result = nutritionSnapshot('2026-11-10', [meal('2026-11-07')]);
+  assert.equal(result.meals, 1);
+  assert.equal(result.latestDate, '2026-11-07');
+  assert.equal(result.proteinPicks.length, 1);
+  assert.equal(result.proteinPicks[0].protein, 25);
+  assert.equal(result.repeatMeal, null);
 });
 
-test('weekly intake totals aggregate meals, include today and exclude future logs', () => {
-  const result = dietWeek('2026-11-03', '2026-11-03', 0, [row('2026-11-02', 1000), row('2026-11-02', 800), row('2026-11-03', 400), row('2026-11-04', 3000)], 2300);
-  assert.equal(result.start, '2026-11-02'); assert.equal(result.end, '2026-11-08');
-  assert.equal(result.loggedDays, 2); assert.equal(result.totals.calories, 2200);
-  assert.equal(result.averageCalories, 1100); assert.equal(result.averageProtein, 150);
-  assert.equal(result.days[0].totals.calories, 1800);
-  assert.equal(result.days[2].future, true);
-  assert.equal(result.balanceDays, 1); assert.equal(result.balance, -500);
+test('seven local calendar dates include today and exclude older and future meals', () => {
+  const result = nutritionSnapshot('2026-11-04', [
+    meal('2026-11-03'), meal('2026-10-29'), meal('2026-10-28'),
+    meal('2026-11-05'), meal('2026-10-29', { id: 'second' }),
+  ]);
+  assert.equal(result.start, '2026-10-29');
+  assert.equal(result.end, '2026-11-04');
+  assert.equal(result.meals, 3);
+  assert.equal(result.latestDate, '2026-11-03');
+  assert.equal(result.repeatMeal.count, 3);
+  assert.equal(result.repeatMeal.days.length, 7);
+  assert.equal(result.repeatMeal.days[0].date, '2026-10-29');
+  assert.equal(result.repeatMeal.days[0].count, 2);
+  assert.equal(result.repeatMeal.days[5].count, 1);
+  assert.equal(result.repeatMeal.maxDailyCount, 2);
+  assert.equal(result.repeatMeal.days.reduce((sum, day) => sum + day.count, 0), 3);
 });
 
-test('unlogged days never become deficits and today alone cannot predict weight change', () => {
-  const empty = dietWeek('2026-11-03', '2026-11-03', 0, [], 2300);
-  assert.equal(empty.averageCalories, null); assert.equal(empty.balance, null);
-  assert.equal(empty.days.filter(day => day.totals === null).length, 7);
-  const today = dietWeek('2026-11-03', '2026-11-03', 0, [row('2026-11-03', 300)], 2300);
-  assert.equal(today.balance, null); assert.equal(today.equivalentLb, null);
+test('calendar arithmetic handles year boundaries, leap day and DST transitions', () => {
+  for (const [today, first, excluded] of [
+    ['2027-01-03', '2026-12-28', '2026-12-27'],
+    ['2028-03-06', '2028-02-29', '2028-02-28'],
+    ['2026-03-09', '2026-03-03', '2026-03-02'],
+    ['2026-11-02', '2026-10-27', '2026-10-26'],
+  ]) {
+    const result = nutritionSnapshot(today, [meal(first), meal(excluded)]);
+    assert.equal(result.start, first);
+    assert.equal(result.latestDate, first);
+    assert.equal(result.meals, 1);
+  }
+  const dates = ['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03'];
+  assert.equal(nutritionSnapshot('2027-01-03', dates.map(date => meal(date))).meals, 7);
 });
 
-test('completed calendar weeks show surplus or deficit equivalents in both units', () => {
-  const food = Array.from({ length: 7 }, (_, index) => row(`2026-10-${String(26 + index).padStart(2, '0')}`, 2000));
-  food[6].date = '2026-11-01';
-  const deficit = dietWeek('2026-11-03', '2026-11-03', -1, food, 2500);
-  assert.equal(deficit.loggedDays, 7); assert.equal(deficit.balance, -3500);
-  assert.equal(deficit.equivalentLb, -1);
-  assert.equal(energyWeightLabel(deficit.equivalentLb, 'lb'), '1.00 lb loss');
-  assert.equal(energyWeightLabel(deficit.equivalentLb, 'kg'), '0.45 kg loss');
-  const surplus = dietWeek('2026-11-03', '2026-11-03', -1, food, 1500);
-  assert.equal(surplus.balance, 3500); assert.equal(energyWeightLabel(surplus.equivalentLb, 'lb'), '1.00 lb gain');
+test('empty windows contain no highlights or navigation date', () => {
+  const result = nutritionSnapshot('2026-11-10', [meal('2026-11-03'), meal('2026-11-11')]);
+  assert.equal(result.meals, 0);
+  assert.equal(result.latestDate, null);
+  assert.equal(result.proteinPicks.length, 0);
+  assert.equal(result.recentMeals.length, 0);
+  assert.equal(result.repeatMeal, null);
 });
 
-test('unknown maintenance, invalid rows and year boundaries are handled without invented estimates', () => {
-  for (const baseline of [null, 0, NaN, Infinity]) {
-    const result = dietWeek('2027-01-05', '2027-01-05', -1, [row('2026-12-31', 2000), row('2027-01-01', NaN)], baseline);
-    assert.equal(result.start, '2026-12-28'); assert.equal(result.end, '2027-01-03');
-    assert.equal(result.loggedDays, 1); assert.equal(result.balance, null);
+test('normalized names group portions, retain the latest artwork and use the largest known protein portion', () => {
+  const older = meal('2026-11-08', { name: '  Turkey   SANDWICH ', protein: 40 });
+  const latest = meal('2026-11-10', { name: 'Turkey sandwich', protein: 20, artwork: { kind: 'preset', key: 'sandwich' } });
+  const result = nutritionSnapshot('2026-11-10', [latest, older]);
+  assert.equal(result.proteinPicks.length, 1);
+  assert.equal(result.proteinPicks[0].entry, latest);
+  assert.equal(result.proteinPicks[0].protein, 40);
+  assert.equal(result.repeatMeal.entry, latest);
+  assert.equal(result.repeatMeal.count, 2);
+});
+
+test('unknown protein, explicit zero and invalid protein do not become protein picks', () => {
+  const result = nutritionSnapshot('2026-11-10', [
+    meal('2026-11-10', { id: 'a', name: 'Unknown', protein: 90, incompleteNutrients: ['protein'] }),
+    meal('2026-11-09', { id: 'b', name: 'Zero', protein: 0 }),
+    meal('2026-11-08', { id: 'c', name: 'Invalid', protein: NaN }),
+    meal('2026-11-07', { id: 'd', name: 'Negative', protein: -1 }),
+  ]);
+  assert.equal(result.proteinPicks.length, 0);
+  assert.equal(result.repeatMeal, null);
+  assert.equal(result.recentMeals.length, 3);
+  assert.equal(result.recentMeals[0].name, 'Unknown');
+});
+
+test('top three protein picks use portion dates and IDs to resolve ties regardless of input order', () => {
+  const rows = [
+    meal('2026-11-10', { id: 'a', name: 'A', protein: 30 }),
+    meal('2026-11-09', { id: 'z', name: 'B', protein: 30 }),
+    meal('2026-11-10', { id: 'z', name: 'C', protein: 30 }),
+    meal('2026-11-08', { id: 'd', name: 'D', protein: 40 }),
+    meal('2026-11-10', { id: 'e', name: 'B', protein: 0 }),
+  ];
+  for (const entries of [rows, [...rows].reverse()]) {
+    const result = nutritionSnapshot('2026-11-10', entries);
+    assert.equal(result.proteinPicks.map(pick => pick.entry.name).join(','), 'D,C,A');
   }
 });
 
-test('coverage distinguishes missing past days from today and upcoming dates', () => {
-  const partial = dietWeek('2026-11-03', '2026-11-03', 0, [row('2026-11-03', 718)], 2500);
-  assert.equal(partial.elapsedDays, 2);
-  assert.equal(partial.pastDays, 1);
-  assert.equal(partial.missingDays, 1);
-  assert.equal(partial.coverage, 'missing');
-  assert.equal(partial.canEstimate, false);
-  assert.equal(partial.averageCalories, 718); // Missing days are unknown, never zero.
-  const monday = dietWeek('2026-11-02', '2026-11-02', 0, [], 2500);
-  assert.equal(monday.coverage, 'in-progress');
-  assert.equal(monday.missingDays, 0);
-  assert.equal(monday.canEstimate, false);
+test('repeat highlight resolves equal counts by newest date then normalized name', () => {
+  const rows = [
+    meal('2026-11-09', { name: 'Zucchini' }), meal('2026-11-08', { name: 'Zucchini' }),
+    meal('2026-11-10', { name: 'Beans' }), meal('2026-11-08', { name: 'Beans' }),
+    meal('2026-11-10', { name: 'Apples' }), meal('2026-11-09', { name: 'Apples' }),
+  ];
+  for (const entries of [rows, [...rows].reverse()]) {
+    assert.equal(nutritionSnapshot('2026-11-10', entries).repeatMeal.entry.name, 'Apples');
+  }
 });
 
-test('estimates require a finished period with every day marked complete', () => {
-  const food = ['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31','2026-11-01'].map(date => row(date, 2000));
-  const complete = dietWeek('2026-11-03', '2026-11-03', -1, food, 2500);
-  assert.equal(complete.coverage, 'recorded');
-  assert.equal(complete.canEstimate, true);
-  assert.equal(complete.missingDays, 0);
-  assert.equal(dietWeek('2026-11-01', '2026-11-01', 0, food, 2500).canEstimate, false);
-  const partial = dietWeek('2026-11-03', '2026-11-03', -1, food.slice(1), 2500);
-  assert.equal(partial.coverage, 'partial');
-  assert.equal(partial.canEstimate, false);
-  assert.equal(partial.averageCalories, 2000);
-  assert.equal(dietWeek('2026-11-03', '2026-11-03', -1, food, null).canEstimate, false);
+test('repeats with no known protein still provide a highlight', () => {
+  const result = nutritionSnapshot('2026-11-10', [
+    meal('2026-11-10', { protein: 0, incompleteNutrients: ['protein'] }),
+    meal('2026-11-09', { protein: 0 }),
+  ]);
+  assert.equal(result.proteinPicks.length, 0);
+  assert.equal(result.repeatMeal.count, 2);
+});
+
+test('overview averages only logged days and retains totals for calories and every macro', () => {
+  const result = nutritionSnapshot('2026-11-10', [
+    meal('2026-11-09'), meal('2026-11-09', { id: 'second' }), meal('2026-11-10'),
+    meal('2026-11-03'), meal('2026-11-11'),
+  ]);
+  assert.equal(result.loggedDays, 2);
+  assert.deepEqual({ ...result.totals }, { calories: 1350, protein: 75, carbs: 120, fats: 45 });
+  assert.deepEqual({ ...result.averages }, { calories: 675, protein: 37.5, carbs: 60, fats: 22.5 });
+  assert.equal(result.days.length, 7);
+  assert.equal(result.days[0].meals, 0);
+  assert.equal(result.days[0].calories, 0);
+  assert.equal(result.days[5].calories, 900);
+  assert.equal(result.days[6].calories, 450);
+});
+
+test('overview distinguishes unknown macros from complete explicit zero and keeps known subtotals', () => {
+  const unknown = nutritionSnapshot('2026-11-10', [meal('2026-11-10', { protein: 10, carbs: 0, fats: 0, incompleteNutrients: ['protein', 'carbs'] })]);
+  assert.deepEqual({ ...unknown.missing }, { protein: true, carbs: true, fats: false });
+  assert.deepEqual({ ...unknown.averages }, { calories: 450, protein: 10, carbs: 0, fats: 0 });
+  const empty = nutritionSnapshot('2026-11-10', []);
+  assert.equal(empty.loggedDays, 0);
+  assert.deepEqual({ ...empty.averages }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
 });

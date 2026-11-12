@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { loadTs } from './helpers/load-ts.mjs';
 const exports = {};
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/account-sync-core.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, { exports });
+}).outputText, { exports, setTimeout });
 const { createAccountList } = exports;
 const copy = (value) => JSON.parse(JSON.stringify(value));
 function storage() {
@@ -16,6 +17,7 @@ function storage() {
 }
 function backend() {
   const accounts = new Map();
+  const receipts = new Map();
   const state = { failRead: false, failSave: false, pauseSave: null, saves: 0 };
   function remote(owner) {
     const rows = (namespace) => {
@@ -24,17 +26,28 @@ function backend() {
     };
     return {
       async read(namespace) { if (state.failRead) throw Error('Network down'); return copy([...rows(namespace).values()]); },
+      async readRecords(namespace, ids) {
+        if (state.failRead) throw Error('Network down');
+        return copy(ids.map(id => rows(namespace).get(id)).filter(Boolean));
+      },
       async import(namespace, records) {
         for (const item of records) if (!rows(namespace).has(item.id)) rows(namespace).set(item.id, { ...copy(item), revision: 1, deleted: false });
       },
-      async save(namespace, changes) {
+      async save(namespace, changes, operationId) {
         state.saves++;
         if (state.pauseSave) await state.pauseSave();
         if (state.failSave) throw Error('Network down');
+        const key = `${owner}:${operationId}`;
+        const batch = JSON.stringify([namespace, changes]);
+        if (operationId && receipts.has(key)) {
+          if (receipts.get(key) !== batch) throw { code: '42501', message: 'Operation ID reused.' };
+          return;
+        }
         for (const item of changes) {
           if ((rows(namespace).get(item.id)?.revision ?? 0) !== item.expectedRevision) throw Error('Newer version exists');
         }
         for (const item of changes) rows(namespace).set(item.id, { id: item.id, payload: copy(item.payload), deleted: item.deleted, revision: item.expectedRevision + 1 });
+        if (operationId) receipts.set(key, batch);
       },
     };
   }
@@ -78,6 +91,110 @@ test('structured workout sets, reps and weights reopen on a second device and ke
 function device(server, userId = 'alice', namespace = 'recipes', local = storage()) {
   return { local, store: createAccountList({ userId, namespace, local, remote: server.remote(userId), identify: (item) => item.id, validate: valid }) };
 }
+function fuelDevice(server, namespace = 'food', local = storage()) {
+  return createAccountList({ userId: 'alice', namespace, local, remote: server.remote('alice'),
+    identify: item => item.id, validate: valid, localFirst: true, reconcileConflicts: true });
+}
+test('Fuel merges separate edits and preserves queued work when the first edit is already on the server', async () => {
+  const server = backend();
+  const phone = fuelDevice(server);
+  await phone.load([{ id: 'meal', name: 'Lunch', calories: 200, meal: 'Lunch' }]);
+  const web = fuelDevice(server);
+  await web.load();
+  await web.change(rows => rows.map(row => ({ ...row, meal: 'Dinner', calories: 250 })));
+  await web.refresh();
+
+  await phone.change(rows => rows.map(row => ({ ...row, calories: 250 })));
+  await phone.change(rows => [...rows.map(row => ({ ...row, name: 'Pasta' })), { id: 'snack', calories: 100 }]);
+  await phone.refresh();
+  assert.equal(phone.status().phase, 'saved');
+  assert.deepEqual(copy(await web.refresh()), [
+    { id: 'meal', name: 'Pasta', calories: 250, meal: 'Dinner' },
+    { id: 'snack', calories: 100 },
+  ]);
+});
+test('Fuel keeps server deletions, and explicit Undo still works after a concurrent delete', async () => {
+  const server = backend();
+  const original = { id: 'meal', calories: 200 };
+  const phone = fuelDevice(server);
+  await phone.load([original, { id: 'other', calories: 100 }]);
+  const web = fuelDevice(server);
+  await web.load();
+  await web.change(() => []);
+  await web.refresh();
+
+  await phone.change(rows => rows.map(row => ({ ...row, calories: 250 })));
+  await phone.refresh();
+  assert.equal(phone.status().phase, 'saved');
+  assert.deepEqual(copy(await phone.cached()), []);
+
+  await phone.change(() => [original], ['meal']);
+  await phone.refresh();
+  assert.deepEqual(copy(await web.refresh()), [original]);
+});
+test('Fuel reconciles a previously blocked queue after restart', async () => {
+  const server = backend(), local = storage();
+  const phone = device(server, 'alice', 'recipes', local);
+  await phone.store.load([{ id: 'meal', name: 'Lunch', calories: 200 }]);
+  const web = fuelDevice(server, 'recipes');
+  await web.load();
+  await web.change(rows => rows.map(row => ({ ...row, name: 'Dinner' })));
+  await web.refresh();
+  const key = 'swolemates.account-cache.alice.recipes';
+  const snapshot = JSON.parse(local.data.get(key));
+  snapshot.operations.push({ id: 'old-edit', phase: 'conflict', retryAt: 0, attempts: 1,
+    changes: [{ id: 'meal', payload: { id: 'meal', name: 'Lunch', calories: 250 }, deleted: false, expectedRevision: 1 }] });
+  await local.setItem(key, JSON.stringify(snapshot));
+  const reopened = fuelDevice(server, 'recipes', local);
+  assert.deepEqual(copy(await reopened.load()), [{ id: 'meal', name: 'Dinner', calories: 250 }]);
+  assert.equal(reopened.status().phase, 'saved');
+});
+test('Fuel recovers an operation ID already bound to a different batch and sends later edits', async () => {
+  const server = backend(), local = storage();
+  await fuelDevice(server, 'food', local).load([{ id: 'meal', name: 'Lunch', calories: 200 }]);
+  const key = 'swolemates.account-cache.alice.food';
+  const snapshot = JSON.parse(local.data.get(key));
+  const original = snapshot.rows[0].payload;
+  const operation = (id, payload, expectedRevision, base) => ({
+    id, phase: 'pending', retryAt: 0, attempts: 0, bases: { meal: { payload: base } },
+    changes: [{ id: 'meal', payload, deleted: false, expectedRevision }],
+  });
+  const firstEdit = { ...original, calories: 250 };
+  snapshot.operations = [
+    operation('first-edit', firstEdit, 1, original),
+    operation('second-edit', { ...firstEdit, calories: 300 }, 2, firstEdit),
+  ];
+  await local.setItem(key, JSON.stringify(snapshot));
+  const remote = server.remote('alice');
+  // Another copy of this queue already used both IDs with different batches.
+  for (const [id, expectedRevision, name] of [['first-edit', 1, 'Dinner'], ['second-edit', 2, 'Pasta']]) {
+    await remote.save('food', [{ id: 'meal', payload: { ...original, name }, deleted: false, expectedRevision }], id);
+  }
+  const reopened = fuelDevice(server, 'food', local);
+  assert.deepEqual(copy(await reopened.load()), [{ id: 'meal', name: 'Pasta', calories: 300 }]);
+  assert.equal(reopened.status().phase, 'saved');
+  assert.deepEqual(copy(await fuelDevice(server).load()), [{ id: 'meal', name: 'Pasta', calories: 300 }]);
+});
+test('Fuel merges weigh-ins from different devices and recalculates estimated targets', async () => {
+  const { goalsFromProfile, isSavedPlan, mergeNutritionPlan, planWithUpdatedWeight } = loadTs('src/lib/nutrition-plan-storage.ts');
+  const { withCurrentWeight } = loadTs('src/lib/macro-calculator.ts');
+  const server = backend();
+  const planDevice = () => createAccountList({ userId: 'alice', namespace: 'nutrition_plan', local: storage(),
+    remote: server.remote('alice'), identify: () => 'plan', validate: isSavedPlan, localFirst: true,
+    reconcileConflicts: true, mergeConflict: mergeNutritionPlan });
+  const profile = { sex: 'Male', age: 28, weightLb: 183, heightIn: 70, goal: 'maintain', steps: '4to7', strengthDays: 3, cardioSessions: 0, cardioLength: null, bodyFat: null, targetWeightLb: null, targetWeeks: null, weighIns: [], plannedWeeklyLb: 0, calorieAdjustment: 0, calibratedThrough: null };
+  const phone = planDevice(), web = planDevice();
+  await phone.load([{ profile, goals: goalsFromProfile(profile), goalSource: 'estimated' }]);
+  await web.load();
+  await web.change(([plan]) => [planWithUpdatedWeight(plan, withCurrentWeight(plan.profile, '2026-10-01', 182))]);
+  await web.refresh();
+  await phone.change(([plan]) => [planWithUpdatedWeight(plan, withCurrentWeight(plan.profile, '2026-10-02', 181))]);
+  await phone.refresh();
+  const [merged] = await web.refresh();
+  assert.deepEqual(copy(merged.profile.weighIns), [{ date: '2026-10-01', weightLb: 182 }, { date: '2026-10-02', weightLb: 181 }]);
+  assert.deepEqual(copy(merged.goals), copy(goalsFromProfile(merged.profile)));
+  assert.equal(phone.status().phase, 'saved');
+});
 test('meal and lift image selections carry to a second device and automatic clears them', async () => {
   for (const namespace of ['recipes', 'food', 'lifts']) {
     const server = backend(); const phone = device(server, 'alice', namespace);

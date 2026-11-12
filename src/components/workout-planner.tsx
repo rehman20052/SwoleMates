@@ -1,3 +1,5 @@
+import { ExerciseMusclePicker, useMuscleClassifications } from './exercise-muscle-picker';
+import { exerciseMuscles } from '@/lib/exercise-muscles';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,6 +32,8 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
   const [splitTitle, setSplitTitle] = useState(currentSplit?.title ?? '');
   const [days, setDays] = useState<string[]>(currentSplit?.days ?? Array(7).fill(''));
   const [openDay, setOpenDay] = useState<number | null>(null);
+  const classifications = useMuscleClassifications();
+  const [classifying, setClassifying] = useState('');
   const [picking, setPicking] = useState(false), [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]), [catalog, setCatalog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [error, setError] = useState(false);
@@ -42,13 +46,13 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
   useEffect(() => { if (currentSplit && !splitDirty.current) { setSplitTitle(currentSplit.title); setDays(currentSplit.days); } }, [currentSplit?.id, currentSplit?.title, JSON.stringify(currentSplit?.days)]);
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && (picking || openDay !== null)) { event.stopPropagation(); event.preventDefault(); if (picking) setPicking(false); else setOpenDay(null); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && (picking || openDay !== null)) { event.stopPropagation(); event.preventDefault(); if (classifying) setClassifying(''); else if (picking) setPicking(false); else setOpenDay(null); } };
     window.addEventListener('keyup', escape, true);
     return () => window.removeEventListener('keyup', escape, true);
-  }, [picking, openDay]);
+  }, [picking, openDay, classifying]);
 
   function say(value: string, failed = false) { setMessage(value); setError(failed); }
-  function changeTab(value: Tab) { setTab(value); setPicking(false); setOpenDay(null); say(''); }
+  function changeTab(value: Tab) { setTab(value); setPicking(false); setClassifying(''); setOpenDay(null); say(''); }
   function freshTemplate() { setTitle(''); setMinutes(''); setRows([]); setEditing(null); templateId.current = `workout-plan:${uid()}`; changeTab('template'); }
   function edit(plan: Template) {
     setTitle(plan.title); setMinutes(plan.durationMinutes === undefined ? '' : String(plan.durationMinutes));
@@ -61,6 +65,13 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
     if (day < 0) { say('Your week is full. Choose a day to change its routine.'); return; }
     splitDirty.current = true; setDays(current => current.map((id, i) => i === day ? plan.id : id));
     say(`${plan.title} added to ${daysOfWeek[day]}. Save your weekly split when you’re ready.`);
+  }
+  function selectExercise(name: string) {
+    setSelected(current => current.includes(name) ? current.filter(value => value !== name) : [...current, name]);
+  }
+  function requestExercise(name: string) {
+    if (selected.includes(name) || exerciseMuscles(name, classifications).length) selectExercise(name);
+    else setClassifying(name);
   }
   function addSelected() {
     if (rows.length + selected.length > 30) { say('Use up to 30 exercises in a template.', true); return; }
@@ -84,7 +95,7 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
       const saved = await saveWorkspaceSetting(id, JSON.stringify(value), accountUserId, Date.now());
       if (!saved) { say('Could not save your plan. Your entries are still here; try again.', true); return; }
       if (kind === 'template') { setEditing(id); setTab('saved'); say(`“${title.trim()}” saved to your template library.`); }
-      else { setDays(knownDays); splitDirty.current = false; say(`“${splitTitle.trim()}” saved. Your week is ready.`); }
+      else onClose();
     } catch { say('Could not save your plan. Your entries are still here; try again.', true); }
     finally { locked.current = false; setBusy(false); }
   }
@@ -95,10 +106,11 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
     return <Pressable accessibilityRole="button" accessibilityLabel={label ?? children} disabled={disabled || unavailable} onPress={onPress} style={[s.button, { backgroundColor: primary ? c.primary : c.surface, borderColor: primary ? c.primary : c.border, opacity: disabled || unavailable ? 0.45 : 1 }]}><AppText display={false} size={14} weight="semibold" color={primary ? c.primaryText : c.text}>{children}</AppText></Pressable>;
   }
   const inputStyle = { backgroundColor: c.surfaceRaised, borderColor: c.border, color: c.text, fontFamily: theme.fonts.regular };
-  const plans = exerciseOptions([...templates.flatMap(plan => plan.rows.map(exerciseName)), ...catalog], search).filter(name => name !== 'Other').slice(0, search ? 40 : 8);
+  const savedNames = [...classifications.values()].map(item => item.name);
+  const plans = exerciseOptions([...savedNames, ...templates.flatMap(plan => plan.rows.map(exerciseName)), ...catalog], search).filter(name => name !== 'Other').slice(0, search ? 40 : 8);
   const cardStyle = { backgroundColor: c.surface, borderColor: c.border };
   const footer = (children: ReactNode) => <View style={[s.footer, { borderColor: c.border }]}>{children}</View>;
-  return <Modal transparent visible animationType="fade" onRequestClose={() => { if (!busy) { if (picking) setPicking(false); else if (openDay !== null) setOpenDay(null); else onClose(); } }}>
+  return <Modal transparent visible animationType="fade" onRequestClose={() => { if (!busy) { if (classifying) setClassifying(''); else if (picking) setPicking(false); else if (openDay !== null) setOpenDay(null); else onClose(); } }}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[s.overlay, { backgroundColor: c.modalOverlay }]}>
       <View accessibilityViewIsModal style={[s.sheet, { backgroundColor: c.background, borderColor: c.border }]}>
         <View style={[s.header, { borderColor: c.border }]}>
@@ -108,12 +120,16 @@ export function WorkoutPlanner({ templates, splits, onClose }: { templates: Temp
         </View>
         <ScrollBody ref={scrollRef} contentContainerStyle={[s.content, narrow && { padding: 18 }]}>
           {message ? <View style={[s.notice, { backgroundColor: c.surfaceRaised }]}><AppText size={14} color={error ? c.danger : c.text} accessibilityRole={error ? 'alert' : undefined} accessibilityLiveRegion="polite">{message}</AppText></View> : null}
-          {picking ? <>
+          {picking ? classifying ? <ExerciseMusclePicker name={classifying} onCancel={() => setClassifying('')} onSaved={() => {
+            selectExercise(classifying);
+            setClassifying('');
+            setSearch('');
+          }} /> : <>
             <Button onPress={() => { setPicking(false); say(''); }}>Back to template</Button>
             <View style={{ gap: 5 }}><Text size={18} strong>Choose exercises</Text><Text muted>Pick a few to build your workout.</Text></View>
             <Input accessibilityLabel="Search exercises" value={search} onChangeText={value => setSearch(value.slice(0, 100))} placeholder="Search or add your own" style={[s.input, inputStyle]} />
-            <View>{plans.map(name => { const added = rows.some(row => exerciseName(row).toLowerCase() === name.toLowerCase()), checked = selected.includes(name); return <Pressable key={name} accessibilityRole="checkbox" accessibilityLabel={name} accessibilityState={{ checked: added || checked, disabled: added || disabled }} disabled={added || disabled} onPress={() => setSelected(current => checked ? current.filter(value => value !== name) : [...current, name])} style={[s.option, { borderBottomColor: c.border }]}><View style={[s.check, { borderColor: added || checked ? c.accent : c.border, backgroundColor: added || checked ? c.primaryTint : 'transparent' }]}>{added || checked ? <WorkoutLogIcon name="check" color={c.accent} size={16} /> : null}</View><View style={{ flex: 1 }}><Text>{name}</Text>{added ? <Text muted size={12}>Already in your template</Text> : null}</View></Pressable>; })}</View>
-            {search.trim() && !plans.some(name => name.toLowerCase() === search.trim().toLowerCase()) ? <Button onPress={() => { const name = search.trim(); if (rows.some(row => exerciseName(row).toLowerCase() === name.toLowerCase())) { say('That exercise is already in your template.', true); return; } setSelected(current => current.includes(name) ? current : [...current, name]); setSearch(''); say('Custom exercise selected. Add it when you’re ready.'); }}>{`Add “${search.trim()}” as a custom exercise`}</Button> : null}
+            <View>{plans.map(name => { const added = rows.some(row => exerciseName(row).toLowerCase() === name.toLowerCase()), checked = selected.includes(name); return <Pressable key={name} accessibilityRole="checkbox" accessibilityLabel={name} accessibilityState={{ checked: added || checked, disabled: added || disabled }} disabled={added || disabled} onPress={() => requestExercise(name)} style={[s.option, { borderBottomColor: c.border }]}><View style={[s.check, { borderColor: added || checked ? c.accent : c.border, backgroundColor: added || checked ? c.primaryTint : 'transparent' }]}>{added || checked ? <WorkoutLogIcon name="check" color={c.accent} size={16} /> : null}</View><View style={{ flex: 1 }}><Text>{name}</Text>{added ? <Text muted size={12}>Already in your template</Text> : null}</View></Pressable>; })}</View>
+            {search.trim() && !plans.some(name => name.toLowerCase() === search.trim().toLowerCase()) ? <Button onPress={() => { const name = search.trim(); if (rows.some(row => exerciseName(row).toLowerCase() === name.toLowerCase())) { say('That exercise is already in your template.', true); return; } if (!selected.includes(name)) requestExercise(name); setSearch(''); }}>{`Add “${search.trim()}” as a custom exercise`}</Button> : null}
             {!search ? <Text muted>Search for more exercises.</Text> : null}
             {footer(<Button primary onPress={addSelected} unavailable={!selected.length}>{selected.length ? `Add ${selected.length} ${selected.length === 1 ? 'exercise' : 'exercises'}` : 'Choose exercises to add'}</Button>)}
           </> : tab === 'template' ? <>

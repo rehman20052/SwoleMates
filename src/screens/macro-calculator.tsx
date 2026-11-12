@@ -625,6 +625,7 @@ function Stepper({
 }
 
 export function WeightTrendCard({
+  manual = false,
   profile,
   onLog,
   onApplyAdjustment,
@@ -634,6 +635,7 @@ export function WeightTrendCard({
   profile: NutritionProfile;
   onLog: (weightLb: number) => Promise<boolean>;
   onApplyAdjustment: (deltaCalories: number) => Promise<boolean>;
+  manual?: boolean;
   disabled?: boolean;
   error?: string | null;
 }) {
@@ -642,7 +644,7 @@ export function WeightTrendCard({
   const [weight, setWeight] = useState(() => Math.round(latest?.weightLb ?? profile.weightLb));
   const [editing, setEditing] = useState(latest == null);
   const [saving, setSaving] = useState(false);
-  const advice = calibrationAdvice(profile, unit);
+  const advice = manual ? null : calibrationAdvice(profile, unit);
   const theme = useAppTheme();
 
   function openEditor() {
@@ -664,7 +666,7 @@ export function WeightTrendCard({
       {editing ? (
         <View style={{ gap: 10 }}>
           <WeightStepper label="Current weight" value={weight} min={90} max={400} onChange={setWeight} />
-          <AppText size={12} muted>Updates daily calories and macros using this weight and your current goal. Custom targets will be recalculated.</AppText>
+          <AppText size={12} muted>{manual ? "Adds to your weight history and keeps your custom targets." : "Updates estimated calories and macros using this weight and your current goal."}</AppText>
           <PrimaryButton
             height={44}
             disabled={disabled || saving}
@@ -676,7 +678,7 @@ export function WeightTrendCard({
               if (saved) setEditing(false);
             }}
           >
-            {saving ? "Saving…" : "Log weight & update targets"}
+            {saving ? "Saving…" : manual ? "Log weight" : "Log weight & update targets"}
           </PrimaryButton>
           {latest ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Cancel weight edit" onPress={() => setEditing(false)}>
@@ -687,7 +689,7 @@ export function WeightTrendCard({
           ) : null}
         </View>
       ) : null}
-      {advice ? (
+      {advice && !editing ? (
         <View style={{ gap: 8 }}>
           <AppText size={13} style={{ lineHeight: 20 }}>
             {advice.message}

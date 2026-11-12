@@ -34,9 +34,21 @@ export function nutritionGoalSource(plan: SavedNutritionPlan): "manual" | "estim
   return (Object.keys(estimated) as (keyof NutritionGoals)[]).every(key => estimated[key] === plan.goals[key]) ? "estimated" : "manual";
 }
 export function planWithUpdatedWeight(plan: SavedNutritionPlan, profile: NutritionProfile): SavedNutritionPlan {
-  // Logging weight explicitly refreshes goal-based daily targets, including a
-  // previously customized plan. Save profile and targets as one record.
-  return { ...plan, profile, goalSource: 'estimated', goals: goalsFromProfile(profile) };
+  const goalSource = nutritionGoalSource(plan);
+  return { ...plan, profile, goalSource, goals: goalSource === "manual" ? plan.goals : goalsFromProfile(profile) };
+}
+export function mergeNutritionPlan(base: SavedNutritionPlan, edit: SavedNutritionPlan, latest: SavedNutritionPlan,
+  mergeFields: (base: unknown, edit: unknown, latest: unknown) => unknown): SavedNutritionPlan {
+  const merged = mergeFields(base, edit, latest);
+  if (!isSavedPlan(merged)) return edit;
+  let { profile } = merged;
+  if (!profile) return merged;
+  if (base.profile && edit.profile && latest.profile) {
+    const byDate = (profile: NutritionProfile) => Object.fromEntries(profile.weighIns.map(entry => [entry.date, entry]));
+    const weighIns = mergeFields(byDate(base.profile), byDate(edit.profile), byDate(latest.profile)) as Record<string, NutritionProfile["weighIns"][number]>;
+    profile = { ...profile, weighIns: Object.values(weighIns).sort((a, b) => a.date.localeCompare(b.date)) };
+  }
+  return { ...merged, profile, goals: merged.goalSource === "estimated" ? goalsFromProfile(profile) : merged.goals };
 }
 export function createNutritionPlanStore(storage: ListStorage) {
   const store = createDurableList(storage, nutritionPlanStorageKey, isSavedPlan);
