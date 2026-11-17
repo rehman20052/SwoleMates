@@ -1,5 +1,6 @@
 import { withDeadline } from "@/lib/network-deadline";
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ActivityDetails } from "@/lib/activity-log";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState, Platform } from "react-native";
 import { foregroundRefresh } from '@/lib/foreground-refresh';
@@ -84,11 +85,13 @@ export type SessionLog = {
   durationMinutes?: number;
   workoutOrigin?: "manual" | "template";
   sourceTemplateId?: string;
+  // Set for cardio and other activities, which log time and distance instead of exercises.
+  activity?: ActivityDetails;
 };
 
 export type WorkoutLogDetails = Pick<
   SessionLog,
-  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto" | "exercises" | "durationMinutes" | "workoutOrigin" | "sourceTemplateId"
+  "verified" | "checkedIn" | "plannedWorkoutId" | "partnerName" | "partnerPhoto" | "exercises" | "durationMinutes" | "workoutOrigin" | "sourceTemplateId" | "activity"
 >;
 
 export type NutritionTotals = {
@@ -188,7 +191,7 @@ type AppDataContextValue = AppData & {
   updateWeeklyWorkoutGoal: (goal: number) => Promise<boolean>;
   logWorkout: (title?: string, notes?: string, date?: string, details?: Partial<WorkoutLogDetails>, recordId?: string) => Promise<boolean>;
   syncVerifiedWorkoutLogs: (logs: SessionLog[]) => void;
-  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes" | "exercises" | "durationMinutes">>) => Promise<boolean>;
+  updateWorkoutLog: (logId: string, updates: Partial<Pick<SessionLog, "title" | "notes" | "exercises" | "durationMinutes" | "activity">>) => Promise<boolean>;
   deleteWorkoutLog: (logId: string) => Promise<boolean>;
   workoutStorageError: string | null;
   resetDeck: () => void;
@@ -469,6 +472,8 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!owner) return;
       channel = supabase.channel(`account-record-deltas-${owner}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "account_records", filter: `user_id=eq.${owner}` }, () => foreground())
+        .on("postgres_changes", { event: "*", schema: "public", table: "workout_logs", filter: `user_id=eq.${owner}` }, () => foreground())
+        .on("postgres_changes", { event: "*", schema: "public", table: "tracked_lift", filter: `user_id=eq.${owner}` }, () => foreground())
         .subscribe(status => { if (!active || channelOwner !== owner) return; realtime = status === "SUBSCRIBED"; if (realtime) foreground(); });
     };
     void withDeadline(supabase.auth.getSession()).then(({ data }) => {

@@ -22,7 +22,7 @@ import { icons } from "@/assets";
 import { photoDisplayUri } from "@/lib/heic-media";
 import { pickProfileMedia } from "@/lib/pick-photo";
 import { moveProfileMedia } from "@/lib/profile-media-order";
-import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileGoals, profileMediaKind, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfileMediaKind, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
+import { ageFromBirthDate, dayTimes, MIN_PROFILE_PROMPTS, photoCaptionGroups, PROMPT_ANSWER_LIMIT, profileActivities, profileGoals, profileMediaKind, profilePromptGroups, profilePromptOptions, weekDays, type ProfileGender, type ProfileMediaKind, type ProfilePromptAnswer, type UserProfile } from "@/lib/profile";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
@@ -607,6 +607,16 @@ export function ProfileScreen({ profile, saving, saveProgress, error, title = "E
               onToggle={(goal) => update({ selectedGoals: toggleChoice(profile.selectedGoals, goal, profileGoals) })}
             />
           </Field>
+          <Field label="Activities you're into">
+            <AppText size={12} muted>
+              Ways you like to work out with a partner. Pick as many as you like.
+            </AppText>
+            <ChoiceChips
+              options={profileActivities}
+              selected={profile.activities}
+              onToggle={(activity) => update({ activities: toggleChoice(profile.activities, activity, profileActivities) })}
+            />
+          </Field>
         </Card>
 
         <Card>
@@ -1066,6 +1076,16 @@ export function ProfilePreview({
         {profile.photoCaptions?.[index + 1] ? <PhotoCaption text={profile.photoCaptions[index + 1]} /> : null}
       </ProfileMediaFrame>
     )),
+    <Card key="activities">
+      <SectionLabel>Activities</SectionLabel>
+      {profile.activities.length > 0 ? (
+        <ReadOnlyChips values={profile.activities} />
+      ) : (
+        <AppText size={13} muted>
+          No activities selected yet.
+        </AppText>
+      )}
+    </Card>,
     <Card key="goals">
       <SectionLabel>Goals</SectionLabel>
       {profile.selectedGoals.length > 0 ? (

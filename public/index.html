@@ -155,7 +155,13 @@
       window.addEventListener("resize", lockPortrait);
       window.addEventListener("orientationchange", lockPortrait);
       window.addEventListener("pageshow", lockPortrait);
-      if ("serviceWorker" in navigator) {
+      // The offline cache is for the published app. On a local dev server it can serve stale code,
+      // so it's skipped there and any worker left from an earlier visit is removed.
+      const localDev = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((window.location && window.location.hostname) || "");
+      if ("serviceWorker" in navigator && localDev) {
+        navigator.serviceWorker.getRegistrations().then((list) => list.forEach((item) => item.unregister())).catch(() => {});
+      }
+      if ("serviceWorker" in navigator && !localDev) {
         window.addEventListener("load", () => {
           let reloadingForUpdate = false;
           navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -163,7 +169,8 @@
             reloadingForUpdate = true;
             window.location.reload();
           });
-          navigator.serviceWorker.register(new URL("sw.js?v=23", document.baseURI)).then((registration) => registration.update());
+          // A failed registration only means no offline cache; it must never cover the app.
+          navigator.serviceWorker.register(new URL("sw.js?v=23", document.baseURI)).then((registration) => registration.update()).catch(() => {});
         });
       }
     </script>

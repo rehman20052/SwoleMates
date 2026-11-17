@@ -3,7 +3,7 @@ import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Screen, ScrollBody, SectionLabel, TitleBar } from "@/components/ui";
 import { discoverExperienceLevels, type DiscoverFilters } from "@/lib/discover";
-import type { UserProfile } from "@/lib/profile";
+import { profileActivities, type UserProfile } from "@/lib/profile";
 import { useAppTheme } from "@/theme";
 
 type DiscoverFiltersScreenProps = {
@@ -112,6 +112,30 @@ export function DiscoverFiltersScreen({ filters, profile, onChange, onClose }: D
           </View>
           <AppText size={12} muted>
             Leave every level unselected to include all of them.
+          </AppText>
+        </Card>
+
+        <Card>
+          <SectionLabel>Activities</SectionLabel>
+          <View style={styles.choices}>
+            {profileActivities.map((activity) => (
+              <Choice
+                key={activity}
+                label={activity}
+                selected={filters.activities.includes(activity)}
+                onPress={() =>
+                  onChange({
+                    ...filters,
+                    activities: filters.activities.includes(activity)
+                      ? filters.activities.filter((item) => item !== activity)
+                      : [...filters.activities, activity],
+                  })
+                }
+              />
+            ))}
+          </View>
+          <AppText size={12} muted>
+            Shows people who do at least one of the activities you pick. Leave them all unselected to include everyone.
           </AppText>
         </Card>
 

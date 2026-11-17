@@ -67,10 +67,92 @@ export function accountRemote(userId: string): AccountRemote {
     },
   };
 }
+// Some kinds of data have moved out of account_records into real tables, but sync exactly the
+// same way: same revisions, conflict checks and offline queue. Each table group has four
+// database functions named after it, e.g. workout_read_delta / workout_commit_operation.
+//   workout_logs -> workout_* (workout_logs, workout_exercise, workout_set; supabase/workout-tables.sql)
+//   lifts        -> lift_*    (tracked_lift, lift_history; supabase/lift-tables.sql)
+// Until a group's script has been run its functions are missing (PGRST202), and that data
+// keeps using account_records.
+const tableGroups: Record<string, string> = { workout_logs: "workout", lifts: "lift" };
+
+export function tableRemote(userId: string, group: string): AccountRemote {
+  const fallback = accountRemote(userId);
+  let snapshot = { rows: new Map<string, AccountRecord>(), sequence: 0 };
+  let tables: boolean | null = null; // null until we know whether the new functions exist
+  const missing = (error: { code?: string } | null) => error?.code === "PGRST202" || error?.code === "42883";
+  async function checkOwner() {
+    const { data, error } = await withDeadline(supabase.auth.getSession());
+    if (error) throw error;
+    if (data.session?.user.id !== userId) throw new Error("Your account changed. Reopen this screen before saving.");
+  }
+  const toRecord = (row: { record_id: string; payload: unknown; deleted: boolean; revision: number | string }): AccountRecord =>
+    ({ id: row.record_id, payload: row.payload, deleted: row.deleted, revision: Number(row.revision) });
+  return {
+    async read(namespace) {
+      if (tables === false) return fallback.read(namespace);
+      await checkOwner();
+      while (true) {
+        const result = await supabase.rpc(`${group}_read_delta`, { p_after: snapshot.sequence, p_limit: 500 });
+        if (result.error) {
+          if (!missing(result.error)) throw result.error;
+          tables = false;
+          return fallback.read(namespace);
+        }
+        tables = true;
+        for (const row of result.data ?? []) {
+          snapshot.rows.set(row.record_id, toRecord(row));
+          snapshot.sequence = Math.max(snapshot.sequence, Number(row.change_sequence));
+        }
+        if (!result.data || result.data.length < 500) return [...snapshot.rows.values()];
+      }
+    },
+    async readRecords(namespace, ids) {
+      if (tables === false) return fallback.readRecords!(namespace, ids);
+      await checkOwner();
+      const rows: AccountRecord[] = [];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const { data, error } = await supabase.rpc(`${group}_read_records`, { p_ids: ids.slice(offset, offset + 100) });
+        if (error) {
+          if (!missing(error)) throw error;
+          tables = false;
+          return fallback.readRecords!(namespace, ids);
+        }
+        rows.push(...(data ?? []).map(toRecord));
+      }
+      return rows;
+    },
+    async import(namespace, records) {
+      if (tables === false) return fallback.import(namespace, records);
+      await checkOwner();
+      for (let offset = 0; offset < records.length; offset += 500) {
+        const { error } = await supabase.rpc(`${group}_import_records`, { p_records: records.slice(offset, offset + 500) });
+        if (error) {
+          if (!missing(error)) throw error;
+          tables = false;
+          return fallback.import(namespace, records.slice(offset));
+        }
+      }
+    },
+    async save(namespace, changes, operationId) {
+      if (tables === false) return fallback.save(namespace, changes, operationId);
+      await checkOwner();
+      const { error } = await supabase.rpc(`${group}_commit_operation`, { p_changes: changes, p_operation_id: operationId });
+      if (error) {
+        if (!missing(error)) throw error;
+        tables = false;
+        return fallback.save(namespace, changes, operationId);
+      }
+    },
+  };
+}
 export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T, onChange?: () => void,
   mergeConflict?: Parameters<typeof createAccountList<T>>[0]["mergeConflict"]) {
   const reconcileConflicts = ["food", "recipes", "nutrition_plan"].includes(namespace);
-  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId),
+  // Workouts and lifts sync through their own tables; everything else through account_records.
+  const group = tableGroups[namespace];
+  const remote = group ? tableRemote(userId, group) : accountRemote(userId);
+  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote,
     allowRestore: namespace === "hidden_chats", localFirst: true, reconcileConflicts, mergeConflict, onChange });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
