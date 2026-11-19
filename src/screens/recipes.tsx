@@ -1,5 +1,6 @@
+import { AppAlert as Alert } from "@/components/app-alert";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, Card, Chip, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
 import { type FoodLogEntry, useAppData } from "@/state/app-data";

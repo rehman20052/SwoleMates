@@ -36,7 +36,11 @@ begin
     select revision into actual_revision from public.account_records
       where user_id = owner_id and namespace = p_namespace and record_id = change->>'id';
     if coalesce(actual_revision, 0) <> (change->>'expectedRevision')::bigint then
-      raise exception 'A newer version exists. Refresh and try again.' using errcode = '40001';
+      -- PT409 maps to HTTP 409. Never use 40001 here: PostgREST 14 treats it as a transient
+      -- serialization failure and retries the call forever, which pinned the database CPU.
+      raise exception 'A newer version exists. Refresh and try again. [user % | % | % | sent rev % | server rev %]',
+        owner_id, p_namespace, change->>'id', change->>'expectedRevision', coalesce(actual_revision, 0)
+        using errcode = 'PT409';
     end if;
     insert into public.account_records(user_id, namespace, record_id, payload, deleted)
       values(owner_id, p_namespace, change->>'id', change->'payload', coalesce((change->>'deleted')::boolean, false))

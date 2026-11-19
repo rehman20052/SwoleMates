@@ -8,7 +8,23 @@ function load(file) {
   vm.runInNewContext(ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports });
   return exports;
 }
-const { weekBounds, weeklyRecap, liftMilestones } = load('src/lib/progress-recap.ts');
+const { weekBounds, weeklyRecap, liftMilestones, trainingHistory } = load('src/lib/progress-recap.ts');
+test('completion averages distinguish partial days and exclude future completion markers', () => {
+  const recap = weeklyRecap('2026-10-03', 0, [], [
+    { date: '2026-09-28', calories: 2000, protein: 100 },
+    { date: '2026-09-29', calories: 500, protein: 20 },
+  ], [], ['2026-09-28', '2026-09-30', '2026-10-04']);
+  assert.equal(recap.completedDays, 2);
+  assert.equal(recap.completedAverageCalories, 1000);
+  assert.equal(recap.averageCalories, 1250);
+});
+test('training history limits dates and preserves native lift units', () => {
+  const history = trainingHistory('2026-10-03', 4, [
+    { date: '2026-09-01' }, { date: '2026-10-02' }, { date: '2026-10-04' },
+  ], [{ name: 'Squat', unit: 'kg', history: [{ date: '2026-10-02', weight: 100 }, { date: '2026-10-04', weight: 110 }] }]);
+  assert.equal(history.sessions, 1); assert.equal(history.days, 1);
+  assert.equal(history.lifts[0].unit, 'kg'); assert.equal(history.lifts[0].entries.length, 1);
+});
 const { validWorkoutExercises, exerciseSummary } = load('src/lib/workout-session.ts');
 const lift = { currentWeight: 130, goalWeight: 150, name: 'Bench', unit: 'lb', history: [
   { date: '2026-09-27', weight: 120 }, { date: '2026-09-28', weight: 135 }, { date: '2026-09-30', weight: 130 }, { date: '2026-10-02', weight: 140 },

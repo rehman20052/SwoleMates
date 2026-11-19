@@ -1,3 +1,5 @@
+import { useSavedDraft } from "@/lib/use-saved-draft";
+import { foregroundRefresh } from '@/lib/foreground-refresh';
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Keyboard, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type KeyboardEvent } from "react-native";
 import { BlurView } from "expo-blur";
@@ -6,9 +8,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { icons } from "@/assets";
 import { WorkoutPlanCard } from "@/components/workout-plan";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
-import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
+import { deleteMatchMessage, editMatchMessage, listConnections, listMessages, markChatRead, messageEditable, notifyChatAlerts, sendMatchMessage, toggleMessageHeart, unmatch, type MatchConnection, type MatchMessage } from "@/lib/matches";
 import { clearCanceledWorkoutMessages, listMatchWorkouts, workoutPlanId, type PlannedWorkout } from "@/lib/workouts";
 import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
+import { useOnlineUsers } from "@/lib/presence";
 import { supabase } from "@/lib/supabase";
 import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
@@ -29,6 +32,7 @@ function menuHeight(canEdit: boolean, confirmingDelete: boolean) {
 
 export function MatchChat({ userId }: { userId: string }) {
   const theme = useAppTheme();
+  const online = useOnlineUsers();
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -50,9 +54,12 @@ export function MatchChat({ userId }: { userId: string }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const stageRef = useRef<View>(null);
   const bubbleNodes = useRef(new Map<string, View>());
+  const lastMessageTap = useRef<{ id: string; at: number } | null>(null);
   const [editing, setEditing] = useState<MatchMessage | null>(null);
   const inputRef = useRef<TextInput>(null);
   const draftBeforeEdit = useRef("");
+  const savedDraft = useSavedDraft("draft:chat:" + userId, setDraft);
+  const changeDraft = (text: string) => { setDraft(text); if (!editing) savedDraft.save(text); };
   const [caret, setCaret] = useState<{ start: number; end: number } | undefined>(undefined);
 
   useEffect(() => {
@@ -149,13 +156,13 @@ export function MatchChat({ userId }: { userId: string }) {
     if (!person || !me) return;
     let active = true;
     const pull = () => {
-      void Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
+      return Promise.all([listMessages(person.requestId, me), listMatchWorkouts(person.requestId)])
         .then(([items, workouts]) => {
           if (!active) return;
           setMessages((current) => {
             const same =
               current.length === items.length &&
-              current.every((item, index) => item.id === items[index]?.id && item.body === items[index]?.body && item.editedAt === items[index]?.editedAt);
+              current.every((item, index) => item.id === items[index]?.id && item.body === items[index]?.body && item.editedAt === items[index]?.editedAt && item.heartCount === items[index]?.heartCount && item.heartedByMe === items[index]?.heartedByMe);
             return same ? current : items;
           });
           setPlans((current) => {
@@ -176,15 +183,22 @@ export function MatchChat({ userId }: { userId: string }) {
         })
         .catch(() => undefined);
     };
-    const timer = setInterval(pull, 2000);
+    // Messages, reactions and plans arrive live. Poll slowly for attendance and
+    // missed events; retain the fast fallback when Realtime is unavailable.
+    let realtime = false, lastPoll = 0;
+    const refresh = foregroundRefresh(pull, 2000, () => {
+      if (realtime && Date.now() - lastPoll < 15000) return false;
+      lastPoll = Date.now(); return true;
+    });
     const channel = supabase
       .channel(`match-messages-${person.requestId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, pull)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, pull)
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${person.requestId}` }, refresh.request)
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refresh.request)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planned_workout", filter: `match_id=eq.${person.requestId}` }, refresh.request)
+      .subscribe(status => { if (!active) return; realtime = status === 'SUBSCRIBED'; if (realtime) refresh.request(); });
     return () => {
       active = false;
-      clearInterval(timer);
+      refresh.stop();
       void supabase.removeChannel(channel);
     };
   }, [person, me]);
@@ -243,8 +257,23 @@ export function MatchChat({ userId }: { userId: string }) {
     setPlansLoaded(true);
   }
 
+  function tapMessage(message: MatchMessage) {
+    const now = Date.now(); const previous = lastMessageTap.current;
+    lastMessageTap.current = { id: message.id, at: now };
+    if (!previous || previous.id !== message.id || now - previous.at > 360) return;
+    lastMessageTap.current = null;
+    const nextHearted = !message.heartedByMe;
+    setMessages(current => current.map(item => item.id === message.id ? { ...item, heartedByMe: nextHearted, heartCount: Math.max(0, item.heartCount + (nextHearted ? 1 : -1)) } : item));
+    void toggleMessageHeart(message.id, message.heartedByMe).catch((err: unknown) => {
+      setMessages(current => current.map(item => item.id === message.id ? message : item));
+      setError(err instanceof Error ? err.message : "Could not update that reaction.");
+    });
+  }
+
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   async function send() {
-    if (!person || !draft.trim()) return;
+    if (sendingRef.current || !savedDraft.ready || !person || !draft.trim()) return;
     const text = draft;
     if (editing) {
       if (text.trim() === editing.body) {
@@ -260,6 +289,7 @@ export function MatchChat({ userId }: { userId: string }) {
       try {
         await editMatchMessage(editing.id, text);
         setEditing(null);
+        setDraft(draftBeforeEdit.current);
         draftBeforeEdit.current = "";
         await refreshMessages();
         setError(null);
@@ -269,15 +299,17 @@ export function MatchChat({ userId }: { userId: string }) {
       }
       return;
     }
+    sendingRef.current = true; setSending(true);
     setDraft("");
     try {
       await sendMatchMessage(person.requestId, text);
+      savedDraft.clear();
       await refreshMessages();
       setError(null);
     } catch (err) {
       setDraft(text);
       setError(err instanceof Error ? err.message : "Could not send that message.");
-    }
+    } finally { sendingRef.current = false; setSending(false); }
   }
 
   function closeSafety() {
@@ -355,7 +387,7 @@ export function MatchChat({ userId }: { userId: string }) {
       <View style={[styles.headerBlock, { borderBottomColor: theme.colors.border }]}>
         <View style={styles.header}>
           <IconButton source={icons.arrowLeft} label="Back" onPress={nav.back} />
-          {person?.photo ? <Avatar source={{ uri: person.photo }} size={40} /> : null}
+          {person?.photo ? <View style={{ width: 40, height: 40 }}><Avatar source={{ uri: person.photo }} size={40} />{online.has(person.userId) ? <View accessibilityLabel="Active now" style={{ position: "absolute", right: -1, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: "#42D66B", borderWidth: 2, borderColor: theme.colors.background }} /> : null}</View> : null}
           <View style={styles.identity}>
             <AppText size={16} weight="extrabold" numberOfLines={1}>
               {person?.name ?? "Chat"}
@@ -438,6 +470,7 @@ export function MatchChat({ userId }: { userId: string }) {
                 <Bubble
                   key={message.id}
                   message={message}
+                  onDoublePress={() => tapMessage(message)}
                   hidden={held?.id === message.id}
                   onHold={message.mine && !planId ? () => holdMessage(message) : undefined}
                   onBind={message.mine && !planId ? (node) => {
@@ -470,8 +503,10 @@ export function MatchChat({ userId }: { userId: string }) {
         <View style={[styles.composer, { backgroundColor: theme.colors.surface, borderTopColor: editing ? "transparent" : theme.colors.border }]}>
           <TextInput
             ref={inputRef}
+            editable={!sending && savedDraft.ready}
+            maxLength={5000}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={changeDraft}
             selection={caret}
             onFocus={() => scrollRef.current?.scrollToEnd({ animated: Platform.OS !== "web" })}
             submitBehavior="submit"
@@ -485,7 +520,7 @@ export function MatchChat({ userId }: { userId: string }) {
             accessibilityRole="button"
             accessibilityLabel={editing ? "Save edit" : "Send message"}
             onPress={() => void send()}
-            disabled={!draft.trim() || !person}
+            disabled={sending || !savedDraft.ready || !draft.trim() || !person}
             style={[styles.send, { backgroundColor: theme.colors.primary, opacity: draft.trim() && person ? 1 : 0.45 }]}
           >
             <Icon source={icons.arrowUp} size={16} tint={theme.colors.primaryText} />
@@ -673,23 +708,22 @@ function MessageBody({ message, lifted }: { message: MatchMessage; lifted?: bool
         {time}
         {message.editedAt ? " · Edited" : ""}
       </AppText>
+      {message.heartCount > 0 ? <View style={{ position: "absolute", right: 8, bottom: -12, minWidth: 28, height: 24, paddingHorizontal: 6, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised, borderWidth: 1, borderColor: message.heartedByMe ? theme.colors.primary : theme.colors.border }}><AppText size={13}>♥ {message.heartCount > 1 ? message.heartCount : ""}</AppText></View> : null}
     </View>
   );
 }
 
-function Bubble({ message, onHold, onBind, hidden }: { message: MatchMessage; onHold?: () => void; onBind?: (node: View | null) => void; hidden?: boolean }) {
+function Bubble({ message, onHold, onDoublePress, onBind, hidden }: { message: MatchMessage; onHold?: () => void; onDoublePress: () => void; onBind?: (node: View | null) => void; hidden?: boolean }) {
   const row = (
     <View ref={onBind} collapsable={false} style={[styles.bubbleSlot, message.mine ? styles.mineSlot : styles.theirSlot]}>
       <MessageBody message={message} />
     </View>
   );
-  if (!onHold) {
-    return <View style={[styles.bubbleRow, hidden && styles.hiddenBubble]}>{row}</View>;
-  }
   return (
     <Pressable
-      accessibilityLabel={`Your message, ${message.body}`}
-      accessibilityHint="Hold to edit or delete"
+      accessibilityLabel={`${message.mine ? "Your" : "Received"} message, ${message.body}`}
+      accessibilityHint={onHold ? "Double tap to heart. Hold to edit or delete." : "Double tap to heart."}
+      onPress={onDoublePress}
       delayLongPress={400}
       onLongPress={onHold}
       style={[styles.bubbleRow, hidden && styles.hiddenBubble]}

@@ -1,22 +1,49 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
-import { createAccountList, type AccountRemote, type AccountRecord } from "./account-sync-core";
+import { createAccountList, type AccountRemote, type AccountRecord, type RecordChange } from "./account-sync-core";
+import { withDeadline } from "./network-deadline";
 
 export function accountSyncError(error: unknown) {
   const value = error as { code?: string; message?: string };
   if (["42P01", "PGRST202", "PGRST205"].includes(value?.code ?? "")) return "Account sync needs the Supabase migration in supabase/account-sync.sql. Existing local data is preserved.";
-  if (value?.code === "40001") return "This record changed on another device. Refresh and try again.";
+  if (value?.code === "40001" || value?.code === "PT409") return "This record changed on another device. Refresh and try again.";
   return value?.message || "Could not sync with your account. Check your connection and try again.";
 }
 export function accountRemote(userId: string): AccountRemote {
+  const snapshots = new Map<string, { rows: Map<string, AccountRecord>; sequence: number }>();
   async function checkOwner() {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await withDeadline(supabase.auth.getSession());
     if (error) throw error;
     if (data.session?.user.id !== userId) throw new Error("Your account changed. Reopen this screen before saving.");
   }
   return {
+    async readRecords(namespace, ids) {
+      await checkOwner();
+      const rows: AccountRecord[] = [];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const { data, error } = await supabase.from("account_records").select("record_id,payload,deleted,revision")
+          .eq("user_id", userId).eq("namespace", namespace).in("record_id", ids.slice(offset, offset + 100));
+        if (error) throw error;
+        rows.push(...(data ?? []).map(row => ({ id: row.record_id, payload: row.payload, deleted: row.deleted, revision: Number(row.revision) })));
+      }
+      return rows;
+    },
     async read(namespace) {
       await checkOwner();
+      const snapshot = snapshots.get(namespace) ?? { rows: new Map<string, AccountRecord>(), sequence: 0 };
+      while (true) {
+        const result = await supabase.rpc("account_read_delta", { p_namespace: namespace, p_after: snapshot.sequence, p_limit: 500 });
+        if (result.error) {
+          if (result.error.code !== "PGRST202") throw result.error;
+          break; // Read-only compatibility with installations awaiting the additive migration.
+        }
+        for (const row of result.data ?? []) {
+          snapshot.rows.set(row.record_id, { id: row.record_id, payload: row.payload, deleted: row.deleted, revision: Number(row.revision) });
+          snapshot.sequence = Math.max(snapshot.sequence, Number(row.change_sequence));
+        }
+        snapshots.set(namespace, snapshot);
+        if (!result.data || result.data.length < 500) return [...snapshot.rows.values()];
+      }
       const rows: AccountRecord[] = [];
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await supabase.from("account_records").select("record_id,payload,deleted,revision")
@@ -33,15 +60,28 @@ export function accountRemote(userId: string): AccountRemote {
         if (error) throw error;
       }
     },
-    async save(namespace, changes) {
+    async save(namespace, changes, operationId) {
       await checkOwner();
-      const { error } = await supabase.rpc("account_save_records", { p_namespace: namespace, p_changes: changes });
+      const { error } = await supabase.rpc("account_commit_operation", { p_namespace: namespace, p_changes: changes, p_operation_id: operationId });
       if (error) throw error;
     },
   };
 }
+// Drafts, routines and other settings carry an updatedAt time. When two devices saved the same
+// one, the copy edited last wins, the same rule saveWorkspaceSetting uses locally.
+function settingTime(payload: unknown) {
+  const value = (payload as { value?: { updatedAt?: unknown } } | null)?.value;
+  return typeof value === "object" && value && typeof value.updatedAt === "number" ? value.updatedAt : null;
+}
+function newestSetting(local: RecordChange, server: AccountRecord | undefined): "local" | "server" {
+  if (!server) return "local";
+  const mine = settingTime(local.payload), theirs = settingTime(server.payload);
+  if (mine == null || theirs == null) return "local";
+  return mine >= theirs ? "local" : "server";
+}
 export function accountList<T>(userId: string, namespace: string, identify: (item: T) => string, validate: (value: unknown) => value is T) {
-  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats" });
+  return createAccountList({ userId, namespace, identify, validate, local: AsyncStorage, remote: accountRemote(userId), allowRestore: namespace === "hidden_chats",
+    resolveConflict: namespace === "settings" ? newestSetting : undefined });
 }
 // Legacy nutrition/calendar keys were not account-scoped. Only their first owner
 // may import them; signing into a second account never inherits the first one's data.

@@ -4,6 +4,7 @@
   if (!viewport) return; // CSS dynamic viewport sizing remains the fallback.
   var frame = 0;
   var revealTimer = 0;
+  var settledRevealTimer = 0;
   var restingHeight = Math.max(viewport.height, document.documentElement.clientHeight || 0);
   var touch = null;
   var recoveryTimers = [];
@@ -24,10 +25,19 @@
       if ((overflow === "auto" || overflow === "scroll") && parent.scrollHeight > parent.clientHeight) {
         var box = parent.getBoundingClientRect();
         var input = field.getBoundingClientRect();
+        var lookup = field.closest && field.closest('[data-food-lookup]');
+        var results = lookup && lookup.querySelector('[data-food-results]');
         var bottom = Math.min(box.bottom, viewport.offsetTop + viewport.height) - 12;
         var top = Math.max(box.top, viewport.offsetTop) + 12;
-        if (input.bottom > bottom) parent.scrollTop += input.bottom - bottom;
-        else if (input.top < top) parent.scrollTop -= top - input.top;
+        // Use the available space for results, keeping the search at the top
+        // when the full list cannot fit above the keyboard.
+        var hasResults = results && field.value && field.value.trim();
+        var desiredBottom = hasResults ? results.getBoundingClientRect().bottom : input.bottom;
+        // Compute one bounded correction. Alternating bottom/top corrections
+        // made long result lists jump on successive viewport events.
+        var correction = Math.max(0, desiredBottom - bottom);
+        correction = Math.min(correction, input.top - top);
+        if (Math.abs(correction) > 1) parent.scrollTop += correction;
         break;
       }
       parent = parent.parentElement;
@@ -62,7 +72,10 @@
     // Position surfaces without scrolling the document during keyboard events.
     // Only their inner scroller may reveal a field; no native pan/reset loop.
     clearTimeout(revealTimer);
+    clearTimeout(settledRevealTimer);
     revealTimer = setTimeout(revealField, 120);
+    // Recheck after the keyboard and modal slide have finished resizing.
+    settledRevealTimer = setTimeout(revealField, 350);
   }
 
   function schedule() {
@@ -91,6 +104,7 @@
   window.addEventListener("focus", recover);
   window.addEventListener("resize", schedule);
   document.addEventListener("focusin", schedule);
+  document.addEventListener("food-search-updated", schedule);
   document.addEventListener("focusout", function () { schedule(); recover(); });
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) recover();
@@ -126,7 +140,8 @@
     var button = event.target.closest && event.target.closest('[role="button"], button');
     // Composer buttons are siblings of their input. Keep focus while sending,
     // but allow navigation and unrelated buttons to dismiss the keyboard.
-    if (editor(field) && button && field.parentElement.contains(button)) event.preventDefault();
+    var lookup = field && field.closest && field.closest('[data-food-lookup]');
+    if (editor(field) && button && (field.parentElement.contains(button) || (lookup && lookup.contains(button)))) event.preventDefault();
   });
   update();
 })();

@@ -410,8 +410,8 @@ erDiagram
 
 - `discover_people()`: Returns people within 50 miles with a rounded distance. Reads `discover_profiles` today. A paused profile stays saved and is left out of everyone else's results.
 - `my_connections()`: Lists your requests and matches with the other person's card and last message.
-- `send_match_request(to_user_id)`: Sends a request, accepts theirs if they already asked, and reopens declined or unmatched ones.
-- `collapse_mutual_requests()`: Turns two requests between the same people into one match.
+- `send_match_request(target_user)`: Sends a request and automatically accepts only a current reciprocal pending request. Reopened declined or unmatched connections require fresh acceptance.
+- `transition_match(request_id, action)`: Validates participant ownership and current status for accept, decline, cancel and unmatch. Legacy `collapse_mutual_requests()` access is revoked when present.
 - `shares_posts_with(author)`: True for you, and for your matches when neither of you blocked the other. The Social read rules use it.
 - `can_see_post(target_post)`: True when you can see that post.
 - `social_people(people)`: Names and main photos for people in your feed: your matches, and anyone who commented on a post you can see.
@@ -420,3 +420,20 @@ erDiagram
 ## Not built yet
 
 Trainers, programs and the AI chatbot are on hold while the team decides how they should work. They'll be added here when they're built.
+
+## Reliability migrations and deployment
+
+Apply existing base migrations first, then these additive migrations in order:
+
+1. `supabase/reliability-safety.sql`: immutable match participants, current `requested_by`, validated request/transition/block RPCs, bidirectional block protection and approved public profile fields. Legacy mutual-collapse helpers are revoked when present. Unblocking leaves the connection ended.
+2. `supabase/reliability-sync.sql`: server change sequences, owner-scoped paginated delta reads and idempotent save receipts. Personal changes use revision checks and tombstones; direct authenticated writes are revoked.
+3. `supabase/shared-sessions.sql`: exercise plans and per-participant readiness/training/finished state. The first start locks the plan. Private weights, repetitions, notes and drafts remain in the participant's own account records. Finishing does not verify attendance.
+4. `supabase/account-controls.sql`: owner-only exports, service-only deletion cleanup, and opt-in diagnostics.
+
+Deploy `supabase/functions/delete-account` using the project administrator's Supabase deployment credentials. The service role key stays in server secrets. Configure Auth recovery redirect allowlisting for the deployed GitHub Pages `/SwoleMates/?recovery=1` URL and approved development URLs. Schedule `public.expire_app_diagnostics()` daily with a privileged scheduler to enforce 30-day retention. Backend-dependent controls remain disabled until their capability checks succeed.
+
+Account caches now use a version-2 envelope containing server revisions, tombstones and an account-scoped durable outbox. Older array caches remain readable. An operation is persisted before the UI reports it saved on the device; pending sync, permanent failures and conflicts have separate states. Explicit conflict resolution preserves local edits until the user chooses. Save receipts prevent a repeated operation ID from applying twice after a lost response.
+
+Favorites, nutrition completion markers, workout templates and private drafts use account settings records with `favorite-food:`, `nutrition-day:`, `workout-plan:` and `draft:` IDs. Existing nutrition days have no completion marker. A copied meal receives fresh entry IDs and the selected destination date/meal; Undo explicitly restores the deleted record through revision checks.
+
+The service worker caches the public shell and exported static assets only. Authenticated API responses, uploads and private media are outside its cache allowlist. Physical iPhone and Android keyboard behavior requires device testing; browser checks cannot establish that behavior.

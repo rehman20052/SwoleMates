@@ -2,14 +2,16 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { Animated, Dimensions, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { appFrameSize } from "@/components/phone-frame";
 import { NotificationMedia } from "@/components/notification-media";
-import { AppText, Avatar, Card, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
+import { AppText, Avatar, Card, Icon, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, TitleBar, Toggle } from "@/components/ui";
+import { icons } from "@/assets";
 import { MAX_MEDIA_BYTES } from "@/lib/media-limits";
+import { useOnlineUsers } from "@/lib/presence";
 import { prepareVideo } from "@/lib/prepare-video";
 import { blockPerson, reportPerson, reportReasons } from "@/lib/safety";
 import {
@@ -65,6 +67,8 @@ type Social = {
   run: (action: () => Promise<unknown>, reloadAfter?: boolean) => Promise<boolean>;
   updatePost: (postId: string, fn: (post: Post) => Post) => void;
   activeVideoId: string | null;
+  // The video just below the active one. It loads in the background so it starts right away.
+  nextVideoId: string | null;
   registerVideo: (id: string, measure: VideoMeasure) => () => void;
   openMedia: (media: PostMedia) => void;
   focus: NoticeFocus | null;
@@ -110,6 +114,40 @@ function seekMountedClip(player: VideoPlayer, seconds: number) {
     return;
   }
   player.currentTime = seconds;
+}
+
+// Loads a clip without starting it. On web, Expo's replace() calls play() right after
+// load() and doesn't handle the promise, so an interrupted load logs an AbortError and the
+// preloaded next clip briefly starts playing. Set the source on the mounted <video> instead.
+function loadClip(player: VideoPlayer, uri: string) {
+  const source = { uri, useCaching: true };
+  if (Platform.OS === "web") {
+    const web = player as VideoPlayer & { _mountedVideos?: Set<HTMLVideoElement>; src?: unknown };
+    web.src = source;
+    web._mountedVideos?.forEach((video) => {
+      video.setAttribute("src", uri);
+      video.load();
+    });
+    return Promise.resolve();
+  }
+  return player.replaceAsync(source);
+}
+
+function playMountedClip(player: VideoPlayer) {
+  // Expo's web player calls HTMLVideoElement.play() without handling its
+  // promise. Safari/Chrome reject it for autoplay restrictions, interrupted
+  // loads and unsupported clips; those rejections otherwise open Expo LogBox.
+  if (Platform.OS === "web") {
+    const mounted = (player as VideoPlayer & { _mountedVideos?: Set<HTMLVideoElement> })._mountedVideos;
+    mounted?.forEach(video => {
+      void video.play().catch(() => {
+        // A later user tap can retry. Source failures remain exposed through
+        // the player's statusChange event instead of an unhandled exception.
+      });
+    });
+    return;
+  }
+  player.play();
 }
 
 let feedAudioReady = false;
@@ -173,6 +211,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [nextVideoId, setNextVideoId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<PostMedia | null>(null);
   const measures = useRef(new Map<string, VideoMeasure>());
   const loadingMore = useRef(false);
@@ -198,7 +237,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
         if (alive) setLoadError(errorMessage(err, "Could not load your feed."));
       });
     const stop = subscribeFeed(() => {
-      void reload().catch((err) => {
+      return reload().catch((err) => {
         if (alive) setLoadError(errorMessage(err, "Could not load your feed."));
       });
     }, channelName);
@@ -211,28 +250,41 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
   const syncVideos = useCallback(() => {
     if (lightbox) {
       setActiveVideoId(null);
+      setNextVideoId(null);
       return;
     }
     const entries = [...measures.current.entries()];
     if (!entries.length) {
       setActiveVideoId(null);
+      setNextVideoId(null);
       return;
     }
     const windowHeight = Dimensions.get("window").height;
+    const visibleBottom = windowHeight - 88;
     let pending = entries.length;
     let bestId: string | null = null;
     let best = 0;
+    const boxes: { id: string; y: number }[] = [];
     for (const [id, measure] of entries) {
       measure((box) => {
         if (box) {
-          const overlap = Math.min(box.y + box.height, windowHeight - 88) - Math.max(box.y, 0);
+          boxes.push({ id, y: box.y });
+          const overlap = Math.min(box.y + box.height, visibleBottom) - Math.max(box.y, 0);
           if (overlap > best) {
             best = overlap;
             bestId = id;
           }
         }
         pending -= 1;
-        if (pending === 0) setActiveVideoId(best > 48 ? bestId : null);
+        if (pending > 0) return;
+        const activeId = best > 48 ? bestId : null;
+        // Only the playing video and the one after it download. Videos further down wait.
+        const activeY = boxes.find((item) => item.id === activeId)?.y;
+        const below = boxes
+          .filter((item) => item.id !== activeId && (activeY != null ? item.y > activeY : item.y >= 0))
+          .sort((left, right) => left.y - right.y);
+        setActiveVideoId(activeId);
+        setNextVideoId(below[0]?.id ?? null);
       });
     }
   }, [lightbox]);
@@ -348,6 +400,7 @@ function useSocialBoard(loadPage: (before?: string) => Promise<FeedPage>, channe
     toggleFollow,
     ensurePost,
     activeVideoId: lightbox ? null : activeVideoId,
+    nextVideoId: lightbox ? null : nextVideoId,
     registerVideo,
     syncVideos,
     lightbox,
@@ -478,6 +531,10 @@ function SocialBoard({
   const [focus, setFocus] = useState<NoticeFocus | null>(null);
   const [audience, setAudience] = useState<"friends" | "public">("friends");
   const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
+  const pullStart = useRef<{ x: number; y: number; eligible: boolean } | null>(null);
+  const pullDistance = useRef(0);
+  const [pullReady, setPullReady] = useState(false);
   const [postsPublic, setPostsPublic] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -569,6 +626,7 @@ function SocialBoard({
         run: board.run,
         updatePost: board.updatePost,
         activeVideoId: board.activeVideoId,
+        nextVideoId: board.nextVideoId,
         registerVideo: board.registerVideo,
         openMedia: board.setLightbox,
         focus,
@@ -582,10 +640,30 @@ function SocialBoard({
         <TitleBar title={title} onBack={onBack} right={composer ? <NotificationBell /> : undefined} />
         <ScrollBody
           ref={scrollRef}
-          refreshControl={<RefreshControl refreshing={board.refreshing} onRefresh={() => void board.refresh()} tintColor={theme.colors.primary} />}
-          onScroll={board.syncVideos}
+          onScroll={(event) => { scrollPosition.current = event.nativeEvent.contentOffset.y; board.syncVideos(); }}
           scrollEventThrottle={64}
+          directionalLockEnabled
+          onTouchStart={(event) => {
+            const touch = event.nativeEvent.touches[0];
+            pullStart.current = touch ? { x: touch.pageX, y: touch.pageY, eligible: scrollPosition.current <= 1 } : null;
+            pullDistance.current = 0; setPullReady(false);
+          }}
+          onTouchMove={(event) => {
+            const start = pullStart.current; const touch = event.nativeEvent.touches[0];
+            if (!start?.eligible || !touch) return;
+            const dx = Math.abs(touch.pageX - start.x); const dy = touch.pageY - start.y;
+            const deliberate = dy >= 110 && dy > dx * 2.2;
+            pullDistance.current = deliberate ? dy : 0;
+            setPullReady(deliberate);
+          }}
+          onTouchEnd={() => {
+            const shouldRefresh = pullDistance.current >= 110 && !board.refreshing;
+            pullStart.current = null; pullDistance.current = 0; setPullReady(false);
+            if (shouldRefresh) void board.refresh();
+          }}
+          onTouchCancel={() => { pullStart.current = null; pullDistance.current = 0; setPullReady(false); }}
         >
+          {pullReady ? <View style={{ alignItems: "center", paddingVertical: 8 }}><AppText size={12} weight="bold" color={theme.colors.accent}>Release to refresh</AppText></View> : null}
           {onOpenFriend ? <FriendRow onOpen={onOpenFriend} /> : null}
           {composer ? <AudienceSwitch value={audience} onChange={setAudience} /> : null}
           {composer && audience === "public" ? (
@@ -787,9 +865,7 @@ function NotificationBell() {
 
   useEffect(() => {
     void refresh();
-    return subscribeFeed(() => {
-      void refresh();
-    }, "social-notices");
+    return subscribeFeed(refresh, "social-notices");
   }, [refresh]);
 
   async function openBell() {
@@ -914,6 +990,7 @@ function AudienceSwitch({ value, onChange }: { value: "friends" | "public"; onCh
 
 function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   const { feed, me } = useSocial();
+  const online = useOnlineUsers();
   const [latest, setLatest] = useState<Record<string, string>>({});
   const [seen, setSeen] = useState<Record<string, string>>({});
   const friendKey = feed.friendIds.join(",");
@@ -957,8 +1034,8 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
   }, [feed.friendIds, latest, seen]);
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow}>
-      <FriendCircle name={me.name || "You"} photo={me.photo} label="You" onPress={() => onOpen("me")} />
+    <ScrollView horizontal nestedScrollEnabled directionalLockEnabled bounces={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.friendRow} style={Platform.OS === "web" ? ({ touchAction: "pan-x", overscrollBehaviorX: "contain" } as ViewStyle) : undefined}>
+      <FriendCircle name={me.name || "You"} photo={me.photo} label="You" online onPress={() => onOpen("me")} />
       {ordered.map((id) => {
         const person = feed.people[id];
         if (!person) return null;
@@ -969,6 +1046,7 @@ function FriendRow({ onOpen }: { onOpen: (userId: string) => void }) {
             photo={person.photo}
             label={firstName(person.name)}
             fresh={friendHasFreshPost(latest[id], seen[id])}
+            online={online.has(id)}
             onPress={() => onOpen(id)}
           />
         );
@@ -982,12 +1060,14 @@ function FriendCircle({
   photo,
   label,
   fresh,
+  online,
   onPress,
 }: {
   name: string;
   photo?: string | null;
   label: string;
   fresh?: boolean;
+  online?: boolean;
   onPress: () => void;
 }) {
   const theme = useAppTheme();
@@ -1000,6 +1080,7 @@ function FriendCircle({
         ]}
       >
         <PersonAvatar name={name} photo={photo} size={64} />
+        {online ? <View accessibilityLabel="Active now" style={{ position: "absolute", right: 0, bottom: 1, width: 16, height: 16, borderRadius: 8, backgroundColor: "#42D66B", borderWidth: 3, borderColor: theme.colors.background }} /> : null}
       </View>
       <AppText size={11} weight="semibold" numberOfLines={1}>
         {label}
@@ -1173,15 +1254,16 @@ function FeedMedia({ media, postId }: { media: PostMedia; postId: string }) {
   if (media.type === "video") {
     return <PostVideo key={media.uri} postId={postId} uri={media.uri} onOpen={() => openMedia(media)} />;
   }
-  return <FeedPhoto key={media.uri} uri={media.uri} onOpen={() => openMedia(media)} />;
+  return <FeedPhoto key={media.uri} uri={media.uri} cacheKey={media.cacheKey} onOpen={() => openMedia(media)} />;
 }
 
-function FeedPhoto({ uri, onOpen }: { uri: string; onOpen: () => void }) {
+function FeedPhoto({ uri, cacheKey, onOpen }: { uri: string; cacheKey?: string; onOpen: () => void }) {
   const [aspectRatio, setAspectRatio] = useState(1);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen}>
       <Image
-        source={{ uri }}
+        source={{ uri, cacheKey }}
+        cachePolicy="memory-disk"
         style={[styles.postMedia, { aspectRatio }]}
         contentFit="contain"
         onLoad={({ source }) => {
@@ -1259,7 +1341,7 @@ function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlayi
     if (queued != null) flushSeek(queued);
     clip.seekTolerance = { toleranceBefore: 0, toleranceAfter: 0 };
     clip.scrubbingModeOptions = { scrubbingModeEnabled: false };
-    if (keepPlayingRef.current) clip.play();
+    if (keepPlayingRef.current) playMountedClip(clip);
   }, [flushSeek]);
 
   useEffect(() => {
@@ -1344,13 +1426,41 @@ function VideoScrubber({ player, keepPlaying }: { player: VideoPlayer; keepPlayi
 function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpen: () => void }) {
   const ref = useRef<View>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
-  const { activeVideoId, registerVideo } = useSocial();
+  const { activeVideoId, nextVideoId, registerVideo } = useSocial();
   const source = useRef(uri);
-  const player = useVideoPlayer(source.current, (clip) => {
+  // The player starts empty. A clip downloads only once it is playing or next in line.
+  const player = useVideoPlayer(null, (clip) => {
     clip.loop = true;
     clip.muted = !feedAudioReady;
   });
   const play = activeVideoId === postId;
+  const wanted = play || nextVideoId === postId;
+  const playRef = useRef(play);
+  playRef.current = play;
+  const [loaded, setLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!wanted || loaded) return;
+    setLoaded(true);
+    // useCaching keeps the clip on the phone, so replays and scrolling back don't download it again.
+    loadClip(player, source.current)
+      .then(() => {
+        if (playRef.current) playMountedClip(player);
+      })
+      .catch(() => setLoaded(false));
+  }, [wanted, loaded, player]);
+
+  useEffect(() => {
+    const status = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") setReady(true);
+    });
+    const loadedSource = player.addListener("sourceLoad", () => setReady(true));
+    return () => {
+      status.remove();
+      loadedSource.remove();
+    };
+  }, [player]);
   const [soundOn, setSoundOn] = useState(feedAudioReady);
   const soundTouched = useRef(false);
 
@@ -1407,9 +1517,9 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
 
   useEffect(() => {
     player.muted = !soundOn;
-    if (play) player.play();
+    if (play && loaded) playMountedClip(player);
     else player.pause();
-  }, [play, player, soundOn]);
+  }, [play, loaded, player, soundOn]);
 
   return (
     <View ref={ref} collapsable={false} style={styles.videoWrap}>
@@ -1425,6 +1535,13 @@ function PostVideo({ postId, uri, onOpen }: { postId: string; uri: string; onOpe
         fullscreenOptions={{ enable: false }}
         onFullscreenEnter={dismissNativeFullscreen}
       />
+      {!ready ? (
+        <View pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, styles.videoPlaceholder]}>
+          <Svg width={40} height={40} viewBox="0 0 24 24">
+            <Path d="M8 5v14l11-7z" fill="rgba(255,255,255,0.85)" />
+          </Svg>
+        </View>
+      ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Open attachment" onPress={onOpen} style={StyleSheet.absoluteFill} />
       <VideoScrubber player={player} keepPlaying={play} />
       <VideoSoundButton muted={!soundOn} onPress={() => {
@@ -1463,7 +1580,7 @@ function MediaLightbox({ media, onClose }: { media: PostMedia | null; onClose: (
         <View style={styles.lightboxBody} pointerEvents="box-none">
           <View style={[styles.lightboxStage, fitted]}>
             {media?.type === "image" ? (
-              <Image source={{ uri: media.uri }} style={styles.lightboxMedia} contentFit="contain" />
+              <Image source={{ uri: media.uri, cacheKey: media.cacheKey }} cachePolicy="memory-disk" style={styles.lightboxMedia} contentFit="contain" />
             ) : null}
             {media?.type === "video" ? <LightboxVideo uri={media.uri} /> : null}
           </View>
@@ -1487,23 +1604,28 @@ function VideoSoundButton({ muted, onPress }: { muted: boolean; onPress: () => v
   return <Pressable accessibilityRole="button" accessibilityLabel={muted ? "Unmute video" : "Mute video"}
     accessibilityState={{ selected: muted }} onPress={(event) => { event.stopPropagation(); onPress(); }}
     style={{ position: "absolute", bottom: 28, right: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.65)", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-    <Svg width={22} height={22} viewBox="0 0 24 24" accessible={false}>
-      <Path d="M3 9h4l5-4v14l-5-4H3z" stroke="#fff" strokeWidth={1.8} fill="none" strokeLinejoin="round" />
-      <Path d={muted ? "M16 9l5 6m0-6l-5 6" : "M16 8c2 2 2 6 0 8m3-11c4 4 4 10 0 14"} stroke="#fff" strokeWidth={1.8} fill="none" strokeLinecap="round" />
-    </Svg>
+    <Image
+      source={muted ? require("../../assets/brand/video-sound-off.svg") : require("../../assets/brand/video-sound-on.svg")}
+      style={{ width: 22, height: 22 }}
+      contentFit="contain"
+      accessible={false}
+      pointerEvents="none"
+    />
   </Pressable>;
 }
 
 function LightboxVideo({ uri }: { uri: string }) {
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
-  const player = useVideoPlayer(uri, (clip) => {
+  const player = useVideoPlayer({ uri, useCaching: true }, (clip) => {
     clip.loop = true;
     clip.muted = false;
   });
   useEffect(() => {
-    player.play();
+    const listener = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
+    playMountedClip(player);
     return () => {
+      listener.remove();
       player.pause();
     };
   }, [player]);
@@ -1524,8 +1646,7 @@ function LightboxVideo({ uri }: { uri: string }) {
         accessibilityLabel={playing ? "Pause clip" : "Play clip"}
         onPress={() => {
           if (playing) player.pause();
-          else player.play();
-          setPlaying(!playing);
+          else playMountedClip(player);
         }}
         style={StyleSheet.absoluteFill}
       />
@@ -1664,9 +1785,9 @@ function PostCard({ post }: { post: Post }) {
             </AppText>
           </Pressable>
         ) : null}
-        {!author.isMe && !menu ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Post actions" onPress={() => setMenu("menu")} hitSlop={8}>
-            <AppText size={15} weight="bold" muted>More</AppText>
+        {!author.isMe ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Post actions" accessibilityState={{ expanded: !!menu }} onPress={() => setMenu(menu ? null : "menu")} hitSlop={8} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+            <Icon source={icons.moreHorizontal} size={22} tint={theme.colors.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -1790,19 +1911,21 @@ function PostSafety({
   const { run } = useSocial();
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
+  const [sending, setSending] = useState(false);
+  const reportBusy = useRef(false);
   const author = usePerson(post.authorId);
+  useEffect(() => {
+    if (menu !== "report") { setReason(""); setDetails(""); }
+  }, [menu]);
   if (!menu) return null;
+  if (menu === "menu") return <View style={{ alignSelf: "flex-end", minWidth: 180, padding: 8, gap: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised }}>
+    <SecondaryButton height={44} onPress={() => onMenu("report")}>Report</SecondaryButton>
+    <SecondaryButton height={44} textColor={theme.colors.danger} onPress={() => onMenu("block")}>Block</SecondaryButton>
+    <SecondaryButton height={44} onPress={() => onMenu(null)}>Close menu</SecondaryButton>
+  </View>;
 
   return (
     <View style={[styles.confirm, { backgroundColor: theme.colors.surfaceRaised, flexWrap: "wrap" }]}>
-      {menu === "menu" ? (
-        <>
-          <AppText size={13} weight="semibold" style={{ flex: 1 }}>What do you want to do?</AppText>
-          <TextAction label="Report" onPress={() => onMenu("report")} />
-          <TextAction label="Block" onPress={() => onMenu("block")} color={theme.colors.danger} />
-          <TextAction label="Cancel" onPress={() => onMenu(null)} />
-        </>
-      ) : null}
       {menu === "block" ? (
         <>
           <AppText size={13} weight="semibold" style={{ flex: 1 }}>Block {firstName(author.name)}? Their posts will disappear.</AppText>
@@ -1818,35 +1941,40 @@ function PostSafety({
         </>
       ) : null}
       {menu === "report" ? (
-        <View style={{ gap: 8, width: "100%" }}>
-          <AppText size={13} weight="semibold">Report {firstName(author.name)}. They won't be told.</AppText>
-          <View style={styles.reasonRow}>
+        <View style={styles.reportForm}>
+          <View style={{ gap: 6 }}>
+            <AppText size={17} weight="extrabold">Report {firstName(author.name)}</AppText>
+            <AppText size={12} muted>Your report is private. They won't be told who reported them.</AppText>
+          </View>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Report reason" style={styles.reportReasons}>
+            <AppText size={13} weight="bold">Choose a reason</AppText>
             {reportReasons.map((item) => (
-              <Pressable key={item} accessibilityRole="button" onPress={() => setReason(item)}>
-                <AppText size={12} weight={reason === item ? "bold" : "medium"} primary={reason === item}>
+              <Pressable key={item} accessibilityRole="radio" accessibilityLabel={item} aria-checked={reason === item} accessibilityState={{ checked: reason === item, disabled: sending }} disabled={sending} onPress={() => setReason(item)}
+                style={({ pressed }) => [styles.reportReason, { borderColor: reason === item ? theme.colors.primary : theme.colors.border, backgroundColor: reason === item ? theme.colors.primaryTint : theme.colors.surface, opacity: pressed ? 0.75 : 1 }]}>
+                <View style={[styles.reportRadio, { borderColor: reason === item ? theme.colors.primary : theme.colors.muted }]}>
+                  {reason === item ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary }} /> : null}
+                </View>
+                <AppText size={14} weight={reason === item ? "bold" : "medium"} style={{ flex: 1 }}>
                   {item}
                 </AppText>
               </Pressable>
             ))}
           </View>
-          <Input
-            placeholder="What happened"
-            value={details}
-            onChangeText={setDetails}
-            maxLength={420}
-          />
-          <View style={styles.commentMeta}>
-            <TextAction label="Cancel" onPress={() => onMenu(null)} />
-            <TextAction
-              label="Send report"
-              color={theme.colors.primary}
-              onPress={() => {
-                if (!reason) return;
+          <View style={{ gap: 8 }}>
+            <AppText size={13} weight="bold">Additional details <AppText size={12} muted>(optional)</AppText></AppText>
+            <Input bordered multiline accessibilityLabel="Report details (optional)" placeholder="What happened" value={details} onChangeText={setDetails} editable={!sending} maxLength={420} style={styles.reportDetails} />
+            <AppText size={11} muted style={{ textAlign: "right" }}>{details.length}/420</AppText>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <SecondaryButton height={46} fontSize={13} style={{ flex: 1 }} disabled={sending} onPress={() => onMenu(null)}>Cancel</SecondaryButton>
+            <PrimaryButton height={46} fontSize={13} style={{ flex: 1 }} disabled={!reason || sending} onPress={async () => {
+                if (!reason || reportBusy.current) return;
+                reportBusy.current = true; setSending(true);
                 const note = `Post ${post.id}. ${details.trim()}`.trim().slice(0, 500);
-                onMenu(null);
-                void run(() => reportPerson(post.authorId, reason, note), false);
-              }}
-            />
+                try {
+                  if (await run(() => reportPerson(post.authorId, reason, note), false)) onMenu(null);
+                } finally { reportBusy.current = false; setSending(false); }
+              }}>{sending ? "Sending…" : "Send report"}</PrimaryButton>
           </View>
         </View>
       ) : null}
@@ -2145,6 +2273,11 @@ function TextAction({
 }
 
 const styles = StyleSheet.create({
+  videoPlaceholder: {
+    alignItems: "center",
+    backgroundColor: "#111",
+    justifyContent: "center",
+  },
   status: {
     alignItems: "center",
     gap: 12,
@@ -2427,11 +2560,14 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: 10,
   },
-  reasonRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+  reportForm: { gap: 18, width: "100%", paddingVertical: 6 },
+  reportReasons: { gap: 8 },
+  reportReason: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    minHeight: 50, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12,
   },
+  reportRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reportDetails: { minHeight: 96, textAlignVertical: "top", paddingTop: 12 },
   comments: {
     borderTopWidth: 1,
     gap: 10,

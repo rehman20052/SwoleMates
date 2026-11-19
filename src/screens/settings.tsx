@@ -21,7 +21,6 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
   const [paused, setPaused] = useState(false);
   const [pauseMessage, setPauseMessage] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
-
   useEffect(() => {
     let active = true;
     currentEmail()
@@ -164,9 +163,10 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         {people.map((person) => (
           <View key={person.userId} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             {person.photo ? <Avatar source={{ uri: person.photo }} size={44} /> : <View style={[styles.face, { backgroundColor: theme.colors.surfaceRaised }]} />}
-            <AppText weight="semibold" numberOfLines={1} style={{ flex: 1 }}>
-              {person.name}
-            </AppText>
+            <View style={{ flex: 1, gap: 4 }}>
+              <AppText weight="semibold" numberOfLines={1}>{person.name}</AppText>
+              <AppText size={11} muted>Account {person.userId.slice(-8)}</AppText>
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Unblock ${person.name}`}
@@ -182,6 +182,7 @@ export function SettingsScreen({ onClose }: { onClose: () => void }) {
         ))}
         {blockedMessage && blockedStatus === "ready" ? <AppText color={theme.colors.danger}>{blockedMessage}</AppText> : null}
         {Platform.OS === "web" ? <ScreenLayoutDetails /> : null}
+        <SecondaryButton height={44} fontSize={14} textColor={theme.colors.danger} onPress={() => nav.push({ name: "delete-account" })}>Delete account</SecondaryButton>
       </ScrollBody>
     </Screen>
   );

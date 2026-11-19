@@ -8,11 +8,12 @@ import { isLift } from "./lift-progression";
 import { validWorkoutExercises } from "./workout-session";
 import type { SavedMeal, SessionLog } from "@/state/app-data";
 
-export type AccountSetting = { id: string; value: number };
+export type AccountSetting = { id: string; value: number | { updatedAt: number; content: string } };
 function isSetting(value: unknown): value is AccountSetting {
   if (!value || typeof value !== "object") return false;
   const item = value as AccountSetting;
-  return item.id === "weekly-workout-goal" && Number.isInteger(item.value) && item.value >= 1 && item.value <= 7;
+  if (item.id === "weekly-workout-goal") return typeof item.value === "number" && Number.isInteger(item.value) && item.value >= 1 && item.value <= 7;
+  return /^(preference|draft|workout-plan|workout-split|favorite-food|nutrition-day):/.test(item.id) && typeof item.value === "object" && item.value !== null && Number.isFinite(item.value.updatedAt) && typeof item.value.content === "string" && item.value.content.length <= 50000;
 }
 function isRecipe(value: unknown): value is SavedMeal {
   return isFoodEntry({ ...(value as object), date: "2000-01-01" });
@@ -22,7 +23,8 @@ export function isWorkoutLog(value: unknown): value is SessionLog {
   const log = value as SessionLog;
   return typeof log.id === "string" && typeof log.title === "string"
     && typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date) && typeof log.verified === "boolean"
-    && (log.exercises === undefined || validWorkoutExercises(log.exercises));
+    && (log.exercises === undefined || validWorkoutExercises(log.exercises))
+    && (log.durationMinutes === undefined || Number.isInteger(log.durationMinutes) && log.durationMinutes >= 1 && log.durationMinutes <= 1440);
 }
 export function createAccountStores(userId: string) {
   return {
@@ -67,12 +69,25 @@ export async function loadAccountStores(stores: ReturnType<typeof createAccountS
     stores.settings.load(isSetting({ id: "weekly-workout-goal", value: Number(legacyGoal) }) ? [{ id: "weekly-workout-goal", value: Number(legacyGoal) }] : []),
     stores.lifts.load(oldLiftRaw ? JSON.parse(oldLiftRaw) : []),
   ]);
-  return { recipes, foodEntries, plan: plans[0] ?? { goals: defaults, profile: null }, logs, deletedWorkoutIds, weeklyWorkoutGoal: settings[0]?.value ?? 3, lifts };
+  return { recipes, foodEntries, plan: plans[0] ?? { goals: defaults, profile: null }, logs, deletedWorkoutIds, weeklyWorkoutGoal: Number(settings.find(item => item.id === "weekly-workout-goal")?.value ?? 3), workspaceSettings: settings.filter(item => item.id !== "weekly-workout-goal"), lifts };
 }
 export async function refreshAccountStores(stores: ReturnType<typeof createAccountStores>, defaults: NutritionGoals) {
   const [recipes, foodEntries, plans, logs, deletedWorkoutIds, settings, lifts] = await Promise.all([
     stores.recipes.refresh(), stores.food.refresh(), stores.plan.refresh(), stores.logs.refresh(),
     stores.deletions.refresh(), stores.settings.refresh(), stores.lifts.refresh(),
   ]);
-  return { recipes, foodEntries, plan: plans[0] ?? { goals: defaults, profile: null }, logs, deletedWorkoutIds, weeklyWorkoutGoal: settings[0]?.value ?? 3, lifts };
+  return { recipes, foodEntries, plan: plans[0] ?? { goals: defaults, profile: null }, logs, deletedWorkoutIds, weeklyWorkoutGoal: Number(settings.find(item => item.id === "weekly-workout-goal")?.value ?? 3), workspaceSettings: settings.filter(item => item.id !== "weekly-workout-goal"), lifts };
+}
+
+export async function cachedAccountStores(stores: ReturnType<typeof createAccountStores>, defaults: NutritionGoals) {
+  const [recipes, foodEntries, plans, logs, deletedWorkoutIds, settings, lifts] = await Promise.all([
+    stores.recipes.cached(), stores.food.cached(), stores.plan.cached(), stores.logs.cached(),
+    stores.deletions.cached(), stores.settings.cached(), stores.lifts.cached(),
+  ]);
+  // Only a complete account-scoped cache can unlock writes. A missing cache is
+  // not proof that the account has no records on another device.
+  if (recipes === null || foodEntries === null || plans === null || logs === null || deletedWorkoutIds === null || settings === null || lifts === null) return null;
+  return { recipes, foodEntries, plan: plans[0] ?? { goals: defaults, profile: null }, logs, deletedWorkoutIds,
+    weeklyWorkoutGoal: Number(settings.find(item => item.id === "weekly-workout-goal")?.value ?? 3),
+    workspaceSettings: settings.filter(item => item.id !== "weekly-workout-goal"), lifts };
 }

@@ -1,7 +1,7 @@
 import { createDurableList, type ListStorage } from "./durable-list";
 import { validItemArtwork, type ItemArtwork } from "./item-artwork";
 
-export type LiftEntry = { date: string; weight: number; minReps: number; maxReps: number };
+export type LiftEntry = { date: string; weight: number; minReps: number; maxReps: number; workoutLogId?: string };
 export type TrackedLift = {
   id: string; name: string; unit: "lb" | "kg"; currentWeight: number;
   minReps: number; maxReps: number; goalWeight: number; history: LiftEntry[]; artwork?: ItemArtwork;
@@ -11,7 +11,7 @@ export function validLiftDetails(value: LiftDetails) {
   return typeof value.name === "string" && value.name.trim().length > 0 && value.name.length <= 100
     && (value.unit === "lb" || value.unit === "kg")
     && Number.isFinite(value.currentWeight) && value.currentWeight >= 0
-    && Number.isFinite(value.goalWeight) && value.goalWeight > 0
+    && Number.isFinite(value.goalWeight) && value.goalWeight >= 0
     && Number.isInteger(value.minReps) && value.minReps >= 1
     && Number.isInteger(value.maxReps) && value.maxReps >= value.minReps && value.maxReps <= 100
     && validItemArtwork(value.artwork);
@@ -39,6 +39,7 @@ export function saveLiftDetails(current: TrackedLift[], id: string, details: Lif
   return existing ? current.map((lift) => lift.id === id ? next : lift) : [...current, next];
 }
 export function liftProgress(lift: Pick<TrackedLift, "currentWeight" | "goalWeight">) {
+  if (lift.goalWeight <= 0) return 0;
   return Math.max(0, Math.min(1, lift.currentWeight / lift.goalWeight));
 }
 export function createLiftStore(storage: ListStorage, userId: string) {

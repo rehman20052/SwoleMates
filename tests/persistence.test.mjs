@@ -16,7 +16,14 @@ function loadModule(file) {
   return exports;
 }
 const { createRecipeStore, recipeStorageKey } = loadModule('src/lib/recipe-storage.ts');
-const { createFoodJournal, foodJournalKey, sumFoodEntries } = loadModule('src/lib/food-journal.ts');
+const { createFoodJournal, foodJournalKey, sumFoodEntries, copyMealEntries } = loadModule('src/lib/food-journal.ts');
+test('meal copying preserves portions while assigning fresh IDs, destination date and meal', () => {
+  const source = [{ id: 'source', date: '2026-10-02', meal: 'Lunch', name: 'Rice', calories: 450, protein: 9, carbs: 90, fats: 1 },
+    { id: 'excluded', date: '2026-10-02', meal: 'Dinner', calories: 100 }];
+  const copied = copyMealEntries(source, '2026-10-02', 'Lunch', '2026-10-03', 'Dinner', () => 'fresh');
+  assert.deepEqual(plain(copied), [{ ...source[0], id: 'fresh', date: '2026-10-03', meal: 'Dinner' }]);
+  assert.equal(source[0].id, 'source');
+});
 const { createHiddenChatStore } = loadModule('src/lib/hidden-chats.ts');
 const { createDurableList } = loadModule('src/lib/durable-list.ts');
 const { mergeVerifiedLogs, workoutLogKey } = loadModule('src/lib/workout-log-sync.ts');
@@ -43,6 +50,15 @@ function memoryStorage() {
   };
 }
 const recipe = (id, name = 'My recipe') => ({ id, name, meal: 'Lunch', calories: 600, protein: 40, carbs: 65, fats: 20 });
+test('scanned ingredients retain editable base nutrition and servings after a saved food reopens', async () => {
+  const storage = memoryStorage();
+  const journal = createFoodJournal(storage); await journal.load([]);
+  const ingredient = { id: 'scan-1', name: 'Milk', source: 'barcode', basis: '1 cup', servings: '1.5', calories: '120', protein: '6', carbs: '12', fats: '4.5' };
+  const entry = { ...recipe('scanned'), date: '2026-10-05', scannedIngredients: [ingredient] };
+  await journal.change(() => [entry]);
+  const restored = await createFoodJournal(storage).load([]);
+  assert.deepEqual(plain(restored[0].scannedIngredients), [ingredient]);
+});
 const validRecipe = (value) => value && typeof value.id === 'string' && typeof value.name === 'string';
 const defaultGoals = { calorieGoal: 2500, proteinGoal: 190, carbGoal: 260, fatGoal: 75 };
 const macroProfile = { sex: 'Male', age: 28, weightLb: 180, heightIn: 70, goal: 'maintain', targetWeightLb: null,
@@ -218,4 +234,58 @@ test('moving profile photos preserves video types and captions in both direction
   assert.deepEqual(plain(moveProfileMedia(moved, 0, 2)), media);
   assert.equal(moveProfileMedia(media, 0, -1), media);
   assert.equal(moveProfileMedia(media, 0, 3), media);
+});
+
+const { avatarCrop } = loadModule('src/lib/avatar-crop.ts');
+test('avatar crop remains square and inside portrait, landscape and zoomed photos', () => {
+  for (const [width, height] of [[3000, 4000], [4000, 2000], [512, 512]]) {
+    for (const zoom of [1, 1.5, 4]) for (const [x,y] of [[0,0], [99999,-99999], [-99999,99999]]) {
+      const crop = avatarCrop(width, height, zoom, x, y);
+      assert.equal(crop.width, crop.height);
+      assert.ok(crop.originX >= 0 && crop.originY >= 0);
+      assert.ok(crop.originX + crop.width <= width && crop.originY + crop.height <= height);
+    }
+  }
+});
+
+const { parseWorkoutDraft, starterWorkoutPlans } = loadModule('src/lib/workout-drafts.ts');
+test('partial workout drafts allow unfinished numeric fields but reject damaged or oversized forms', () => {
+  const draft = { title: '', notes: 'Between sets', recordId: 'log-stable', rows: [{ id: 'one', exercise: 'Bench press', customName: '', sets: '', reps: '8', weight: '', unit: 'lb' }] };
+  assert.deepEqual(plain(parseWorkoutDraft(JSON.stringify(draft))), draft);
+  assert.equal(parseWorkoutDraft('{'), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, rows: [...draft.rows, ...draft.rows] })), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, rows: [{ ...draft.rows[0], unit: 'stones' }] })), null);
+  assert.equal(parseWorkoutDraft(JSON.stringify({ ...draft, title: 'x'.repeat(101) })), null);
+  assert.equal(starterWorkoutPlans.length, 3);
+});
+
+const { nutritionGoalSource, planWithUpdatedWeight } = loadModule('src/lib/nutrition-plan-storage.ts');
+test('weight check-ins refresh custom and estimated targets from the updated goal profile', () => {
+  const profile = { sex: 'Male', age: 28, weightLb: 183, heightIn: 70, goal: 'maintain', steps: '4to7', strengthDays: 3, cardioSessions: 0, cardioLength: null, bodyFat: null, targetWeightLb: null, targetWeeks: null, weighIns: [], plannedWeeklyLb: 0, calorieAdjustment: 0, calibratedThrough: null };
+  const goals = { calorieGoal: 1900, proteinGoal: 160, carbGoal: 180, fatGoal: 60 };
+  const manual = { goals, profile, goalSource: 'manual' };
+  const updated = planWithUpdatedWeight(manual, { ...profile, weightLb: 178 });
+  assert.deepEqual(plain(updated.goals), plain(goalsFromProfile({ ...profile, weightLb: 178 }))); assert.equal(updated.profile.weightLb, 178); assert.equal(updated.goalSource, 'estimated');
+  assert.equal(nutritionGoalSource({ goals, profile }), 'manual');
+  const estimated = { goals: goalsFromProfile(profile), profile, goalSource: 'estimated' };
+  assert.deepEqual(plain(planWithUpdatedWeight(estimated, { ...profile, weightLb: 178 }).goals), plain(goalsFromProfile({ ...profile, weightLb: 178 })));
+});
+test('weigh-ins update goal-based calories and macros atomically and preserve goal settings', async () => {
+  for (const goal of ['lose', 'maintain', 'gain']) {
+    const storage = memoryStorage();
+    const store = createNutritionPlanStore(storage);
+    const profile = { ...macroProfile, goal, calorieAdjustment: 100 };
+    const goals = goalsFromProfile(profile);
+    await store.load(goals, profile, goals);
+    const updatedProfile = withCurrentWeight(profile, '2026-11-03', 170);
+    const updated = await store.change(current => planWithUpdatedWeight(current, updatedProfile));
+    assert.equal(updated.profile.goal, goal);
+    assert.equal(updated.profile.calorieAdjustment, 100);
+    assert.equal(updated.profile.weightLb, 170);
+    assert.equal(updated.profile.weighIns.at(-1).weightLb, 170);
+    assert.deepEqual(plain(updated.goals), plain(goalsFromProfile(updatedProfile)));
+    assert.notDeepEqual(plain(updated.goals), plain(goals));
+    const reopened = await createNutritionPlanStore(storage).load(goals, profile, goals);
+    assert.deepEqual(plain(reopened), plain(updated));
+  }
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlatList, Modal, PanResponder, Platform, Pressable, StyleSheet, View, type LayoutRectangle, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -8,6 +8,7 @@ import {
   Card,
   Field,
   Input,
+  Icon,
   PhotoScrim,
   PrimaryButton,
   Screen,
@@ -16,6 +17,7 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import { experienceLevels } from "@/data/partners";
+import { icons } from "@/assets";
 import { photoDisplayUri } from "@/lib/heic-media";
 import { pickProfileMedia } from "@/lib/pick-photo";
 import { moveProfileMedia } from "@/lib/profile-media-order";
@@ -24,6 +26,7 @@ import { useNavigation } from "@/navigation";
 import { useAppTheme } from "@/theme";
 import { lookupUsZip } from "@/lib/zip-location";
 import { searchGymsByName, searchStreetAddresses, type GymPlace } from "@/lib/gym-location";
+import { AvatarCrop } from "@/components/avatar-crop";
 import { ProfileLiftsEditor } from "@/components/profile-lifts-editor";
 import { legacyLiftFields, profileLifts } from "@/lib/profile-lifts";
 
@@ -86,6 +89,7 @@ type ProfileScreenProps = {
 export function ProfileScreen({ profile, saving, error, title = "Edit Profile", initialMode = "view", onChange, onSave }: ProfileScreenProps) {
   const theme = useAppTheme();
   const nav = useNavigation();
+  const [crop, setCrop] = useState<{ profile: UserProfile; uri: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
@@ -124,9 +128,18 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
     return () => { node?.removeEventListener("contextmenu", suppressMenu); node?.classList.remove("profile-reorder-grid"); style.remove(); };
   }, [mode]);
 
+  const changeMedia = (next: UserProfile) => {
+    if (next.photos[0] && profileMediaKind(next.photos[0], next.photoMedia[0]) === "video") {
+      setPhotoError("The first slot is your profile photo. Move a photo here instead of a video.");
+      return;
+    }
+    if (next.photos[0] && next.photos[0] !== profileRef.current.photos[0]) {
+      setCrop({ profile: next, uri: next.photos[0] });
+    } else onChangeRef.current(next);
+  };
   const movePhoto = (from: number, to: number) => {
     const current = profileRef.current;
-    onChangeRef.current({ ...current, ...moveProfileMedia({
+    changeMedia({ ...current, ...moveProfileMedia({
       photos: current.photos,
       photoMedia: current.photos.map((photo, index) => profileMediaKind(photo, current.photoMedia?.[index])),
       photoCaptions: current.photos.map((_, index) => current.photoCaptions?.[index] ?? ""),
@@ -278,6 +291,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
     setPhotoNote(null);
     try {
       const picked = await pickProfileMedia({
+        photosOnly: index === 0,
         onCompressProgress: (progress) => {
           setCompressing(true);
           const percent = Math.min(99, Math.round(progress * 100));
@@ -296,7 +310,8 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         photoMedia.push(picked.kind);
         photoCaptions.push("");
       }
-      update({
+      changeMedia({
+        ...profile,
         photos: photos.slice(0, MAX_PHOTOS),
         photoMedia: photoMedia.slice(0, photos.length),
         photoCaptions: photoCaptions.slice(0, photos.length),
@@ -310,7 +325,9 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
   };
 
   const removePhoto = (index: number) => {
-    update({
+    changeMedia({
+      ...profile,
+      avatar: index === 0 ? undefined : profile.avatar,
       photos: profile.photos.filter((_, photoIndex) => photoIndex !== index),
       photoMedia: (profile.photoMedia ?? []).filter((_, photoIndex) => photoIndex !== index),
       photoCaptions: (profile.photoCaptions ?? []).filter((_, photoIndex) => photoIndex !== index),
@@ -331,6 +348,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
 
   return (
     <Screen>
+      {crop ? <AvatarCrop key={crop.uri} uri={crop.uri} onCancel={() => setCrop(null)} onConfirm={(avatar) => { onChange({ ...crop.profile, avatar }); setCrop(null); }} /> : null}
       {mode === "view" ? (
         <ProfilePreview profile={profile} mode={mode} onChangeMode={setMode} />
       ) : (
@@ -373,7 +391,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
         <Card>
           <SectionLabel>Photos</SectionLabel>
           <AppText size={12} muted>
-            Add up to {MAX_PHOTOS} photos or clips. Hold and drag, or use the arrows to reorder. The first appears first on your profile. At least 1 is required.
+            Add up to {MAX_PHOTOS} photos or clips. Hold and drag, or use the arrows to reorder. The first slot is a photo: crop its chat and social icon inside a circle. At least 1 is required.
           </AppText>
           <View ref={photoGridRef} style={styles.photoGrid} {...photoPan.panHandlers} onTouchEnd={() => finishPhotoDrag(true)} onTouchCancel={() => finishPhotoDrag(false)}>
             {Array.from({ length: MAX_PHOTOS }, (_, index) => {
@@ -401,7 +419,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                 >
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={photo ? `Replace photo or clip ${index + 1}` : index === 0 ? "Add profile photo or clip" : `Add photo or clip ${index + 1}`}
+                    accessibilityLabel={index === 0 ? photo ? "Replace profile photo" : "Add profile photo" : photo ? `Replace photo or clip ${index + 1}` : `Add photo or clip ${index + 1}`}
                     disabled={locked || saving || compressing}
                     onPress={() => addPhoto(index)}
                     delayLongPress={400}
@@ -429,7 +447,7 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
                           +
                         </AppText>
                         <AppText size={10} weight="bold" muted style={styles.photoLabel}>
-                          {index === 0 ? "Photo or clip" : isNextEmpty ? "Add" : ""}
+                          {index === 0 ? "Profile photo" : isNextEmpty ? "Add" : ""}
                         </AppText>
                       </View>
                     )}
@@ -470,6 +488,10 @@ export function ProfileScreen({ profile, saving, error, title = "Edit Profile", 
               {photoError}
             </AppText>
           ) : null}
+          {profile.photos[0] && profileMediaKind(profile.photos[0], profile.photoMedia[0]) === "image" ? <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Image source={{ uri: photoDisplayUri(profile.avatar || profile.photos[0]) }} style={{ width: 48, height: 48, borderRadius: 24 }} contentFit="cover" accessibilityLabel="Your chat and social profile icon" />
+            <SecondaryButton onPress={() => setCrop({ profile, uri: profile.photos[0] })}>Adjust profile icon</SecondaryButton>
+          </View> : null}
           {profile.photos.length > 0 ? (
             <View style={styles.promptList}>
               <AppText size={12} muted>
@@ -1019,22 +1041,26 @@ export function ProfilePreview({
   const [hero, ...morePhotos] = profile.photos;
   const headline = [profile.fullName.trim() || "Your name", profile.age.trim()].filter(Boolean).join(", ");
   const subtitle = [profile.experienceLevel, profile.gender].filter(Boolean).join(" • ");
-  const facts = [distanceLabel, profile.hometown.trim(), profile.primaryGym.trim()].filter(Boolean);
+  const facts = [
+    { key: "distance", text: distanceLabel, icon: icons.location },
+    { key: "town", text: profile.hometown.trim(), icon: icons.location },
+    { key: "gym", text: profile.primaryGym.trim(), icon: icons.training },
+  ].filter(fact => fact.text);
   const days = profile.availabilityDays.join(", ");
   const times = profile.availabilityTimes.join(", ");
   const answered = (profile.prompts ?? []).filter((row) => row.prompt.trim() && row.answer.trim());
   const betweenPrompts = [
     <Card key="about">
-      <SectionLabel>About</SectionLabel>
+      <AppText display upper primary size={20} accessibilityRole="header">About</AppText>
       <AppText weight="semibold" style={{ lineHeight: 22 }}>
         {profile.about.trim() || "No bio yet."}
       </AppText>
     </Card>,
     ...morePhotos.map((photo, index) => (
-      <View key={`photo-${index}-${photo.slice(0, 24)}`} style={styles.hero}>
+      <ProfileMediaFrame key={`photo-${index}-${photo.slice(0, 24)}`} uri={photo} kind={profileMediaKind(photo, profile.photoMedia?.[index + 1])}>
         <ProfileMedia key={photo} uri={photo} kind={profileMediaKind(photo, profile.photoMedia?.[index + 1])} play />
         {profile.photoCaptions?.[index + 1] ? <PhotoCaption text={profile.photoCaptions[index + 1]} /> : null}
-      </View>
+      </ProfileMediaFrame>
     )),
     <Card key="goals">
       <SectionLabel>Goals</SectionLabel>
@@ -1093,7 +1119,7 @@ export function ProfilePreview({
   return (
     <ScrollBody style={{ flex: 1 }} contentContainerStyle={styles.previewScroll}>
       {chrome && onChangeMode ? <ModeTabs mode={mode} onChange={onChangeMode} inset={false} /> : null}
-      <View style={styles.hero}>
+      <ProfileMediaFrame uri={hero} kind={profileMediaKind(hero || "", profile.photoMedia?.[0])}>
         {hero ? (
           <ProfileMedia key={hero} uri={hero} kind={profileMediaKind(hero, profile.photoMedia?.[0])} play />
         ) : (
@@ -1116,9 +1142,10 @@ export function ProfilePreview({
           {facts.length > 0 ? (
             <View style={styles.factRow}>
               {facts.map((fact) => (
-                <View key={fact} style={styles.fact}>
-                  <AppText size={12} weight="medium" color="#FFFFFF">
-                    {fact}
+                <View key={fact.key} style={[styles.fact, { flexDirection: "row", alignItems: "center", gap: 7, maxWidth: "100%" }]}>
+                  <Icon source={fact.icon} size={16} tint={theme.colors.accent} />
+                  <AppText display={false} size={12} weight="semibold" color="#FFFFFF" style={{ flexShrink: 1 }}>
+                    {fact.text}
                   </AppText>
                 </View>
               ))}
@@ -1126,7 +1153,7 @@ export function ProfilePreview({
           ) : null}
         </View>
         {profile.photoCaptions?.[0] ? <PhotoCaption text={profile.photoCaptions[0]} /> : null}
-      </View>
+      </ProfileMediaFrame>
 
       {previewBlocks}
 
@@ -1141,43 +1168,73 @@ export function ProfilePreview({
   );
 }
 
+const MediaSizeContext = createContext<((size: { width: number; height: number }) => void) | undefined>(undefined);
+function ProfileMediaFrame({ uri, kind, children }: { uri?: string; kind: ProfileMediaKind; children: ReactNode }) {
+  const [ratio, setRatio] = useState(1);
+  const update = useCallback((size: { width: number; height: number }) => {
+    if (size.width > 0 && size.height > 0) setRatio(size.width / size.height);
+  }, []);
+  return <MediaSizeContext.Provider value={update}><View style={[styles.hero, { height: undefined, aspectRatio: ratio, backgroundColor: "#101012" }]}>{children}</View></MediaSizeContext.Provider>;
+}
+
 function ProfileMedia({ uri, kind, play = false }: { uri: string; kind: ProfileMediaKind; play?: boolean }) {
   if (kind === "video") return <ProfileClip uri={uri} play={play} />;
   return <ProfileStill uri={uri} />;
 }
 
 function ProfileStill({ uri }: { uri: string }) {
-  return <Image source={{ uri: photoDisplayUri(uri) }} style={StyleSheet.absoluteFill} contentFit="cover" />;
+  const onSize = useContext(MediaSizeContext);
+  return <Image onLoad={({ source }) => onSize?.(source)} source={{ uri: photoDisplayUri(uri) }} style={StyleSheet.absoluteFill} contentFit="contain" />;
 }
 
 function ProfileClip({ uri, play }: { uri: string; play: boolean }) {
+  const ref = useRef<View>(null);
+  const onSize = useContext(MediaSizeContext);
   const player = useVideoPlayer(uri, (clip) => {
     clip.loop = true;
     clip.muted = true;
   });
   useEffect(() => {
+    if (!onSize) return;
+    if (Platform.OS === "web") {
+      const video = (ref.current as unknown as HTMLElement | null)?.querySelector("video");
+      if (!video) return;
+      const update = () => onSize({ width: video.videoWidth, height: video.videoHeight });
+      video.addEventListener("loadedmetadata", update); video.addEventListener("resize", update); update();
+      return () => { video.removeEventListener("loadedmetadata", update); video.removeEventListener("resize", update); };
+    }
+    const update = (size?: { width: number; height: number }) => { if (size) onSize(size); };
+    update(player.videoTrack?.size ?? player.availableVideoTracks[0]?.size);
+    const loaded = player.addListener("sourceLoad", e => update(e.availableVideoTracks[0]?.size));
+    const changed = player.addListener("videoTrackChange", e => update(e.videoTrack?.size));
+    return () => { loaded.remove(); changed.remove(); };
+  }, [onSize, player]);
+  useEffect(() => {
     const start = () => {
-      if (play) player.play();
+      if (play) {
+        if (Platform.OS === "web") { const video = (ref.current as unknown as HTMLElement | null)?.querySelector("video"); void video?.play().catch(() => {}); }
+        else player.play();
+      }
     };
     start();
     const subscription = player.addListener("statusChange", start);
     return () => subscription.remove();
   }, [player, play]);
   return (
-    <VideoView
+    <View ref={ref} style={StyleSheet.absoluteFill}><VideoView
       player={player}
       style={[StyleSheet.absoluteFill, { width: "100%", height: "100%" }]}
-      contentFit="cover"
+      contentFit="contain"
       nativeControls={false}
       playsInline
-    />
+    /></View>
   );
 }
 
 function PromptAnswer({ prompt, answer }: { prompt: string; answer: string }) {
   return (
     <Card>
-      <AppText size={13} weight="bold" primary>
+      <AppText display upper size={20} primary accessibilityRole="header">
         {prompt}
       </AppText>
       <AppText weight="semibold" style={{ lineHeight: 22 }}>
@@ -1367,7 +1424,6 @@ const styles = StyleSheet.create({
   },
   hero: {
     borderRadius: 24,
-    height: 420,
     overflow: "hidden",
   },
   captionWrap: {

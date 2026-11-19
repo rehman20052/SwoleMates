@@ -1,5 +1,7 @@
+import { AppAlert as Alert } from "@/components/app-alert";
+import { useSavedDraft } from "@/lib/use-saved-draft";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 import { icons } from "@/assets";
 import { AppText, Avatar, Icon, IconButton, PrimaryButton, Screen } from "@/components/ui";
@@ -22,7 +24,10 @@ function Conversation({ partner }: { partner: Partner }) {
   const nav = useNavigation();
   const { conversations, workouts, sendMessage, markRead, block, review } = useAppData();
   const [draft, setDraft] = useState("");
+  const savedDraft = useSavedDraft("draft:chat:demo:" + partner.id, setDraft);
   const scrollRef = useRef<ScrollView>(null);
+  const lastTap = useRef<{ id: string; at: number } | null>(null);
+  const [hearted, setHearted] = useState<Set<string>>(new Set());
   const messages = conversations.find((c) => c.partnerId === partner.id)?.messages ?? [];
   const nextSession = workouts.find((w) => w.partnerId === partner.id && w.date >= daysFromToday(0));
   const name = firstName(partner);
@@ -35,6 +40,7 @@ function Conversation({ partner }: { partner: Partner }) {
   function handleSend() {
     sendMessage(partner.id, draft);
     setDraft("");
+    savedDraft.clear();
   }
 
   function scheduleWorkout() {
@@ -70,7 +76,7 @@ function Conversation({ partner }: { partner: Partner }) {
             onPress={() => nav.push({ name: "partner", id: partner.id })}
             style={styles.identityTap}
           >
-            <Avatar source={partner.avatar} size={40} />
+            <View style={{ width: 40, height: 40 }}><Avatar source={partner.avatar} size={40} /><View accessibilityLabel="Active now" style={{ position: "absolute", right: -1, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: "#42D66B", borderWidth: 2, borderColor: theme.colors.background }} /></View>
             <View style={{ flex: 1, gap: 2 }}>
               <AppText size={15} weight="extrabold" numberOfLines={1}>
                 {partner.name}
@@ -120,7 +126,7 @@ function Conversation({ partner }: { partner: Partner }) {
                   {message.day}
                 </AppText>
               ) : null}
-              <Bubble message={message} partner={partner} />
+              <Bubble message={message} partner={partner} hearted={hearted.has(message.id)} onDoublePress={() => { const now = Date.now(); const previous = lastTap.current; lastTap.current = { id: message.id, at: now }; if (previous?.id === message.id && now - previous.at <= 360) { lastTap.current = null; setHearted(current => { const next = new Set(current); if (next.has(message.id)) next.delete(message.id); else next.add(message.id); return next; }); } }} />
             </Fragment>
           ))}
         </ScrollView>
@@ -145,7 +151,7 @@ function Conversation({ partner }: { partner: Partner }) {
           </Pressable>
           <TextInput
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={text => { setDraft(text); savedDraft.save(text); }}
             onSubmitEditing={handleSend}
             returnKeyType="send"
             placeholder="Type your workout plan..."
@@ -187,7 +193,7 @@ function SafetyButton({ label, color, onPress }: { label: string; color?: string
   );
 }
 
-function Bubble({ message, partner }: { message: Message; partner: Partner }) {
+function Bubble({ message, partner, hearted, onDoublePress }: { message: Message; partner: Partner; hearted: boolean; onDoublePress: () => void }) {
   const theme = useAppTheme();
   const mine = message.from === "me";
 
@@ -204,18 +210,19 @@ function Bubble({ message, partner }: { message: Message; partner: Partner }) {
       <AppText size={9} muted style={{ textAlign: "right" }}>
         {message.time}
       </AppText>
+      {hearted ? <View style={{ position: "absolute", right: 8, bottom: -12, width: 25, height: 23, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceRaised, borderWidth: 1, borderColor: theme.colors.primary }}><AppText size={13}>♥</AppText></View> : null}
     </View>
   );
 
   if (mine) {
-    return <View style={styles.mine}>{bubble}</View>;
+    return <Pressable accessibilityHint="Double tap to heart" onPress={onDoublePress} style={styles.mine}>{bubble}</Pressable>;
   }
 
   return (
-    <View style={styles.theirs}>
+    <Pressable accessibilityHint="Double tap to heart" onPress={onDoublePress} style={styles.theirs}>
       <Avatar source={partner.avatar} size={28} />
       {bubble}
-    </View>
+    </Pressable>
   );
 }
 

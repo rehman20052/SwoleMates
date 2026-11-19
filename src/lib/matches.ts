@@ -1,4 +1,4 @@
-import { normalizeProfile, type UserProfile } from "@/lib/profile";
+import { profilePortrait, normalizeProfile, type UserProfile } from "@/lib/profile";
 import { blockedUserIds } from "@/lib/safety";
 import { supabase } from "@/lib/supabase";
 import { markAccountRead, readAccountMarkers } from "@/lib/account-markers";
@@ -31,6 +31,8 @@ export type MatchMessage = {
   body: string;
   createdAt: string;
   editedAt: string | null;
+  heartCount: number;
+  heartedByMe: boolean;
 };
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
@@ -83,6 +85,7 @@ export async function loadPublicMatchProfile(userId: string) {
   });
   const profile: UserProfile = {
     ...normalized,
+    avatar: normalized.avatar ? photoUrl(normalized.avatar) : undefined,
     photos: shown.map((item) => item.url),
     photoMedia: shown.map((item) => item.kind),
     birthDate: "",
@@ -118,7 +121,7 @@ function personFrom(row: {
     return url ? [{ url, kind: normalized?.photoMedia[index] ?? "image" }] : [];
   });
   const photos = shown.map((item) => item.url);
-  const profile = normalized ? { ...normalized, photos, photoMedia: shown.map((item) => item.kind) } : null;
+  const profile = normalized ? { ...normalized, avatar: normalized.avatar ? photoUrl(normalized.avatar) : undefined, photos, photoMedia: shown.map((item) => item.kind) } : null;
   if (profile) matchProfiles.set(row.other_user_id, profile);
   const person: MatchConnection = {
     requestId: row.id,
@@ -128,7 +131,7 @@ function personFrom(row: {
     name: profile?.fullName?.trim() || "SwoleMate",
     age: profile?.age?.trim() || "",
     gym: profile?.primaryGym?.trim() || "",
-    photo: shown.find((item) => item.kind === "image")?.url ?? null,
+    photo: profile ? profilePortrait(profile) : null,
     lastMessage: row.last_message?.trim() || "",
     lastMessageMine: false,
     lastMessageAt: "",
@@ -369,12 +372,7 @@ export async function chatAlertCount() {
   const me = await signedInUserId();
   if (!me) return 0;
 
-  let connections: MatchConnection[] = [];
-  try {
-    connections = await listConnections();
-  } catch {
-    return 0;
-  }
+  const connections = await listConnections();
 
   let reads = await chatReadTimes();
   const blocked = await blockedUserIds();
@@ -417,10 +415,21 @@ export async function chatAlertCount() {
   return incoming + unreadChats;
 }
 
-export async function listConnections() {
-  const collapsed = await supabase.rpc("collapse_mutual_requests");
-  if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
+// The Chat badge, Chat tab and Discover often ask at the same moment. They share one
+// request instead of each calling the database. Nothing is kept once it finishes.
+let connectionsInFlight: Promise<MatchConnection[]> | null = null;
 
+// collapse_mutual_requests runs after a request is accepted (respondToMatch), and
+// send_match_request merges mutual requests itself, so loading the list doesn't need it.
+export function listConnections() {
+  connectionsInFlight ??= loadConnections().finally(() => {
+    connectionsInFlight = null;
+  });
+  return connectionsInFlight;
+}
+
+async function loadConnections() {
+  await blockedUserIds();
   const { data, error } = await supabase.rpc("my_connections");
   if (error) throw setupError(error);
   return ((data ?? []) as Parameters<typeof personFrom>[0][])
@@ -442,107 +451,21 @@ export async function sendMatchRequest(toUserId: string) {
   if (me === toUserId) throw new Error("You can't send a request to yourself.");
   if ((await blockedUserIds()).has(toUserId)) throw new Error("Unblock this person in Home settings before matching again.");
 
-  // This database names the argument to_user_id. A newer script renames it to
-  // target_user so it does not clash with the column. Calling the missing name
-  // never returns, so try the live name first.
-  let { error } = await supabase.rpc("send_match_request", { to_user_id: toUserId });
-  if (error && `${error.message} ${error.hint ?? ""}`.includes("target_user")) {
-    const retry = await supabase.rpc("send_match_request", { target_user: toUserId });
-    error = retry.error;
-  }
-  if (error) await sendMatchRequestDirect(me, toUserId);
-  notifyChatAlerts();
-}
-
-async function sendMatchRequestDirect(me: string, toUserId: string) {
-  const { data, error } = await supabase
-    .from("match_requests")
-    .select("id, from_user_id, to_user_id, status")
-    .or(`and(from_user_id.eq.${me},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${me})`);
+  const { error } = await supabase.rpc("send_match_request", { target_user: toUserId });
   if (error) throw setupError(error);
-
-  const rows = (data ?? []) as { id: string; from_user_id: string; to_user_id: string; status: string }[];
-  const reverse = rows.find((row) => row.from_user_id === toUserId && row.to_user_id === me);
-  const mine = rows.find((row) => row.from_user_id === me && row.to_user_id === toUserId);
-
-  // Keep the same row so the old chat returns once they accept. Their old request
-  // stays unmatched until the database function can turn it into a new outgoing request.
-  if (mine?.status === "unmatched") {
-    const { error: reopenError } = await supabase
-      .from("match_requests")
-      .update({ status: "pending", ended_at: null, ended_by: null })
-      .eq("id", mine.id);
-    if (reopenError) throw setupError(reopenError);
-    return;
-  }
-  if (reverse?.status === "unmatched") {
-    throw new Error("Run the latest match request script in Supabase, then try matching again.");
-  }
-
-  if (reverse && reverse.status !== "accepted") {
-    const { error: acceptError } = await supabase.from("match_requests").update({ status: "accepted" }).eq("id", reverse.id);
-    if (acceptError) throw setupError(acceptError);
-  }
-  if (reverse && mine && mine.status !== "accepted") {
-    const { error: deleteError } = await supabase.from("match_requests").delete().eq("id", mine.id);
-    if (deleteError) throw setupError(deleteError);
-    return;
-  }
-  if (reverse) return;
-
-  if (mine) {
-    if (mine.status === "pending" || mine.status === "accepted") return;
-    const { error: reopenError } = await supabase.from("match_requests").update({ status: "pending" }).eq("id", mine.id);
-    if (reopenError) throw setupError(reopenError);
-    return;
-  }
-
-  const { error: insertError } = await supabase.from("match_requests").insert({
-    from_user_id: me,
-    to_user_id: toUserId,
-    status: "pending",
-  });
-  if (insertError) throw setupError(insertError);
+  notifyChatAlerts();
 }
 
 export async function respondToMatch(requestId: string, accept: boolean) {
-  const { error } = await supabase
-    .from("match_requests")
-    .update({ status: accept ? "accepted" : "declined" })
-    .eq("id", requestId);
-  if (error) throw setupError(error);
-  if (accept) {
-    const collapsed = await supabase.rpc("collapse_mutual_requests");
-    if (collapsed.error && !missingFunction(collapsed.error, "collapse_mutual_requests")) throw setupError(collapsed.error);
-  }
-  notifyChatAlerts();
+  await transitionMatch(requestId, accept ? "accept" : "decline");
 }
-
-// Ends an accepted match. The chat is hidden from both people, and either one can send a new request later.
-export async function unmatch(requestId: string) {
-  const me = await currentUserId();
-  const { error } = await supabase
-    .from("match_requests")
-    .update({ status: "unmatched", ended_at: new Date().toISOString(), ended_by: me })
-    .eq("id", requestId)
-    .eq("status", "accepted");
+async function transitionMatch(requestId: string, action: string) {
+  const { error } = await supabase.rpc("transition_match", { request_id: requestId, action });
   if (error) throw setupError(error);
   notifyChatAlerts();
 }
-
-export async function cancelMatchRequest(requestId: string) {
-  const me = await currentUserId();
-  const { data, error } = await supabase.from("match_requests").delete()
-    .eq("id", requestId).eq("from_user_id", me).eq("status", "pending").select("id");
-  if (error) {
-    if (error.code === "42501") throw new Error("Cancellation permission needs updating in Supabase. Run supabase/cancel-match-requests.sql.");
-    // Preserve the actual error; a foreign-key conflict is not a missing script.
-    throw new Error(error.message || "Could not cancel this request.");
-  }
-  if (!data?.length) throw new Error("This request is no longer pending, or cancellation permission needs updating. Refresh requests; if it is still pending, run supabase/cancel-match-requests.sql.");
-  notifyChatAlerts();
-}
-
+export async function unmatch(requestId: string) { await transitionMatch(requestId, "unmatch"); }
+export async function cancelMatchRequest(requestId: string) { await transitionMatch(requestId, "cancel"); }
 export async function listMessages(matchId: string, me: string): Promise<MatchMessage[]> {
   const listed = await supabase
     .from("match_messages")
@@ -561,13 +484,30 @@ export async function listMessages(matchId: string, me: string): Promise<MatchMe
     error = fallback.error;
   }
   if (error) throw setupError(error);
+  const ids = (data ?? []).map(message => message.id);
+  let reactions: { message_id: string; user_id: string }[] = [];
+  if (ids.length) {
+    const listedReactions = await supabase.from("message_reactions").select("message_id, user_id").in("message_id", ids);
+    if (!listedReactions.error) reactions = listedReactions.data ?? [];
+  }
   return (data ?? []).map((message) => ({
     id: message.id,
     mine: message.sender_id === me,
     body: message.body,
     createdAt: message.created_at,
     editedAt: message.edited_at ?? null,
+    heartCount: reactions.filter(reaction => reaction.message_id === message.id).length,
+    heartedByMe: reactions.some(reaction => reaction.message_id === message.id && reaction.user_id === me),
   }));
+}
+
+export async function toggleMessageHeart(messageId: string, hearted: boolean) {
+  const me = await currentUserId();
+  const query = hearted
+    ? supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", me)
+    : supabase.from("message_reactions").insert({ message_id: messageId, user_id: me, reaction: "heart" });
+  const { error } = await query;
+  if (error) throw new Error(error.message.includes("message_reactions") || error.message.includes("schema cache") ? "Run supabase/message-reactions.sql to enable message hearts." : error.message);
 }
 
 export async function sendMatchMessage(matchId: string, body: string) {
