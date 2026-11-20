@@ -66,9 +66,11 @@ const blockedTraits: Record<Diet, string[]> = {
 };
 
 export const dietNotes: Partial<Record<Diet, string>> = {
-  Halal: "Checks ingredients only, not halal certification. Choose halal meat.",
-  Kosher: "Checks ingredients only, not kosher certification. Choose kosher meat.",
-  "Gluten-free": "Check labels on sauces and broths for hidden gluten.",
+  Vegetarian: "Parmesan, pecorino and some other cheeses are made with animal rennet. Look for a vegetarian label.",
+  Pescatarian: "Parmesan, pecorino and some other cheeses are made with animal rennet. Look for a vegetarian label.",
+  Halal: "Checks ingredients only, not halal certification. Choose halal meat and broth, and cheese made with microbial or halal rennet. Some people, such as many Hanafi Muslims, also avoid shrimp.",
+  Kosher: "Checks ingredients only, not kosher certification. Choose kosher-certified meat, broth, cheese and wine.",
+  "Gluten-free": "Check labels on sauces and broths for hidden gluten, and choose oats labeled gluten-free.",
 };
 
 export function ingredient(id: string) {
@@ -131,6 +133,8 @@ export function problems(lines: RecipeLine[], chosenDiets: Diet[], chosenAllerge
     const meat = items.filter((item) => item.traits.includes("red-meat") || item.traits.includes("poultry"));
     const dairy = items.filter((item) => item.traits.includes("dairy"));
     if (meat.length && dairy.length) found.push(`Not kosher: mixes meat with dairy (${dairy.map((item) => item.name).join(", ")})`);
+    const fish = items.filter((item) => item.traits.includes("fish"));
+    if (meat.length && fish.length) found.push(`Not kosher: cooks fish with meat (${fish.map((item) => item.name).join(", ")})`);
   }
 
   for (const allergen of chosenAllergens) {

@@ -1824,5 +1824,371 @@
       "carbs": 20.7,
       "fats": 5.9
     }
+  },
+  {
+    "id": "asparagus",
+    "name": "Asparagus",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 20,
+      "protein": 2.2,
+      "carbs": 3.9,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "green-beans",
+    "name": "Green beans",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 31,
+      "protein": 1.8,
+      "carbs": 7,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "sweet-corn",
+    "name": "Sweet corn",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 86,
+      "protein": 3.3,
+      "carbs": 18.7,
+      "fats": 1.4
+    }
+  },
+  {
+    "id": "butternut-squash",
+    "name": "Butternut squash",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 45,
+      "protein": 1,
+      "carbs": 11.7,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "beets",
+    "name": "Beets",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 43,
+      "protein": 1.6,
+      "carbs": 9.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "arugula",
+    "name": "Arugula",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 25,
+      "protein": 2.6,
+      "carbs": 3.7,
+      "fats": 0.7
+    }
+  },
+  {
+    "id": "brussels-sprouts",
+    "name": "Brussels sprouts",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 43,
+      "protein": 3.4,
+      "carbs": 9,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "snap-peas",
+    "name": "Sugar snap peas",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 42,
+      "protein": 2.8,
+      "carbs": 7.6,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "jalapeno",
+    "name": "Jalapeno pepper",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 29,
+      "protein": 0.9,
+      "carbs": 6.5,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "sun-dried-tomatoes",
+    "name": "Sun-dried tomatoes",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 258,
+      "protein": 14.1,
+      "carbs": 55.8,
+      "fats": 3
+    }
+  },
+  {
+    "id": "strawberries",
+    "name": "Strawberries",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 32,
+      "protein": 0.7,
+      "carbs": 7.7,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "mango",
+    "name": "Mango",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 60,
+      "protein": 0.8,
+      "carbs": 15,
+      "fats": 0.4
+    }
+  },
+  {
+    "id": "apple",
+    "name": "Apple",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 52,
+      "protein": 0.3,
+      "carbs": 13.8,
+      "fats": 0.2
+    }
+  },
+  {
+    "id": "pineapple",
+    "name": "Pineapple",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 50,
+      "protein": 0.5,
+      "carbs": 13.1,
+      "fats": 0.1
+    }
+  },
+  {
+    "id": "raspberries",
+    "name": "Raspberries",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 52,
+      "protein": 1.2,
+      "carbs": 11.9,
+      "fats": 0.7
+    }
+  },
+  {
+    "id": "tilapia",
+    "name": "Tilapia fillet",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 96,
+      "protein": 20.1,
+      "carbs": 0,
+      "fats": 1.7
+    }
+  },
+  {
+    "id": "sardines",
+    "name": "Sardines, canned in oil, drained",
+    "traits": [
+      "fish"
+    ],
+    "allergens": [
+      "Fish"
+    ],
+    "per100g": {
+      "calories": 208,
+      "protein": 24.6,
+      "carbs": 0,
+      "fats": 11.5
+    }
+  },
+  {
+    "id": "ground-chicken",
+    "name": "Ground chicken",
+    "traits": [
+      "poultry"
+    ],
+    "allergens": [],
+    "per100g": {
+      "calories": 143,
+      "protein": 17.4,
+      "carbs": 0,
+      "fats": 8.1
+    }
+  },
+  {
+    "id": "cottage-cheese",
+    "name": "Cottage cheese, 2%",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 81,
+      "protein": 10.5,
+      "carbs": 4.8,
+      "fats": 2.3
+    }
+  },
+  {
+    "id": "mozzarella",
+    "name": "Mozzarella, part-skim",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 254,
+      "protein": 24.3,
+      "carbs": 2.8,
+      "fats": 15.9
+    }
+  },
+  {
+    "id": "ricotta",
+    "name": "Ricotta, part-skim",
+    "traits": [
+      "dairy"
+    ],
+    "allergens": [
+      "Milk"
+    ],
+    "per100g": {
+      "calories": 138,
+      "protein": 11.4,
+      "carbs": 5.1,
+      "fats": 7.9
+    }
+  },
+  {
+    "id": "egg-noodles-cooked",
+    "name": "Egg noodles, cooked",
+    "traits": [
+      "gluten",
+      "egg"
+    ],
+    "allergens": [
+      "Wheat",
+      "Egg"
+    ],
+    "per100g": {
+      "calories": 138,
+      "protein": 4.5,
+      "carbs": 25.2,
+      "fats": 2.1
+    }
+  },
+  {
+    "id": "wild-rice-cooked",
+    "name": "Wild rice, cooked",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 101,
+      "protein": 4,
+      "carbs": 21.3,
+      "fats": 0.3
+    }
+  },
+  {
+    "id": "balsamic-vinegar",
+    "name": "Balsamic vinegar",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 88,
+      "protein": 0.5,
+      "carbs": 17,
+      "fats": 0
+    }
+  },
+  {
+    "id": "hummus",
+    "name": "Hummus",
+    "traits": [],
+    "allergens": [
+      "Sesame"
+    ],
+    "per100g": {
+      "calories": 166,
+      "protein": 7.9,
+      "carbs": 14.3,
+      "fats": 9.6
+    }
+  },
+  {
+    "id": "chia-seeds",
+    "name": "Chia seeds",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 486,
+      "protein": 16.5,
+      "carbs": 42.1,
+      "fats": 30.7
+    }
+  },
+  {
+    "id": "pumpkin-seeds",
+    "name": "Pumpkin seeds",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 559,
+      "protein": 30.2,
+      "carbs": 10.7,
+      "fats": 49.1
+    }
+  },
+  {
+    "id": "sunflower-seeds",
+    "name": "Sunflower seeds",
+    "traits": [],
+    "allergens": [],
+    "per100g": {
+      "calories": 584,
+      "protein": 20.8,
+      "carbs": 20,
+      "fats": 51.5
+    }
   }
 ]
