@@ -3433,5 +3433,885 @@
       "Toss the lentils, quinoa, spinach, tomatoes and cucumber with the dressing.",
       "Top with toasted walnuts."
     ]
+  },
+  {
+    "id": "chicken-burrito-bowl",
+    "name": "Chicken burrito bowl",
+    "cuisine": "Mexican",
+    "region": "Latin America",
+    "description": "Spiced chicken over brown rice with black beans, peppers, salsa and avocado.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-breast",
+        "grams": 300,
+        "amount": "2 small breasts (about 300 g)"
+      },
+      {
+        "id": "brown-rice-cooked",
+        "grams": 300,
+        "amount": "1½ cups cooked"
+      },
+      {
+        "id": "black-beans-cooked",
+        "grams": 200,
+        "amount": "1 cup, rinsed"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 120,
+        "amount": "1 pepper, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 80,
+        "amount": "½ onion, sliced"
+      },
+      {
+        "id": "salsa",
+        "grams": 120,
+        "amount": "½ cup"
+      },
+      {
+        "id": "avocado",
+        "grams": 100,
+        "amount": "1 small avocado, sliced"
+      },
+      {
+        "id": "lime-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "cilantro",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Rub the chicken with the cumin, chili powder, salt and half the oil.",
+      "Cook it in a hot pan for 6 to 7 minutes a side, until no pink is left inside and it reaches 165°F (74°C). Rest for 5 minutes, then slice.",
+      "Cook the pepper and onion in the rest of the oil for 5 minutes, and warm the beans.",
+      "Divide the rice between two bowls and top with the chicken, beans, peppers, salsa and avocado. Finish with lime juice and cilantro."
+    ]
+  },
+  {
+    "id": "huevos-rancheros",
+    "name": "Huevos rancheros",
+    "cuisine": "Mexican",
+    "region": "Latin America",
+    "description": "Fried eggs on warm corn tortillas with black beans and salsa.",
+    "minutes": 20,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "egg",
+        "grams": 200,
+        "amount": "4 eggs"
+      },
+      {
+        "id": "corn-tortilla",
+        "grams": 104,
+        "amount": "4 small tortillas"
+      },
+      {
+        "id": "black-beans-cooked",
+        "grams": 200,
+        "amount": "1 cup, rinsed"
+      },
+      {
+        "id": "salsa",
+        "grams": 160,
+        "amount": "⅔ cup"
+      },
+      {
+        "id": "avocado",
+        "grams": 70,
+        "amount": "½ avocado, sliced"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 10,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 1,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "cilantro",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Warm the beans with the cumin and a splash of water, mashing a few of them.",
+      "Warm the tortillas in a dry pan for 30 seconds a side.",
+      "Fry the eggs in the oil until the whites and yolks are set.",
+      "Top each tortilla with beans, an egg and warm salsa. Finish with avocado and cilantro."
+    ]
+  },
+  {
+    "id": "sweet-potato-black-bean-tacos",
+    "name": "Sweet potato & black bean tacos",
+    "cuisine": "Mexican",
+    "region": "Latin America",
+    "description": "Roasted spiced sweet potato and black beans in corn tortillas with lime cabbage.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "sweet-potato",
+        "grams": 300,
+        "amount": "1 medium, diced"
+      },
+      {
+        "id": "black-beans-cooked",
+        "grams": 200,
+        "amount": "1 cup, rinsed"
+      },
+      {
+        "id": "corn-tortilla",
+        "grams": 156,
+        "amount": "6 small tortillas"
+      },
+      {
+        "id": "cabbage",
+        "grams": 100,
+        "amount": "1 cup, shredded"
+      },
+      {
+        "id": "lime-juice",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "salsa",
+        "grams": 100,
+        "amount": "½ cup"
+      },
+      {
+        "id": "avocado",
+        "grams": 100,
+        "amount": "1 small avocado, sliced"
+      },
+      {
+        "id": "salt",
+        "grams": 1,
+        "amount": "a pinch"
+      },
+      {
+        "id": "cilantro",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Heat the oven to 425°F (220°C). Toss the sweet potato with the oil, chili powder, cumin and salt, then roast for 20 to 25 minutes until soft and browned.",
+      "Toss the cabbage with half the lime juice.",
+      "Warm the beans and the tortillas.",
+      "Fill the tortillas with sweet potato, beans, cabbage, salsa and avocado. Add the rest of the lime juice and the cilantro."
+    ]
+  },
+  {
+    "id": "chana-masala",
+    "name": "Chana masala",
+    "cuisine": "Indian",
+    "region": "South Asia",
+    "description": "Chickpeas simmered in a spiced tomato and onion sauce, served with rice.",
+    "minutes": 35,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "chickpeas-cooked",
+        "grams": 480,
+        "amount": "2 cans, drained (about 3 cups)"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (400 g)"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 10,
+        "amount": "1 thumb, grated"
+      },
+      {
+        "id": "curry-powder",
+        "grams": 6,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "turmeric",
+        "grams": 1,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 3,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 450,
+        "amount": "3 cups cooked, to serve"
+      },
+      {
+        "id": "cilantro",
+        "grams": 8,
+        "amount": "a handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Cook the onion in the oil for 8 to 10 minutes, until golden.",
+      "Add the garlic, ginger and spices and cook for 1 minute.",
+      "Add the tomatoes and simmer for 5 minutes. Add the chickpeas and a splash of water, then simmer for 15 minutes, mashing a few chickpeas to thicken it.",
+      "Stir in the lemon juice and salt. Serve over the rice with cilantro."
+    ]
+  },
+  {
+    "id": "palak-paneer",
+    "name": "Palak paneer",
+    "cuisine": "Indian",
+    "region": "South Asia",
+    "description": "Golden paneer in a smooth, spiced spinach sauce, finished with yogurt.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "spinach",
+        "grams": 400,
+        "amount": "about 12 cups, fresh"
+      },
+      {
+        "id": "paneer",
+        "grams": 200,
+        "amount": "200 g, cubed"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, chopped"
+      },
+      {
+        "id": "tomato",
+        "grams": 120,
+        "amount": "1 tomato, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 8,
+        "amount": "1 small piece, grated"
+      },
+      {
+        "id": "ghee",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "curry-powder",
+        "grams": 4,
+        "amount": "1½ tsp"
+      },
+      {
+        "id": "greek-yogurt",
+        "grams": 60,
+        "amount": "¼ cup"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "white-rice-cooked",
+        "grams": 300,
+        "amount": "2 cups cooked, to serve"
+      }
+    ],
+    "steps": [
+      "Wilt the spinach in a covered pan with a splash of water for 2 to 3 minutes, then blend until smooth.",
+      "Brown the paneer in half the ghee for 2 to 3 minutes a side, then set it aside.",
+      "Cook the onion in the rest of the ghee for 6 to 8 minutes. Add the garlic, ginger, spices and tomato and cook for 5 minutes.",
+      "Stir in the spinach and paneer and heat through. Take the pan off the heat, stir in the yogurt and salt, and serve with rice."
+    ]
+  },
+  {
+    "id": "everyday-lentil-dal",
+    "name": "Everyday lentil dal",
+    "cuisine": "Indian",
+    "region": "South Asia",
+    "description": "Comforting lentils cooked with turmeric, cumin, ginger and tomato, over brown rice.",
+    "minutes": 30,
+    "servings": 3,
+    "ingredients": [
+      {
+        "id": "lentils-cooked",
+        "grams": 450,
+        "amount": "about 2 cups cooked"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 200,
+        "amount": "½ can"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "ginger",
+        "grams": 8,
+        "amount": "1 small piece, grated"
+      },
+      {
+        "id": "turmeric",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "curry-powder",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "canola-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "vegetable-broth",
+        "grams": 300,
+        "amount": "1¼ cups"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "brown-rice-cooked",
+        "grams": 450,
+        "amount": "3 cups cooked, to serve"
+      },
+      {
+        "id": "cilantro",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Cook the onion in the oil for 6 to 8 minutes, until soft.",
+      "Add the garlic, ginger and spices and cook for 1 minute.",
+      "Add the tomatoes, broth and lentils. Simmer for 10 to 15 minutes, stirring, until thick, mashing some of the lentils.",
+      "Stir in the lemon juice and salt. Serve over the rice with cilantro."
+    ]
+  },
+  {
+    "id": "chicken-souvlaki-tzatziki",
+    "name": "Chicken souvlaki with tzatziki",
+    "cuisine": "Greek",
+    "region": "Mediterranean",
+    "description": "Lemon and oregano chicken in warm pita with tomato and a cool cucumber yogurt sauce.",
+    "minutes": 35,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-breast",
+        "grams": 300,
+        "amount": "2 small breasts, cubed"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves, minced"
+      },
+      {
+        "id": "oregano",
+        "grams": 2,
+        "amount": "1 tsp, dried"
+      },
+      {
+        "id": "greek-yogurt",
+        "grams": 200,
+        "amount": "¾ cup"
+      },
+      {
+        "id": "cucumber",
+        "grams": 150,
+        "amount": "½ cucumber, grated"
+      },
+      {
+        "id": "dill",
+        "grams": 5,
+        "amount": "1 tbsp, chopped"
+      },
+      {
+        "id": "pita-bread",
+        "grams": 120,
+        "amount": "2 pitas"
+      },
+      {
+        "id": "tomato",
+        "grams": 120,
+        "amount": "1 tomato, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 40,
+        "amount": "a few thin slices"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      }
+    ],
+    "steps": [
+      "Toss the chicken with half the oil, half the lemon juice, most of the garlic, the oregano and the salt. Leave it in the fridge for at least 10 minutes.",
+      "Squeeze the grated cucumber dry and mix it with the yogurt, dill and the rest of the garlic and lemon juice to make tzatziki.",
+      "Thread the chicken onto skewers and grill or pan-cook for 10 to 12 minutes, turning, until no pink is left inside and it reaches 165°F (74°C).",
+      "Warm the pitas and fill them with the chicken, tomato, onion and tzatziki."
+    ]
+  },
+  {
+    "id": "greek-salad-chickpeas",
+    "name": "Greek salad with chickpeas & feta",
+    "cuisine": "Greek",
+    "region": "Mediterranean",
+    "description": "Tomato, cucumber, pepper and olives with chickpeas, feta and a lemon oregano dressing.",
+    "minutes": 15,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "tomato",
+        "grams": 250,
+        "amount": "2 tomatoes, in chunks"
+      },
+      {
+        "id": "cucumber",
+        "grams": 200,
+        "amount": "½ large cucumber"
+      },
+      {
+        "id": "green-bell-pepper",
+        "grams": 100,
+        "amount": "1 pepper, sliced"
+      },
+      {
+        "id": "onion",
+        "grams": 50,
+        "amount": "¼ onion, thinly sliced"
+      },
+      {
+        "id": "olives",
+        "grams": 40,
+        "amount": "about 12 olives"
+      },
+      {
+        "id": "feta",
+        "grams": 80,
+        "amount": "about ½ cup, crumbled"
+      },
+      {
+        "id": "chickpeas-cooked",
+        "grams": 240,
+        "amount": "1 can, drained"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "oregano",
+        "grams": 1,
+        "amount": "½ tsp, dried"
+      },
+      {
+        "id": "salt",
+        "grams": 1,
+        "amount": "a pinch"
+      }
+    ],
+    "steps": [
+      "Chop the tomatoes, cucumber, pepper and onion and put them in a bowl with the chickpeas and olives.",
+      "Whisk the oil, lemon juice, oregano and salt, then toss it through the salad.",
+      "Top with the feta and serve."
+    ]
+  },
+  {
+    "id": "shakshuka",
+    "name": "Shakshuka",
+    "cuisine": "Middle Eastern",
+    "region": "Middle East",
+    "description": "Eggs gently cooked in a spiced tomato and pepper sauce, with warm pita.",
+    "minutes": 30,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "egg",
+        "grams": 200,
+        "amount": "4 eggs"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 400,
+        "amount": "1 can (400 g)"
+      },
+      {
+        "id": "onion",
+        "grams": 100,
+        "amount": "1 onion, chopped"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 120,
+        "amount": "1 pepper, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 9,
+        "amount": "3 cloves"
+      },
+      {
+        "id": "cumin",
+        "grams": 2,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "pita-bread",
+        "grams": 120,
+        "amount": "2 pitas, to serve"
+      },
+      {
+        "id": "parsley",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Cook the onion and pepper in the oil for 8 minutes, until soft.",
+      "Add the garlic, cumin and paprika and cook for 1 minute.",
+      "Add the tomatoes and salt and simmer for 8 to 10 minutes, until thick.",
+      "Make 4 small wells, crack in the eggs, cover and cook on low for 6 to 8 minutes, until the whites and yolks are set. Scatter over the parsley and serve with warm pita."
+    ]
+  },
+  {
+    "id": "turkey-black-bean-chili",
+    "name": "Turkey & black bean chili",
+    "cuisine": "American",
+    "region": "North America",
+    "description": "A hearty, high-protein chili with lean turkey, black beans, peppers and tomatoes.",
+    "minutes": 45,
+    "servings": 4,
+    "ingredients": [
+      {
+        "id": "ground-turkey",
+        "grams": 450,
+        "amount": "1 lb (450 g)"
+      },
+      {
+        "id": "black-beans-cooked",
+        "grams": 480,
+        "amount": "2 cans, rinsed"
+      },
+      {
+        "id": "canned-tomatoes",
+        "grams": 800,
+        "amount": "2 cans (400 g each)"
+      },
+      {
+        "id": "tomato-paste",
+        "grams": 30,
+        "amount": "2 tbsp"
+      },
+      {
+        "id": "onion",
+        "grams": 150,
+        "amount": "1 large onion, chopped"
+      },
+      {
+        "id": "red-bell-pepper",
+        "grams": 150,
+        "amount": "1 pepper, chopped"
+      },
+      {
+        "id": "garlic",
+        "grams": 12,
+        "amount": "4 cloves"
+      },
+      {
+        "id": "chili-powder",
+        "grams": 8,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cumin",
+        "grams": 4,
+        "amount": "2 tsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 4,
+        "amount": "¾ tsp"
+      },
+      {
+        "id": "cilantro",
+        "grams": 5,
+        "amount": "a small handful",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Brown the turkey in the oil for 7 to 9 minutes, breaking it up, until it is cooked through and reaches 165°F (74°C).",
+      "Add the onion and pepper and cook for 5 minutes. Stir in the garlic, spices and tomato paste for 1 minute.",
+      "Add the tomatoes and beans, cover and simmer for 20 to 25 minutes, stirring now and then.",
+      "Season with the salt and serve with cilantro."
+    ]
+  },
+  {
+    "id": "sheet-pan-chicken-sweet-potato",
+    "name": "Sheet-pan chicken with sweet potato & broccoli",
+    "cuisine": "American",
+    "region": "North America",
+    "description": "Paprika chicken thighs roasted on one tray with sweet potato and broccoli.",
+    "minutes": 40,
+    "servings": 2,
+    "ingredients": [
+      {
+        "id": "chicken-thigh",
+        "grams": 300,
+        "amount": "4 boneless thighs (about 300 g)"
+      },
+      {
+        "id": "sweet-potato",
+        "grams": 300,
+        "amount": "1 large, cubed"
+      },
+      {
+        "id": "broccoli",
+        "grams": 250,
+        "amount": "1 head, in florets"
+      },
+      {
+        "id": "olive-oil",
+        "grams": 20,
+        "amount": "1½ tbsp"
+      },
+      {
+        "id": "paprika",
+        "grams": 3,
+        "amount": "1 tsp"
+      },
+      {
+        "id": "garlic",
+        "grams": 6,
+        "amount": "2 cloves, minced"
+      },
+      {
+        "id": "lemon-juice",
+        "grams": 15,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "salt",
+        "grams": 2,
+        "amount": "½ tsp"
+      },
+      {
+        "id": "black-pepper",
+        "grams": 1,
+        "amount": "a pinch"
+      }
+    ],
+    "steps": [
+      "Heat the oven to 425°F (220°C). Toss the sweet potato with half the oil and roast for 10 minutes.",
+      "Toss the chicken with the rest of the oil, the paprika, garlic, salt and pepper.",
+      "Add the chicken and broccoli to the tray and roast for 20 to 25 minutes, until the chicken reaches 165°F (74°C) and the vegetables are browned.",
+      "Squeeze over the lemon juice and serve."
+    ]
+  },
+  {
+    "id": "peanut-butter-banana-oatmeal",
+    "name": "Peanut butter banana oatmeal",
+    "cuisine": "American",
+    "region": "North America",
+    "description": "Creamy oats cooked in milk, topped with banana, peanut butter and cinnamon.",
+    "minutes": 10,
+    "servings": 1,
+    "ingredients": [
+      {
+        "id": "rolled-oats",
+        "grams": 50,
+        "amount": "½ cup"
+      },
+      {
+        "id": "milk-2pct",
+        "grams": 240,
+        "amount": "1 cup"
+      },
+      {
+        "id": "banana",
+        "grams": 100,
+        "amount": "1 banana, sliced"
+      },
+      {
+        "id": "peanut-butter",
+        "grams": 16,
+        "amount": "1 tbsp"
+      },
+      {
+        "id": "cinnamon",
+        "grams": 1,
+        "amount": "a pinch"
+      },
+      {
+        "id": "honey",
+        "grams": 7,
+        "amount": "1 tsp",
+        "optional": true
+      }
+    ],
+    "steps": [
+      "Simmer the oats in the milk for 4 to 5 minutes, stirring, until creamy. You can also microwave them for 2 minutes.",
+      "Stir in the cinnamon.",
+      "Top with the banana, peanut butter and honey."
+    ]
   }
 ]

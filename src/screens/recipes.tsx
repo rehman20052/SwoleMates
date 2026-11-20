@@ -2,8 +2,13 @@ import { AppAlert as Alert } from "@/components/app-alert";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { AppText, Card, Chip, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, TitleBar } from "@/components/ui";
+import { builderPageSize, RecipeBuilder } from "@/components/recipe-builder";
+import { RecipeCard } from "@/components/recipe-card";
+import { RecipePicks } from "@/components/recipe-picks";
+import { AppText, Card, Chip, Input, PrimaryButton, Screen, ScrollBody, SecondaryButton, SectionLabel, Segmented, TitleBar } from "@/components/ui";
 import { type FoodLogEntry, useAppData } from "@/state/app-data";
+import { type QuickPick } from "@/lib/quick-picks";
+import { type BuildChoice } from "@/lib/recipe-builder";
 import {
   allergens,
   applySwaps,
@@ -17,7 +22,6 @@ import {
   type Macros,
   problems,
   type Recipe,
-  recipeById,
   saveFilters,
   scaleMacros,
   searchRecipes,
@@ -33,6 +37,16 @@ import { useAppTheme } from "@/theme";
 type Meal = FoodLogEntry["meal"];
 
 const meals: Meal[] = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+type Mode = "browse" | "build" | "picks";
+
+const modes: { value: Mode; label: string }[] = [
+  { value: "browse", label: "Browse" },
+  { value: "build", label: "Build" },
+  { value: "picks", label: "Quick picks" },
+];
+
+const firstChoice: BuildChoice = { picked: [], meal: "Any", goal: "Balanced", extras: true, style: "Any", flavor: "Any", mix: 0 };
 
 function toggle<T>(list: T[], value: T) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -79,7 +93,11 @@ export function RecipesScreen({ embedded = false, onBack }: { embedded?: boolean
   const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<SortOption>("Best match");
   const [onlyFitsToday, setOnlyFitsToday] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openRecipe, setOpenRecipe] = useState<Recipe | null>(null);
+  const [mode, setMode] = useState<Mode>("browse");
+  const [buildChoice, setBuildChoice] = useState<BuildChoice>(firstChoice);
+  const [buildShown, setBuildShown] = useState(builderPageSize);
+  const [pickId, setPickId] = useState<string | null>(null);
   const { nutrition } = useAppData();
   const left = leftToday(nutrition);
 
@@ -100,6 +118,17 @@ export function RecipesScreen({ embedded = false, onBack }: { embedded?: boolean
     saveFilters({ diets: chosenDiets, allergens: next });
   }
 
+  function changeBuild(next: BuildChoice) {
+    setBuildChoice(next);
+    setBuildShown(builderPageSize);
+  }
+
+  function openInBuild(pick: QuickPick) {
+    const style = pick.styles.length === 1 ? pick.styles[0] : "Any";
+    changeBuild({ picked: [], meal: pick.meal, goal: pick.goal, extras: true, style, flavor: "Any", mix: 0 });
+    setMode("build");
+  }
+
   const results = useMemo(() => {
     const found = searchRecipes(query, cuisine)
       .map((recipe) => ({
@@ -112,9 +141,8 @@ export function RecipesScreen({ embedded = false, onBack }: { embedded?: boolean
     return [...sorted.filter((item) => item.fits), ...sorted.filter((item) => !item.fits)];
   }, [query, cuisine, chosenDiets, chosenAllergens, sort, onlyFitsToday, left?.calories]);
 
-  const openRecipe = openId ? recipeById(openId) : undefined;
   if (openRecipe) {
-    return <RecipeDetail recipe={openRecipe} diets={chosenDiets} allergies={chosenAllergens} embedded={embedded} onBack={() => setOpenId(null)} />;
+    return <RecipeDetail recipe={openRecipe} diets={chosenDiets} allergies={chosenAllergens} embedded={embedded} onBack={() => setOpenRecipe(null)} />;
   }
 
   const fitCount = results.filter((item) => item.fits).length;
@@ -124,29 +152,10 @@ export function RecipesScreen({ embedded = false, onBack }: { embedded?: boolean
       <View style={styles.hero}>
         <SectionLabel>NutriDish</SectionLabel>
         <AppText size={29} weight="black">Cook something good.</AppText>
-        <AppText muted>Meals from around the world, checked against your diet and allergies.</AppText>
+        <AppText muted>Browse dishes from around the world, build your own, or tap a quick pick.</AppText>
       </View>
 
-      {left ? (
-        <Card padding={16} radius={20} gap={10} style={{ backgroundColor: theme.colors.primaryDeep }}>
-          <AppText size={12} weight="bold" muted upper>Left today</AppText>
-          <AppText size={20} weight="black">
-            {left.calories.toLocaleString()} cal <AppText size={14} muted>· {left.protein}g protein</AppText>
-          </AppText>
-          <View style={styles.wrap}>
-            <Chip label="Only show what fits" selected={onlyFitsToday} onPress={() => setOnlyFitsToday(!onlyFitsToday)} />
-          </View>
-        </Card>
-      ) : null}
-
-      <Input value={query} onChangeText={setQuery} placeholder="Search recipes or ingredients" bordered />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        <Chip label="All" selected={!cuisine} onPress={() => setCuisine(null)} />
-        {cuisines.map((name) => (
-          <Chip key={name} label={name} selected={cuisine === name} onPress={() => setCuisine(cuisine === name ? null : name)} />
-        ))}
-      </ScrollView>
+      <Segmented options={modes} value={mode} onChange={setMode} height={44} />
 
       <Pressable accessibilityRole="button" onPress={() => setShowFilters(!showFilters)} style={styles.filterToggle}>
         <AppText weight="bold" primary>Diet & allergies{chosenDiets.length + chosenAllergens.length ? ` (${chosenDiets.length + chosenAllergens.length})` : ""}</AppText>
@@ -166,33 +175,74 @@ export function RecipesScreen({ embedded = false, onBack }: { embedded?: boolean
               <Chip key={allergen} shape="tag" label={allergen} selected={chosenAllergens.includes(allergen)} onPress={() => changeAllergens(toggle(chosenAllergens, allergen))} />
             ))}
           </View>
-          <AppText size={11} muted>Saved on this device, so you only set them once.</AppText>
+          <AppText size={11} muted>Saved on this device, so you only set them once. Used by Browse, Build and Quick picks.</AppText>
         </Card>
       ) : null}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        {sortOptions.map((option) => (
-          <Chip key={option} shape="tag" label={option} selected={sort === option} onPress={() => setSort(option)} />
-        ))}
-      </ScrollView>
+      {mode === "picks" ? (
+        <RecipePicks
+          pickId={pickId}
+          onPick={setPickId}
+          diets={chosenDiets}
+          allergies={chosenAllergens}
+          onOpen={setOpenRecipe}
+          onOpenInBuild={openInBuild}
+        />
+      ) : mode === "build" ? (
+        <RecipeBuilder
+          choice={buildChoice}
+          onChange={changeBuild}
+          shown={buildShown}
+          onShowMore={() => setBuildShown(buildShown + builderPageSize)}
+          diets={chosenDiets}
+          allergies={chosenAllergens}
+          onOpen={setOpenRecipe}
+        />
+      ) : (
+        <>
+          {left ? (
+            <Card padding={16} radius={20} gap={10} style={{ backgroundColor: theme.colors.primaryDeep }}>
+              <AppText size={12} weight="bold" muted upper>Left today</AppText>
+              <AppText size={20} weight="black">
+                {left.calories.toLocaleString()} cal <AppText size={14} muted>· {left.protein}g protein</AppText>
+              </AppText>
+              <View style={styles.wrap}>
+                <Chip label="Only show what fits" selected={onlyFitsToday} onPress={() => setOnlyFitsToday(!onlyFitsToday)} />
+              </View>
+            </Card>
+          ) : null}
 
-      <AppText size={13} muted>
-        {chosenDiets.length || chosenAllergens.length ? `${fitCount} of ${results.length} recipes fit you` : `${results.length} recipes`}
-      </AppText>
+          <Input value={query} onChangeText={setQuery} placeholder="Search recipes or ingredients" bordered />
 
-      {results.map(({ recipe, macros, fits }) => (
-        <Pressable key={recipe.id} accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} onPress={() => setOpenId(recipe.id)}>
-          <Card padding={16} radius={18} gap={8} style={{ opacity: fits ? 1 : 0.55 }}>
-            <AppText size={11} weight="bold" muted upper>
-              {recipe.cuisine} · {recipe.minutes} min{recipe.blueZone ? " · Blue Zone" : ""}
-            </AppText>
-            <AppText size={17} weight="extrabold">{recipe.name}</AppText>
-            <AppText size={13} muted numberOfLines={2}>{recipe.description}</AppText>
-            <AppText size={12} weight="semibold">{macroLine(macros)}</AppText>
-            {!fits ? <AppText size={12} color={theme.colors.danger}>Doesn't fit your filters, open it to swap ingredients</AppText> : null}
-          </Card>
-        </Pressable>
-      ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            <Chip label="All" selected={!cuisine} onPress={() => setCuisine(null)} />
+            {cuisines.map((name) => (
+              <Chip key={name} label={name} selected={cuisine === name} onPress={() => setCuisine(cuisine === name ? null : name)} />
+            ))}
+          </ScrollView>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {sortOptions.map((option) => (
+              <Chip key={option} shape="tag" label={option} selected={sort === option} onPress={() => setSort(option)} />
+            ))}
+          </ScrollView>
+
+          <AppText size={13} muted>
+            {chosenDiets.length || chosenAllergens.length ? `${fitCount} of ${results.length} recipes fit you` : `${results.length} recipes`}
+          </AppText>
+
+          {results.map(({ recipe, macros, fits }) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              macros={macros}
+              faded={!fits}
+              warning={fits ? undefined : "Doesn't fit your filters, open it to swap ingredients"}
+              onPress={() => setOpenRecipe(recipe)}
+            />
+          ))}
+        </>
+      )}
     </Frame>
   );
 }
