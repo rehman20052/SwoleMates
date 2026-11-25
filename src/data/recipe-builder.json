@@ -1,0 +1,2062 @@
+{
+  "pantry": [
+    "olive-oil",
+    "canola-oil",
+    "sesame-oil",
+    "salt",
+    "black-pepper",
+    "garlic",
+    "cumin",
+    "paprika",
+    "chili-powder",
+    "curry-powder",
+    "turmeric",
+    "oregano",
+    "thyme",
+    "cinnamon",
+    "lemon-juice",
+    "lime-juice",
+    "soy-sauce",
+    "tamari",
+    "rice-vinegar",
+    "honey",
+    "maple-syrup",
+    "chicken-broth",
+    "vegetable-broth"
+  ],
+  "popular": [
+    "chicken-breast",
+    "egg",
+    "firm-tofu",
+    "salmon",
+    "lean-ground-beef",
+    "chickpeas-cooked",
+    "shrimp",
+    "white-rice-cooked",
+    "pasta-cooked",
+    "potato",
+    "rolled-oats",
+    "corn-tortilla",
+    "broccoli",
+    "spinach",
+    "red-bell-pepper",
+    "tomato",
+    "mushrooms",
+    "banana",
+    "sweet-corn",
+    "asparagus"
+  ],
+  "aliases": {
+    "chicken": "chicken-breast",
+    "chicken breast": "chicken-breast",
+    "chicken thighs": "chicken-thigh",
+    "turkey": "ground-turkey",
+    "beef": "lean-ground-beef",
+    "ground beef": "lean-ground-beef",
+    "mince": "lean-ground-beef",
+    "steak": "beef-flank-steak",
+    "lamb": "ground-lamb",
+    "pork": "pork-tenderloin",
+    "fish": "cod",
+    "white fish": "cod",
+    "tuna": "canned-light-tuna",
+    "prawns": "shrimp",
+    "eggs": "egg",
+    "tofu": "firm-tofu",
+    "beans": "black-beans-cooked",
+    "chickpeas": "chickpeas-cooked",
+    "lentils": "lentils-cooked",
+    "rice": "white-rice-cooked",
+    "brown rice": "brown-rice-cooked",
+    "pasta": "pasta-cooked",
+    "spaghetti": "pasta-cooked",
+    "noodles": "rice-noodles-cooked",
+    "soba": "soba-noodles-cooked",
+    "quinoa": "quinoa-cooked",
+    "couscous": "couscous-cooked",
+    "bulgur": "bulgur-cooked",
+    "potatoes": "potato",
+    "sweet potatoes": "sweet-potato",
+    "tortilla": "corn-tortilla",
+    "tortillas": "corn-tortilla",
+    "bread": "whole-wheat-bread",
+    "toast": "whole-wheat-bread",
+    "oats": "rolled-oats",
+    "oatmeal": "rolled-oats",
+    "yogurt": "greek-yogurt",
+    "yoghurt": "greek-yogurt",
+    "milk": "milk-2pct",
+    "cheese": "cheddar",
+    "pepper": "red-bell-pepper",
+    "peppers": "red-bell-pepper",
+    "bell pepper": "red-bell-pepper",
+    "lettuce": "romaine",
+    "greens": "spinach",
+    "mushroom": "mushrooms",
+    "tomatoes": "tomato",
+    "onions": "onion",
+    "carrots": "carrot",
+    "peas": "green-peas",
+    "berries": "blueberries",
+    "bananas": "banana",
+    "nuts": "almonds",
+    "peanut butter": "peanut-butter",
+    "corn": "sweet-corn",
+    "squash": "butternut-squash",
+    "beet": "beets",
+    "rocket": "arugula",
+    "sprouts": "brussels-sprouts",
+    "brussel sprouts": "brussels-sprouts",
+    "snap peas": "snap-peas",
+    "jalapeno": "jalapeno",
+    "jalapenos": "jalapeno",
+    "strawberry": "strawberries",
+    "raspberry": "raspberries",
+    "apples": "apple",
+    "sardine": "sardines",
+    "ground chicken": "ground-chicken",
+    "chicken mince": "ground-chicken",
+    "mozz": "mozzarella",
+    "balsamic": "balsamic-vinegar",
+    "chia": "chia-seeds",
+    "pepitas": "pumpkin-seeds"
+  },
+  "proteins": {
+    "chicken-breast": {
+      "kind": "poultry",
+      "title": "chicken"
+    },
+    "chicken-thigh": {
+      "kind": "poultry",
+      "title": "chicken thigh"
+    },
+    "ground-turkey": {
+      "kind": "ground-poultry",
+      "title": "turkey"
+    },
+    "lean-ground-beef": {
+      "kind": "ground-meat",
+      "title": "beef"
+    },
+    "ground-lamb": {
+      "kind": "ground-meat",
+      "title": "lamb"
+    },
+    "ground-pork": {
+      "kind": "ground-meat",
+      "title": "pork"
+    },
+    "beef-flank-steak": {
+      "kind": "whole-cut",
+      "title": "steak"
+    },
+    "pork-tenderloin": {
+      "kind": "whole-cut",
+      "title": "pork"
+    },
+    "salmon": {
+      "kind": "fish",
+      "title": "salmon"
+    },
+    "cod": {
+      "kind": "fish",
+      "title": "cod"
+    },
+    "shrimp": {
+      "kind": "shrimp",
+      "title": "shrimp"
+    },
+    "canned-light-tuna": {
+      "kind": "ready",
+      "title": "tuna"
+    },
+    "smoked-salmon": {
+      "kind": "ready",
+      "title": "smoked salmon"
+    },
+    "egg": {
+      "kind": "egg",
+      "title": "egg"
+    },
+    "firm-tofu": {
+      "kind": "tofu",
+      "title": "tofu"
+    },
+    "soft-tofu": {
+      "kind": "tofu",
+      "title": "silken tofu"
+    },
+    "tempeh": {
+      "kind": "tofu",
+      "title": "tempeh"
+    },
+    "paneer": {
+      "kind": "paneer",
+      "title": "paneer"
+    },
+    "chickpeas-cooked": {
+      "kind": "legume",
+      "title": "chickpea"
+    },
+    "black-beans-cooked": {
+      "kind": "legume",
+      "title": "black bean"
+    },
+    "lentils-cooked": {
+      "kind": "legume",
+      "title": "lentil"
+    },
+    "white-beans-cooked": {
+      "kind": "legume",
+      "title": "white bean"
+    },
+    "black-eyed-peas-cooked": {
+      "kind": "legume",
+      "title": "black-eyed pea"
+    },
+    "edamame": {
+      "kind": "legume",
+      "title": "edamame"
+    },
+    "tilapia": {
+      "kind": "fish",
+      "title": "tilapia"
+    },
+    "sardines": {
+      "kind": "ready",
+      "title": "sardine"
+    },
+    "ground-chicken": {
+      "kind": "ground-poultry",
+      "title": "chicken"
+    }
+  },
+  "kinds": {
+    "poultry": {
+      "time": "6 to 8 minutes",
+      "check": "has no pink inside and reaches 165°F (74°C)",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "ground-poultry": {
+      "time": "7 to 9 minutes, breaking it up",
+      "check": "is browned all the way through and reaches 165°F (74°C)",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "ground-meat": {
+      "time": "6 to 8 minutes, breaking it up",
+      "check": "is browned all the way through and reaches 160°F (71°C)",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "whole-cut": {
+      "time": "3 to 5 minutes a side",
+      "check": "reaches 145°F (63°C), then rest it for 3 minutes",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "fish": {
+      "time": "3 to 4 minutes a side",
+      "check": "flakes easily and reaches 145°F (63°C)",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "shrimp": {
+      "time": "2 to 3 minutes",
+      "check": "is pink and no longer see-through",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "ready": {
+      "time": "1 to 2 minutes",
+      "check": "is warm",
+      "grams": {
+        "Balanced": 100,
+        "High protein": 140,
+        "Lighter": 85
+      }
+    },
+    "egg": {
+      "time": "3 to 5 minutes, stirring gently",
+      "check": "is set and no liquid egg is left",
+      "grams": {
+        "Balanced": 100,
+        "High protein": 150,
+        "Lighter": 100
+      }
+    },
+    "tofu": {
+      "time": "6 to 8 minutes, turning",
+      "check": "is golden on the outside",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    },
+    "paneer": {
+      "time": "4 to 5 minutes, turning",
+      "check": "is golden at the edges",
+      "grams": {
+        "Balanced": 120,
+        "High protein": 160,
+        "Lighter": 90
+      }
+    },
+    "legume": {
+      "time": "2 to 3 minutes",
+      "check": "is hot all the way through",
+      "grams": {
+        "Balanced": 150,
+        "High protein": 200,
+        "Lighter": 120
+      }
+    }
+  },
+  "bases": {
+    "quinoa-cooked": {
+      "grams": 150,
+      "prep": "Cook the quinoa, or warm up leftover cooked quinoa."
+    },
+    "brown-rice-cooked": {
+      "grams": 150,
+      "prep": "Cook the brown rice, or warm up leftover cooked rice."
+    },
+    "white-rice-cooked": {
+      "grams": 150,
+      "prep": "Cook the white rice, or warm up leftover cooked rice."
+    },
+    "short-grain-rice-cooked": {
+      "grams": 150,
+      "prep": "Cook the short-grain rice, or warm up leftover cooked rice."
+    },
+    "couscous-cooked": {
+      "grams": 150,
+      "prep": "Pour boiling water over the couscous, cover for 5 minutes, then fluff it with a fork."
+    },
+    "bulgur-cooked": {
+      "grams": 150,
+      "prep": "Cook the bulgur, or warm up leftover cooked bulgur."
+    },
+    "pearl-barley-cooked": {
+      "grams": 150,
+      "prep": "Cook the pearl barley, or warm up leftover cooked barley."
+    },
+    "pasta-cooked": {
+      "grams": 170,
+      "prep": "Boil the pasta in salted water until just tender, then drain."
+    },
+    "rice-noodles-cooked": {
+      "grams": 170,
+      "prep": "Soak or boil the rice noodles following the packet, then drain."
+    },
+    "soba-noodles-cooked": {
+      "grams": 170,
+      "prep": "Boil the soba noodles for 4 to 5 minutes, then rinse them under cold water."
+    },
+    "potato": {
+      "grams": 200,
+      "prep": "Cut the potatoes into bite-size pieces."
+    },
+    "sweet-potato": {
+      "grams": 200,
+      "prep": "Cut the sweet potato into bite-size pieces."
+    },
+    "corn-tortilla": {
+      "grams": 52,
+      "fixed": true,
+      "prep": "Warm the tortillas in a dry pan for 30 seconds a side."
+    },
+    "pita-bread": {
+      "grams": 60,
+      "fixed": true,
+      "prep": "Warm the pita in a dry pan for 30 seconds a side."
+    },
+    "whole-wheat-bread": {
+      "grams": 60,
+      "fixed": true,
+      "prep": "Toast the bread."
+    },
+    "rye-bread": {
+      "grams": 60,
+      "fixed": true,
+      "prep": "Toast the rye bread."
+    },
+    "wild-rice-cooked": {
+      "grams": 150,
+      "prep": "Cook the wild rice, or warm up leftover cooked wild rice."
+    },
+    "egg-noodles-cooked": {
+      "grams": 170,
+      "prep": "Boil the egg noodles for 6 to 8 minutes, then drain."
+    }
+  },
+  "styles": [
+    {
+      "id": "bowl",
+      "name": "bowl",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 25,
+      "base": "required",
+      "bases": [
+        "quinoa-cooked",
+        "brown-rice-cooked",
+        "white-rice-cooked",
+        "couscous-cooked",
+        "bulgur-cooked",
+        "pearl-barley-cooked",
+        "short-grain-rice-cooked",
+        "wild-rice-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "salmon",
+        "firm-tofu",
+        "chickpeas-cooked",
+        "egg",
+        "lean-ground-beef",
+        "chicken-thigh",
+        "shrimp",
+        "ground-turkey",
+        "beef-flank-steak",
+        "tempeh",
+        "lentils-cooked",
+        "black-beans-cooked",
+        "white-beans-cooked",
+        "black-eyed-peas-cooked",
+        "edamame",
+        "canned-light-tuna",
+        "smoked-salmon",
+        "cod",
+        "paneer",
+        "pork-tenderloin",
+        "ground-lamb",
+        "ground-pork",
+        "tilapia",
+        "ground-chicken",
+        "sardines"
+      ],
+      "vegetables": [
+        "broccoli",
+        "spinach",
+        "red-bell-pepper",
+        "carrot",
+        "zucchini",
+        "kale",
+        "cucumber",
+        "cabbage",
+        "mushrooms",
+        "tomato",
+        "green-peas",
+        "cauliflower",
+        "bok-choy",
+        "green-bell-pepper",
+        "asparagus",
+        "green-beans",
+        "sweet-corn",
+        "brussels-sprouts",
+        "butternut-squash",
+        "beets"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} to the pan and cook for 4 to 5 minutes, until just tender.",
+        "Stir in the {flavor}, then season to taste."
+      ],
+      "serve": "Spoon everything over the {base}",
+      "label": "Bowls"
+    },
+    {
+      "id": "stir-fry",
+      "name": "stir-fry",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 20,
+      "base": "required",
+      "bases": [
+        "white-rice-cooked",
+        "brown-rice-cooked",
+        "short-grain-rice-cooked",
+        "quinoa-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "firm-tofu",
+        "shrimp",
+        "beef-flank-steak",
+        "chicken-thigh",
+        "pork-tenderloin",
+        "tempeh",
+        "ground-pork",
+        "ground-turkey",
+        "lean-ground-beef",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "broccoli",
+        "red-bell-pepper",
+        "bok-choy",
+        "mushrooms",
+        "carrot",
+        "cabbage",
+        "green-peas",
+        "mung-bean-sprouts",
+        "green-bell-pepper",
+        "zucchini",
+        "onion",
+        "snap-peas",
+        "green-beans",
+        "asparagus"
+      ],
+      "vegetableCount": 3,
+      "steps": [
+        "Chop the {vegetables} into bite-size pieces.",
+        "{cookProtein}",
+        "Add the {vegetables} and stir-fry over high heat for 3 to 4 minutes, until bright and crisp-tender.",
+        "Stir in the {flavor}, then toss for 1 minute."
+      ],
+      "serve": "Serve over the {base}",
+      "label": "Stir-fries"
+    },
+    {
+      "id": "salad",
+      "name": "salad",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 15,
+      "base": "optional",
+      "bases": [
+        "quinoa-cooked",
+        "bulgur-cooked",
+        "couscous-cooked",
+        "pearl-barley-cooked",
+        "wild-rice-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "salmon",
+        "chickpeas-cooked",
+        "egg",
+        "canned-light-tuna",
+        "shrimp",
+        "firm-tofu",
+        "white-beans-cooked",
+        "lentils-cooked",
+        "smoked-salmon",
+        "beef-flank-steak",
+        "chicken-thigh",
+        "black-beans-cooked",
+        "edamame",
+        "tempeh",
+        "paneer",
+        "sardines",
+        "tilapia"
+      ],
+      "vegetables": [
+        "romaine",
+        "spinach",
+        "cucumber",
+        "tomato",
+        "red-bell-pepper",
+        "kale",
+        "carrot",
+        "cabbage",
+        "fennel",
+        "celery",
+        "arugula",
+        "beets",
+        "sweet-corn",
+        "snap-peas"
+      ],
+      "vegetableCount": 3,
+      "steps": [
+        "{cookProtein}",
+        "Chop the {vegetables} and put them in a large bowl.",
+        "Whisk the {flavor} with a splash of water to make a dressing."
+      ],
+      "serve": "Add the {base}, pour over the dressing and toss everything together",
+      "serveNoBase": "Pour over the dressing and toss everything together",
+      "label": "Salads"
+    },
+    {
+      "id": "tacos",
+      "name": "tacos",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 20,
+      "base": "required",
+      "bases": [
+        "corn-tortilla",
+        "pita-bread"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "lean-ground-beef",
+        "black-beans-cooked",
+        "shrimp",
+        "cod",
+        "ground-turkey",
+        "chicken-thigh",
+        "beef-flank-steak",
+        "firm-tofu",
+        "pork-tenderloin",
+        "ground-pork",
+        "egg",
+        "salmon",
+        "tempeh",
+        "tilapia",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "red-bell-pepper",
+        "onion",
+        "cabbage",
+        "tomato",
+        "romaine",
+        "green-bell-pepper",
+        "zucchini",
+        "mushrooms",
+        "sweet-corn",
+        "jalapeno"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Stir the {flavor} into the pan, then cook for 1 more minute.",
+        "Slice the {vegetables} thinly."
+      ],
+      "serve": "Fill the {base} with everything",
+      "label": "Tacos"
+    },
+    {
+      "id": "pasta",
+      "name": "pasta",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 25,
+      "base": "required",
+      "bases": [
+        "pasta-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "shrimp",
+        "lean-ground-beef",
+        "white-beans-cooked",
+        "ground-turkey",
+        "salmon",
+        "canned-light-tuna",
+        "chickpeas-cooked",
+        "lentils-cooked",
+        "firm-tofu",
+        "ground-lamb",
+        "ground-pork",
+        "sardines",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "spinach",
+        "mushrooms",
+        "zucchini",
+        "tomato",
+        "broccoli",
+        "red-bell-pepper",
+        "kale",
+        "onion",
+        "eggplant",
+        "green-peas",
+        "asparagus",
+        "sun-dried-tomatoes",
+        "arugula"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and cook for 4 to 5 minutes, until soft.",
+        "Stir in the {flavor}, then let it bubble for 2 minutes."
+      ],
+      "serve": "Toss everything with the {base}",
+      "label": "Pasta"
+    },
+    {
+      "id": "noodles",
+      "name": "noodles",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 20,
+      "base": "required",
+      "bases": [
+        "rice-noodles-cooked",
+        "soba-noodles-cooked",
+        "egg-noodles-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "shrimp",
+        "firm-tofu",
+        "beef-flank-steak",
+        "chicken-thigh",
+        "pork-tenderloin",
+        "tempeh",
+        "egg",
+        "ground-pork",
+        "salmon"
+      ],
+      "vegetables": [
+        "bok-choy",
+        "carrot",
+        "red-bell-pepper",
+        "cabbage",
+        "mushrooms",
+        "mung-bean-sprouts",
+        "broccoli",
+        "cucumber",
+        "green-bell-pepper",
+        "snap-peas"
+      ],
+      "vegetableCount": 3,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and stir-fry for 3 minutes.",
+        "Stir in the {flavor}, then add a splash of water."
+      ],
+      "serve": "Toss everything with the {base}",
+      "label": "Noodles"
+    },
+    {
+      "id": "sheet-pan",
+      "name": "sheet-pan dinner",
+      "meals": [
+        "Dinner"
+      ],
+      "minutes": 35,
+      "base": "required",
+      "bases": [
+        "potato",
+        "sweet-potato"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "salmon",
+        "chickpeas-cooked",
+        "firm-tofu",
+        "chicken-thigh",
+        "cod",
+        "pork-tenderloin",
+        "tempeh",
+        "paneer",
+        "tilapia"
+      ],
+      "vegetables": [
+        "broccoli",
+        "cauliflower",
+        "carrot",
+        "red-bell-pepper",
+        "zucchini",
+        "onion",
+        "eggplant",
+        "fennel",
+        "mushrooms",
+        "green-bell-pepper",
+        "asparagus",
+        "brussels-sprouts",
+        "green-beans",
+        "butternut-squash",
+        "beets"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "Heat the oven to 425°F (220°C).",
+        "{prepBase}",
+        "Toss the {everything} with the {seasoning} on a lined baking tray.",
+        "Roast for 20 to 25 minutes, turning once. It is done when the {protein} {check}."
+      ],
+      "serve": "Serve straight from the tray",
+      "label": "Sheet-pan dinners"
+    },
+    {
+      "id": "skillet",
+      "name": "skillet",
+      "meals": [
+        "Dinner"
+      ],
+      "minutes": 30,
+      "base": "required",
+      "bases": [
+        "white-rice-cooked",
+        "brown-rice-cooked",
+        "quinoa-cooked",
+        "couscous-cooked",
+        "wild-rice-cooked"
+      ],
+      "proteins": [
+        "chicken-breast",
+        "chickpeas-cooked",
+        "lentils-cooked",
+        "chicken-thigh",
+        "firm-tofu",
+        "paneer",
+        "cod",
+        "ground-turkey",
+        "lean-ground-beef",
+        "white-beans-cooked",
+        "black-eyed-peas-cooked",
+        "ground-lamb",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "spinach",
+        "cauliflower",
+        "red-bell-pepper",
+        "onion",
+        "carrot",
+        "green-peas",
+        "zucchini",
+        "eggplant",
+        "kale",
+        "mushrooms",
+        "tomato",
+        "butternut-squash",
+        "green-beans"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and cook for 3 to 4 minutes.",
+        "Stir in the {flavor}. Cover and simmer gently for 8 to 10 minutes."
+      ],
+      "serve": "Serve over the {base}",
+      "label": "Skillets"
+    },
+    {
+      "id": "scramble",
+      "name": "scramble",
+      "meals": [
+        "Breakfast",
+        "Lunch"
+      ],
+      "minutes": 15,
+      "base": "optional",
+      "bases": [
+        "whole-wheat-bread",
+        "rye-bread",
+        "corn-tortilla"
+      ],
+      "proteins": [
+        "egg",
+        "firm-tofu",
+        "soft-tofu"
+      ],
+      "vegetables": [
+        "spinach",
+        "mushrooms",
+        "tomato",
+        "red-bell-pepper",
+        "onion",
+        "kale",
+        "zucchini",
+        "green-bell-pepper",
+        "asparagus"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "Heat the {fat} in a pan over medium heat and cook the {vegetables} for 3 to 4 minutes, until soft.",
+        "Add the {protein} and cook for {time}. It is ready when it {check}.",
+        "Stir in the {flavor}, then take the pan off the heat."
+      ],
+      "serve": "Serve with the {base}",
+      "serveNoBase": "Serve right away",
+      "label": "Scrambles"
+    },
+    {
+      "id": "fried-rice",
+      "name": "fried rice",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 20,
+      "base": "required",
+      "bases": [
+        "white-rice-cooked",
+        "brown-rice-cooked",
+        "short-grain-rice-cooked"
+      ],
+      "proteins": [
+        "egg",
+        "chicken-breast",
+        "shrimp",
+        "firm-tofu",
+        "ground-pork",
+        "chicken-thigh",
+        "ground-chicken",
+        "tempeh"
+      ],
+      "vegetables": [
+        "green-peas",
+        "carrot",
+        "sweet-corn",
+        "red-bell-pepper",
+        "broccoli",
+        "cabbage",
+        "snap-peas",
+        "onion",
+        "green-beans"
+      ],
+      "vegetableCount": 3,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and stir-fry for 3 minutes.",
+        "Add the {base} and fry for 3 to 4 minutes, stirring, until it is hot all the way through.",
+        "Stir in the {flavor}, then toss for 1 minute."
+      ],
+      "serve": "Serve hot",
+      "label": "Fried rice"
+    },
+    {
+      "id": "soup",
+      "name": "soup",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 30,
+      "base": "optional",
+      "bases": [
+        "egg-noodles-cooked",
+        "pasta-cooked",
+        "rice-noodles-cooked",
+        "white-rice-cooked",
+        "wild-rice-cooked"
+      ],
+      "broths": [
+        "chicken-broth",
+        "vegetable-broth"
+      ],
+      "brothGrams": 400,
+      "proteins": [
+        "chicken-breast",
+        "white-beans-cooked",
+        "lentils-cooked",
+        "chickpeas-cooked",
+        "firm-tofu",
+        "chicken-thigh",
+        "ground-turkey",
+        "black-beans-cooked",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "carrot",
+        "celery",
+        "onion",
+        "spinach",
+        "kale",
+        "zucchini",
+        "tomato",
+        "green-beans",
+        "butternut-squash",
+        "mushrooms",
+        "sweet-corn"
+      ],
+      "vegetableCount": 3,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and cook for 4 to 5 minutes.",
+        "Pour in the {broth}, add the {flavor} and simmer for 15 minutes, until the vegetables are tender."
+      ],
+      "serve": "Stir in the {base} and ladle into a bowl",
+      "serveNoBase": "Ladle into a bowl",
+      "label": "Soups"
+    },
+    {
+      "id": "stuffed-potato",
+      "name": "stuffed {base}",
+      "meals": [
+        "Lunch",
+        "Dinner"
+      ],
+      "minutes": 30,
+      "base": "required",
+      "bases": [
+        "sweet-potato",
+        "potato"
+      ],
+      "basePrep": "Prick the {base} all over, then microwave for 8 to 10 minutes or bake at 400°F (200°C) for about 45 minutes, until soft.",
+      "proteins": [
+        "black-beans-cooked",
+        "chicken-breast",
+        "ground-turkey",
+        "chickpeas-cooked",
+        "lean-ground-beef",
+        "lentils-cooked",
+        "ground-chicken"
+      ],
+      "vegetables": [
+        "spinach",
+        "red-bell-pepper",
+        "sweet-corn",
+        "onion",
+        "kale",
+        "broccoli",
+        "tomato",
+        "jalapeno"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and cook for 3 to 4 minutes.",
+        "Stir in the {flavor}."
+      ],
+      "serve": "Split the {base} open and pile the filling inside",
+      "label": "Stuffed potatoes"
+    },
+    {
+      "id": "lettuce-wraps",
+      "name": "lettuce wraps",
+      "meals": [
+        "Lunch",
+        "Dinner",
+        "Snack"
+      ],
+      "minutes": 20,
+      "base": "optional",
+      "bases": [],
+      "always": [
+        {
+          "id": "romaine",
+          "grams": 80
+        }
+      ],
+      "proteins": [
+        "ground-chicken",
+        "ground-turkey",
+        "ground-pork",
+        "firm-tofu",
+        "shrimp",
+        "chicken-breast",
+        "lean-ground-beef",
+        "tempeh"
+      ],
+      "vegetables": [
+        "carrot",
+        "red-bell-pepper",
+        "mushrooms",
+        "mung-bean-sprouts",
+        "snap-peas",
+        "cabbage"
+      ],
+      "vegetableCount": 2,
+      "steps": [
+        "{cookProtein}",
+        "Add the {vegetables} and cook for 2 to 3 minutes.",
+        "Stir in the {flavor}."
+      ],
+      "serve": "Spoon the filling into the romaine lettuce leaves",
+      "serveNoBase": "Spoon the filling into the romaine lettuce leaves",
+      "label": "Lettuce wraps"
+    }
+  ],
+  "flavors": [
+    {
+      "id": "lemon-herb",
+      "label": "Lemon herb",
+      "cuisine": "Mediterranean",
+      "styles": [
+        "bowl",
+        "salad",
+        "pasta",
+        "sheet-pan",
+        "scramble",
+        "soup"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "parsley"
+          ],
+          "grams": 5
+        },
+        {
+          "options": [
+            "black-pepper"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "feta",
+        "parmesan",
+        "almonds"
+      ],
+      "toppingGrams": 20
+    },
+    {
+      "id": "greek",
+      "label": "Greek",
+      "cuisine": "Mediterranean",
+      "styles": [
+        "bowl",
+        "salad",
+        "tacos",
+        "sheet-pan"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "oregano"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "feta",
+        "olives"
+      ],
+      "toppingGrams": 25
+    },
+    {
+      "id": "soy-ginger",
+      "label": "Soy ginger",
+      "cuisine": "East Asian",
+      "styles": [
+        "bowl",
+        "stir-fry",
+        "noodles",
+        "fried-rice",
+        "lettuce-wraps"
+      ],
+      "fat": [
+        "sesame-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "soy-sauce",
+            "tamari"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "ginger"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "scallion"
+          ],
+          "grams": 10
+        }
+      ],
+      "toppings": [
+        "sesame-seeds",
+        "cashews"
+      ],
+      "toppingGrams": 8
+    },
+    {
+      "id": "peanut-lime",
+      "label": "Peanut lime",
+      "cuisine": "Thai",
+      "styles": [
+        "bowl",
+        "stir-fry",
+        "noodles",
+        "salad",
+        "lettuce-wraps"
+      ],
+      "fat": [
+        "canola-oil",
+        "olive-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "peanut-butter"
+          ],
+          "grams": 16
+        },
+        {
+          "options": [
+            "lime-juice"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "soy-sauce",
+            "tamari"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "sriracha"
+          ],
+          "grams": 5
+        }
+      ],
+      "toppings": [
+        "peanuts",
+        "cashews"
+      ],
+      "toppingGrams": 10
+    },
+    {
+      "id": "miso-sesame",
+      "label": "Miso sesame",
+      "cuisine": "Japanese",
+      "styles": [
+        "bowl",
+        "salad",
+        "noodles",
+        "stir-fry",
+        "soup",
+        "lettuce-wraps"
+      ],
+      "fat": [
+        "sesame-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "miso"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "rice-vinegar"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "ginger"
+          ],
+          "grams": 4
+        }
+      ],
+      "toppings": [
+        "sesame-seeds"
+      ],
+      "toppingGrams": 5
+    },
+    {
+      "id": "chili-lime",
+      "label": "Chili lime",
+      "cuisine": "Mexican",
+      "styles": [
+        "bowl",
+        "salad",
+        "tacos",
+        "sheet-pan",
+        "scramble",
+        "stuffed-potato",
+        "soup",
+        "lettuce-wraps"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "cumin"
+          ],
+          "grams": 2
+        },
+        {
+          "options": [
+            "chili-powder"
+          ],
+          "grams": 2
+        },
+        {
+          "options": [
+            "lime-juice"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "salsa"
+          ],
+          "grams": 40
+        },
+        {
+          "options": [
+            "cilantro"
+          ],
+          "grams": 5
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "avocado",
+        "cheddar"
+      ],
+      "toppingGrams": 40
+    },
+    {
+      "id": "coconut-curry",
+      "label": "Coconut curry",
+      "cuisine": "South Asian",
+      "styles": [
+        "skillet",
+        "soup"
+      ],
+      "fat": [
+        "canola-oil",
+        "olive-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "curry-powder"
+          ],
+          "grams": 3
+        },
+        {
+          "options": [
+            "ginger"
+          ],
+          "grams": 5
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "coconut-milk"
+          ],
+          "grams": 80
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "cashews"
+      ],
+      "toppingGrams": 10
+    },
+    {
+      "id": "tomato-basil",
+      "label": "Tomato basil",
+      "cuisine": "Italian",
+      "styles": [
+        "pasta",
+        "skillet",
+        "scramble",
+        "soup"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "canned-tomatoes"
+          ],
+          "grams": 150
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "basil"
+          ],
+          "grams": 5
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "parmesan"
+      ],
+      "toppingGrams": 15
+    },
+    {
+      "id": "smoky-paprika",
+      "label": "Smoky paprika",
+      "cuisine": "Spanish",
+      "styles": [
+        "bowl",
+        "sheet-pan",
+        "tacos",
+        "scramble",
+        "stuffed-potato"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "paprika"
+          ],
+          "grams": 3
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "almonds"
+      ],
+      "toppingGrams": 15
+    },
+    {
+      "id": "honey-garlic",
+      "label": "Honey garlic",
+      "cuisine": "East Asian",
+      "styles": [
+        "bowl",
+        "stir-fry",
+        "noodles",
+        "sheet-pan",
+        "fried-rice",
+        "lettuce-wraps"
+      ],
+      "fat": [
+        "canola-oil",
+        "olive-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "honey",
+            "maple-syrup"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 8
+        },
+        {
+          "options": [
+            "soy-sauce",
+            "tamari"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "rice-vinegar"
+          ],
+          "grams": 5
+        }
+      ],
+      "toppings": [
+        "sesame-seeds",
+        "scallion"
+      ],
+      "toppingGrams": 6
+    },
+    {
+      "id": "tahini-lemon",
+      "label": "Tahini lemon",
+      "cuisine": "Middle Eastern",
+      "styles": [
+        "bowl",
+        "salad",
+        "tacos",
+        "sheet-pan",
+        "stuffed-potato"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "tahini"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 4
+        },
+        {
+          "options": [
+            "cumin"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "parsley",
+        "almonds"
+      ],
+      "toppingGrams": 8
+    },
+    {
+      "id": "cajun",
+      "label": "Cajun",
+      "cuisine": "Cajun",
+      "styles": [
+        "bowl",
+        "sheet-pan",
+        "tacos",
+        "pasta",
+        "skillet",
+        "stuffed-potato",
+        "soup"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "paprika"
+          ],
+          "grams": 3
+        },
+        {
+          "options": [
+            "chili-powder"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "oregano"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "thyme"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "black-pepper"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "cheddar",
+        "avocado"
+      ],
+      "toppingGrams": 25
+    },
+    {
+      "id": "pesto",
+      "label": "Pesto",
+      "cuisine": "Italian",
+      "styles": [
+        "pasta",
+        "bowl",
+        "salad",
+        "sheet-pan",
+        "scramble"
+      ],
+      "fat": [
+        "olive-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "basil"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 4
+        },
+        {
+          "options": [
+            "parmesan"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 5
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "walnuts",
+        "pumpkin-seeds",
+        "almonds"
+      ],
+      "toppingGrams": 10
+    },
+    {
+      "id": "moroccan",
+      "label": "Moroccan spiced",
+      "cuisine": "Moroccan",
+      "styles": [
+        "skillet",
+        "bowl",
+        "sheet-pan",
+        "soup",
+        "stuffed-potato",
+        "tacos"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "cumin"
+          ],
+          "grams": 2
+        },
+        {
+          "options": [
+            "cinnamon"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "paprika"
+          ],
+          "grams": 2
+        },
+        {
+          "options": [
+            "turmeric"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 10
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "almonds",
+        "dried-apricots"
+      ],
+      "toppingGrams": 15
+    },
+    {
+      "id": "balsamic-herb",
+      "label": "Balsamic herb",
+      "cuisine": "Italian",
+      "styles": [
+        "salad",
+        "sheet-pan",
+        "bowl",
+        "pasta"
+      ],
+      "fat": [
+        "olive-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "balsamic-vinegar"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 4
+        },
+        {
+          "options": [
+            "thyme"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "black-pepper"
+          ],
+          "grams": 1
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "mozzarella",
+        "feta",
+        "walnuts"
+      ],
+      "toppingGrams": 25
+    },
+    {
+      "id": "lemon-pepper",
+      "label": "Lemon pepper",
+      "cuisine": "American",
+      "styles": [
+        "bowl",
+        "sheet-pan",
+        "salad",
+        "skillet",
+        "soup"
+      ],
+      "fat": [
+        "olive-oil",
+        "canola-oil"
+      ],
+      "items": [
+        {
+          "options": [
+            "lemon-juice"
+          ],
+          "grams": 15
+        },
+        {
+          "options": [
+            "black-pepper"
+          ],
+          "grams": 2
+        },
+        {
+          "options": [
+            "garlic"
+          ],
+          "grams": 6
+        },
+        {
+          "options": [
+            "salt"
+          ],
+          "grams": 1
+        }
+      ],
+      "toppings": [
+        "parmesan",
+        "sunflower-seeds"
+      ],
+      "toppingGrams": 10
+    }
+  ],
+  "breakfast": {
+    "meals": [
+      "Breakfast",
+      "Snack"
+    ],
+    "bases": {
+      "rolled-oats": {
+        "grams": 50,
+        "name": "overnight oats",
+        "liquid": [
+          "milk-2pct",
+          "soy-milk",
+          "almond-milk"
+        ],
+        "liquidGrams": 200
+      },
+      "greek-yogurt": {
+        "grams": 200,
+        "name": "yogurt bowl"
+      },
+      "whole-milk-yogurt": {
+        "grams": 200,
+        "name": "yogurt bowl"
+      },
+      "soy-yogurt": {
+        "grams": 200,
+        "name": "yogurt bowl"
+      },
+      "milk-2pct": {
+        "grams": 250,
+        "name": "smoothie",
+        "blend": true
+      },
+      "soy-milk": {
+        "grams": 250,
+        "name": "smoothie",
+        "blend": true
+      },
+      "almond-milk": {
+        "grams": 250,
+        "name": "smoothie",
+        "blend": true
+      }
+    },
+    "flavors": [
+      {
+        "id": "blueberry",
+        "label": "Blueberry cinnamon",
+        "fruit": "blueberries",
+        "fruitGrams": 75,
+        "toppings": [
+          "almonds",
+          "walnuts",
+          "sesame-seeds"
+        ]
+      },
+      {
+        "id": "banana-nut",
+        "label": "Banana walnut",
+        "fruit": "banana",
+        "fruitGrams": 100,
+        "toppings": [
+          "walnuts",
+          "almonds",
+          "peanut-butter"
+        ]
+      },
+      {
+        "id": "apricot",
+        "label": "Apricot almond",
+        "fruit": "dried-apricots",
+        "fruitGrams": 30,
+        "toppings": [
+          "almonds",
+          "cashews",
+          "sesame-seeds"
+        ]
+      },
+      {
+        "id": "strawberry-banana",
+        "label": "Strawberry",
+        "fruit": "strawberries",
+        "fruitGrams": 100,
+        "toppings": [
+          "chia-seeds",
+          "almonds",
+          "pumpkin-seeds"
+        ]
+      },
+      {
+        "id": "mango-pineapple",
+        "label": "Mango",
+        "fruit": "mango",
+        "fruitGrams": 100,
+        "toppings": [
+          "chia-seeds",
+          "sunflower-seeds",
+          "cashews"
+        ]
+      },
+      {
+        "id": "raspberry-almond",
+        "label": "Raspberry almond",
+        "fruit": "raspberries",
+        "fruitGrams": 75,
+        "toppings": [
+          "almonds",
+          "chia-seeds",
+          "walnuts"
+        ]
+      },
+      {
+        "id": "apple-cinnamon",
+        "label": "Apple cinnamon",
+        "fruit": "apple",
+        "fruitGrams": 100,
+        "toppings": [
+          "walnuts",
+          "pumpkin-seeds",
+          "almonds"
+        ]
+      },
+      {
+        "id": "pineapple-coconut",
+        "label": "Pineapple",
+        "fruit": "pineapple",
+        "fruitGrams": 100,
+        "toppings": [
+          "chia-seeds",
+          "cashews",
+          "sunflower-seeds"
+        ]
+      }
+    ],
+    "sweeteners": [
+      "honey",
+      "maple-syrup"
+    ],
+    "label": "Oats, yogurt & smoothies"
+  }
+}
